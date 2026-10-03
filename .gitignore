@@ -14,6 +14,7 @@ customer-app/node_modules/
 customer-app/android/.gradle/
 customer-app/android/app/build/
 customer-app/android/build/
+local.properties
 *.keystore
 !debug.keystore
 
