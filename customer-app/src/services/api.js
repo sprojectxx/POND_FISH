@@ -63,13 +63,13 @@ export const api = {
   },
 
   /**
-   * Verify Phone OTP / Firebase identity and establish customer session
+   * Verify Firebase identity token and establish customer session
    * POST /api/v1/customer/auth/verify-otp
    */
-  async verifyOtp({ mobileNumber, idToken, otp }) {
+  async verifyOtp({ mobileNumber, idToken }) {
     return request('/api/v1/customer/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({ mobileNumber, idToken, otp }),
+      body: JSON.stringify({ mobileNumber, idToken }),
     });
   },
 

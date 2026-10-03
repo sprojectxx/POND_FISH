@@ -50,3 +50,6 @@ android {
 dependencies {
     implementation("com.facebook.react:react-android")
 }
+
+apply plugin: "com.google.gms.google-services"
+

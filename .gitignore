@@ -25,6 +25,7 @@ customer-app/android/build/
 *.env
 firebase-adminsdk*.json
 service-account*.json
+google-services.json
 
 # Storage / Uploads (local development uploads)
 uploads/

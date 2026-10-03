@@ -1,67 +1,58 @@
 /**
  * Firebase Phone Authentication Client Service
  * Traceability: PondFish Integration Specification (Section 6)
- * Encapsulates Firebase Phone OTP dispatch and confirmation for React Native.
+ * Encapsulates real Firebase Phone OTP dispatch and confirmation for React Native.
+ * Uses @react-native-firebase/auth exclusively. Zero mock pathways.
  */
 
-let confirmationResultStore = null;
+import auth from '@react-native-firebase/auth';
+
+let confirmationResult = null;
 
 /**
- * Initiates Firebase Phone OTP verification for an Indian mobile number
- * @param {string} mobileNumber - 10 digit mobile number
- * @returns {Promise<{ confirmationResult: object|null, verificationId?: string }>}
+ * Initiates real Firebase Phone OTP verification for an Indian mobile number
+ * @param {string} mobileNumber - 10 digit Indian mobile number
+ * @returns {Promise<{ verificationId?: string }>}
  */
 export async function sendFirebasePhoneOtp(mobileNumber) {
   const formattedNumber = `+91${mobileNumber.replace(/\D/g, '').slice(-10)}`;
 
   try {
-    // Attempt native Firebase Auth if available
-    let authModule;
-    try {
-      authModule = require('@react-native-firebase/auth').default;
-    } catch {
-      authModule = null;
-    }
-
-    if (authModule && typeof authModule === 'function') {
-      const confirmation = await authModule().signInWithPhoneNumber(formattedNumber);
-      confirmationResultStore = confirmation;
-      return { confirmationResult: confirmation, verificationId: confirmation.verificationId };
-    }
-
-    // Fallback/standard flow: Store confirmation handle
-    confirmationResultStore = {
-      verificationId: `mock_verify_${Date.now()}`,
-      phone: formattedNumber,
-    };
-
-    return { confirmationResult: confirmationResultStore, verificationId: confirmationResultStore.verificationId };
+    confirmationResult = await auth().signInWithPhoneNumber(formattedNumber);
+    return { verificationId: confirmationResult.verificationId };
   } catch (error) {
-    console.error('[FIREBASE PHONE AUTH ERROR]', error.message);
-    throw new Error(error.message || 'Failed to dispatch phone verification OTP.');
+    console.error('[FIREBASE PHONE AUTH DISPATCH ERROR]', error.code, error.message);
+    throw new Error(error.message || 'Failed to dispatch phone verification OTP via Firebase.');
   }
 }
 
 /**
- * Confirms OTP code with Firebase and returns ID token
+ * Confirms OTP code with Firebase and returns real Firebase ID token
  * @param {string} otpCode - 6 digit verification code
- * @returns {Promise<{ idToken: string|null, user: object|null }>}
+ * @returns {Promise<{ idToken: string, user: object }>}
  */
 export async function verifyFirebasePhoneOtp(otpCode) {
+  if (!confirmationResult || typeof confirmationResult.confirm !== 'function') {
+    throw new Error('No active verification session found. Please request a new OTP.');
+  }
+
   try {
-    if (confirmationResultStore && typeof confirmationResultStore.confirm === 'function') {
-      const userCredential = await confirmationResultStore.confirm(otpCode);
-      const idToken = await userCredential.user.getIdToken();
-      return { idToken, user: userCredential.user };
+    const userCredential = await confirmationResult.confirm(otpCode);
+    if (!userCredential || !userCredential.user) {
+      throw new Error('Firebase authentication failed. No user record returned.');
     }
 
-    // In environment where native Firebase is not initialized, return verified payload
+    const idToken = await userCredential.user.getIdToken();
+    if (!idToken) {
+      throw new Error('Failed to retrieve Firebase ID token from authenticated user.');
+    }
+
     return {
-      idToken: `firebase_id_token_${Date.now()}`,
-      user: { phoneNumber: confirmationResultStore?.phone || '+919876543210' },
+      idToken,
+      user: userCredential.user,
     };
   } catch (error) {
-    console.error('[FIREBASE OTP CONFIRMATION ERROR]', error.message);
-    throw new Error('The verification code is incorrect or expired. Please try again.');
+    console.error('[FIREBASE OTP CONFIRMATION ERROR]', error.code, error.message);
+    throw new Error(error.message || 'The verification code is incorrect or expired. Please try again.');
   }
 }

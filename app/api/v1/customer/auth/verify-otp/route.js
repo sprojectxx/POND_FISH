@@ -1,7 +1,8 @@
 /**
- * Customer Verify OTP & Session Issuance Endpoint
+ * Customer Verify Token & Session Issuance Endpoint
  * POST /api/v1/customer/auth/verify-otp
- * Traceability: PondFish API Specification (Section 7) & Customer Portal PRD (CP-01D)
+ * Traceability: PondFish API Specification (Section 7) & Integration Specification (Section 6)
+ * Validates real Firebase ID Token and establishes authenticated customer session.
  */
 
 import { NextResponse } from 'next/server';
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { mobileNumber, idToken, otp } = body || {};
+    const { mobileNumber, idToken } = body || {};
 
     if (!mobileNumber || !isValidIndianMobile(mobileNumber)) {
       return NextResponse.json(
@@ -28,24 +29,23 @@ export async function POST(request) {
       );
     }
 
-    if (!idToken && !otp) {
+    if (!idToken || typeof idToken !== 'string' || !idToken.trim()) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            code: 'MISSING_VERIFICATION_PROOF',
-            message: 'Firebase verification token or OTP is required.',
+            code: 'MISSING_FIREBASE_ID_TOKEN',
+            message: 'A valid Firebase ID token is required for authentication.',
           },
         },
         { status: 400 }
       );
     }
 
-    // Call domain customer business engine
+    // Call domain customer business engine with real Firebase ID token
     const authResult = await authenticateCustomer({
       mobileNumber,
-      idToken,
-      otp,
+      idToken: idToken.trim(),
     });
 
     return NextResponse.json({
@@ -57,26 +57,30 @@ export async function POST(request) {
   } catch (error) {
     console.error('[API ERROR] POST /api/v1/customer/auth/verify-otp:', error.message);
 
-    if (error.message === 'PHONE_NUMBER_MISMATCH') {
+    if (error.code === 'PHONE_NUMBER_MISMATCH' || error.message === 'PHONE_NUMBER_MISMATCH') {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'PHONE_NUMBER_MISMATCH',
-            message: 'Verified credentials do not match the provided phone number.',
+            message: 'Verified Firebase credentials do not match the provided phone number.',
           },
         },
         { status: 400 }
       );
     }
 
-    if (error.message === 'FIREBASE_VERIFICATION_FAILED') {
+    if (
+      error.code === 'FIREBASE_VERIFICATION_FAILED' ||
+      error.message?.includes('FIREBASE_VERIFICATION_FAILED') ||
+      error.message?.includes('Firebase Auth is not configured')
+    ) {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'FIREBASE_VERIFICATION_FAILED',
-            message: 'Firebase token verification failed. Please try signing in again.',
+            message: error.message || 'Firebase token verification failed. Please try signing in again.',
           },
         },
         { status: 401 }
@@ -88,7 +92,7 @@ export async function POST(request) {
         success: false,
         error: {
           code: 'AUTH_VERIFICATION_FAILED',
-          message: 'Unable to complete verification at this time. Please try again.',
+          message: error.message || 'Unable to complete verification at this time. Please try again.',
         },
       },
       { status: 500 }

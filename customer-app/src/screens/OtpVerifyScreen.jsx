@@ -59,11 +59,10 @@ export default function OtpVerifyScreen({ routeParams, onNavigate }) {
       // 1. Confirm OTP with Firebase Auth service
       const { idToken } = await verifyFirebasePhoneOtp(cleanOtp);
 
-      // 2. Call PondFish backend to verify identity, retrieve/create customer record, and issue session
+      // 2. Call PondFish backend with verified Firebase ID Token
       const response = await api.verifyOtp({
         mobileNumber,
         idToken,
-        otp: cleanOtp,
       });
 
       const { token, customer, isProfileComplete } = response.data;
