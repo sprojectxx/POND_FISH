@@ -598,3 +598,19 @@ Source:
 - PondFish_Core_Business_Engines_Specification_v1.md — Section Y
 - PondFish_Page_By_Page_UI_Specification_Customer_React_Native_App.md — Section Z
 ```
+
+---
+
+# 26. MANDATORY CONTINUOUS COMMIT AND PUSH TO MAIN
+
+For every change, implementation slice, architecture decision, foundation change, or code update:
+
+1. Stage all relevant created and modified files (`git add`).
+2. Verify that sensitive files (`.env`, secrets, credentials) are strictly excluded and never staged.
+3. Commit with a clear, descriptive message referencing documentation sources.
+4. Immediately push the commit to the remote repository on the `main` branch:
+   ```bash
+   git push origin main
+   ```
+5. Do not leave completed work uncommitted or unpushed.
+
