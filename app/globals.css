@@ -1,0 +1,77 @@
+/* PondFish Design System Tokens - Vanilla CSS */
+/* Traceability: Documentation/PondFish_Design_System_Brand_Style_Guide_v1.md */
+
+:root {
+  /* Brand Core Colors */
+  --pf-primary: #0F172A;
+  --pf-primary-light: #1E293B;
+  --pf-secondary: #0284C7;
+  --pf-secondary-hover: #0369A1;
+
+  /* Freshness Indicators */
+  --pf-fresh-green: #16A34A;
+  --pf-fresh-green-bg: #DCFCE7;
+  --pf-fresh-grey: #64748B;
+  --pf-fresh-grey-bg: #F1F5F9;
+  --pf-fresh-red: #DC2626;
+  --pf-fresh-red-bg: #FEE2E2;
+
+  /* Status Colors */
+  --pf-success: #16A34A;
+  --pf-warning: #D97706;
+  --pf-danger: #DC2626;
+  --pf-info: #0284C7;
+
+  /* Neutrals & Surfaces */
+  --pf-bg-main: #0B1120;
+  --pf-bg-surface: #1E293B;
+  --pf-bg-card: #0F172A;
+  --pf-bg-light: #F8FAFC;
+  --pf-surface-light: #FFFFFF;
+  --pf-border: #334155;
+  --pf-border-light: #E2E8F0;
+
+  /* Typography Colors */
+  --pf-text-primary: #F8FAFC;
+  --pf-text-secondary: #94A3B8;
+  --pf-text-muted: #64748B;
+  --pf-text-dark: #0F172A;
+  --pf-text-dark-muted: #475569;
+
+  /* Spacing Tokens */
+  --pf-space-xs: 4px;
+  --pf-space-sm: 8px;
+  --pf-space-md: 16px;
+  --pf-space-lg: 24px;
+  --pf-space-xl: 32px;
+  --pf-space-2xl: 48px;
+
+  /* Radii */
+  --pf-radius-sm: 4px;
+  --pf-radius-md: 8px;
+  --pf-radius-lg: 12px;
+  --pf-radius-full: 9999px;
+
+  /* Font Families */
+  --pf-font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --pf-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--pf-font-main);
+  background-color: var(--pf-bg-main);
+  color: var(--pf-text-primary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

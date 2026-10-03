@@ -1,0 +1,22 @@
+{
+  "name": "pondfish-customer-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PondFish Customer Mobile App (Android) - Booking, Freshness, and Delivery Tracking",
+  "main": "index.js",
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-native": "0.75.4",
+    "react-native-keychain": "^8.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.4",
+    "@babel/runtime": "^7.25.6",
+    "metro-react-native-babel-preset": "^0.77.0"
+  }
+}
