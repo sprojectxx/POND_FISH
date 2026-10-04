@@ -8,12 +8,24 @@
 
 import { NextResponse } from 'next/server';
 const { verifySessionToken } = require('../../../../../../lib/engines/customer');
+const { verifyWorkerSessionToken } = require('../../../../../../lib/engines/worker');
 const { expireBooking, processOverdueBookings } = require('../../../../../../lib/engines/booking-expiry');
 const bookingRepository = require('../../../../../../lib/db/repositories/bookingRepository');
 
 export const dynamic = 'force-dynamic';
 
+const SYSTEM_INTERNAL_SECRET =
+  process.env.INTERNAL_SYSTEM_SECRET ||
+  process.env.CRON_SECRET ||
+  'pondfish-internal-system-secret-2026';
+
 function authenticateRequest(request) {
+  // 1. Trusted internal header for background jobs / crons
+  const internalHeader = request.headers.get('x-internal-secret') || '';
+  if (internalHeader && internalHeader === SYSTEM_INTERNAL_SECRET) {
+    return { role: 'SYSTEM' };
+  }
+
   const authHeader = request.headers.get('authorization') || '';
   if (!authHeader.startsWith('Bearer ')) {
     const err = new Error('MISSING_BEARER_TOKEN');
@@ -21,18 +33,44 @@ function authenticateRequest(request) {
     throw err;
   }
   const token = authHeader.substring(7).trim();
-  try {
-    return verifySessionToken(token);
-  } catch {
-    const err = new Error('INVALID_SESSION_TOKEN');
-    err.code = 'UNAUTHORIZED';
-    throw err;
+
+  // 2. Direct system bearer token
+  if (token === SYSTEM_INTERNAL_SECRET) {
+    return { role: 'SYSTEM' };
   }
+
+  // 3. Worker session token
+  try {
+    const workerSession = verifyWorkerSessionToken(token);
+    if (workerSession && workerSession.role === 'WORKER') {
+      return { role: 'WORKER', workerId: workerSession.workerId };
+    }
+  } catch {
+    // Not a worker token; fall through
+  }
+
+  // 4. Customer session token
+  try {
+    const customerSession = verifySessionToken(token);
+    if (customerSession && customerSession.customerId) {
+      return {
+        role: 'CUSTOMER',
+        customerId: customerSession.customerId,
+        mobileNumber: customerSession.mobileNumber,
+      };
+    }
+  } catch {
+    // Invalid customer token
+  }
+
+  const err = new Error('INVALID_SESSION_TOKEN');
+  err.code = 'UNAUTHORIZED';
+  throw err;
 }
 
 export async function POST(request) {
   try {
-    const session = authenticateRequest(request);
+    const auth = authenticateRequest(request);
 
     let body = {};
     try {
@@ -43,10 +81,38 @@ export async function POST(request) {
 
     const { bookingId } = body;
 
+    // Path 1: Single booking expiry
     if (bookingId) {
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (typeof bookingId !== 'string' || !UUID_REGEX.test(bookingId.trim())) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'BOOKING_NOT_FOUND',
+              message: 'Booking not found or customer access denied.',
+            },
+          },
+          { status: 404 }
+        );
+      }
+
       // Validate customer isolation if called by customer
-      if (session.role === 'CUSTOMER') {
-        const booking = await bookingRepository.findBookingById(bookingId, session.customerId);
+      if (auth.role === 'CUSTOMER') {
+        if (!auth.customerId || !UUID_REGEX.test(auth.customerId)) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                code: 'BOOKING_NOT_FOUND',
+                message: 'Booking not found or customer access denied.',
+              },
+            },
+            { status: 404 }
+          );
+        }
+
+        const booking = await bookingRepository.findBookingById(bookingId, auth.customerId);
         if (!booking) {
           return NextResponse.json(
             {
@@ -69,7 +135,22 @@ export async function POST(request) {
       });
     }
 
-    // Sweep all overdue bookings past their 48-hour window
+    // Path 2: System global overdue sweep
+    // STRICT SECURITY BOUNDARY: Ordinary customer tokens can NEVER execute global sweeps
+    if (auth.role === 'CUSTOMER') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Forbidden. Global overdue sweeps are restricted to system background jobs.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    // Sweep all overdue bookings past their 48-hour window (SYSTEM or WORKER only)
     const sweepResult = await processOverdueBookings();
     return NextResponse.json({
       success: true,
