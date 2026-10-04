@@ -97,4 +97,96 @@ export const api = {
       body: JSON.stringify({ name, age, area }),
     });
   },
+
+  /**
+   * Fetch active fish categories
+   * GET /api/v1/customer/categories
+   */
+  async getCategories() {
+    return request('/api/v1/customer/categories', {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Fetch fish catalogue with optional filters
+   * GET /api/v1/customer/fish
+   * @param {object} filters - { category_id, search, online_bookable, availability, discount }
+   */
+  async getFish(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.category_id) params.set('category_id', filters.category_id);
+    if (filters.search && filters.search.trim()) params.set('search', filters.search.trim());
+    if (typeof filters.online_bookable === 'boolean') params.set('online_bookable', String(filters.online_bookable));
+    if (typeof filters.availability === 'boolean') params.set('availability', String(filters.availability));
+    if (typeof filters.discount === 'boolean') params.set('discount', String(filters.discount));
+
+    const qs = params.toString();
+    const endpoint = `/api/v1/customer/fish${qs ? `?${qs}` : ''}`;
+    return request(endpoint, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Fetch single fish details by ID
+   * GET /api/v1/customer/fish/{id}
+   */
+  async getFishDetails(id) {
+    return request(`/api/v1/customer/fish/${encodeURIComponent(id)}`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Fetch customer cart
+   * GET /api/v1/customer/cart
+   */
+  async getCart() {
+    return request('/api/v1/customer/cart', {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Add fish to customer cart
+   * POST /api/v1/customer/cart/items
+   */
+  async addToCart({ fishId, quantity = 1 }) {
+    return request('/api/v1/customer/cart/items', {
+      method: 'POST',
+      body: JSON.stringify({ fish_id: fishId, quantity }),
+    });
+  },
+
+  /**
+   * Update quantity of a fish item in cart
+   * PATCH /api/v1/customer/cart/items/{id}
+   */
+  async updateCartQuantity({ fishId, quantity }) {
+    return request(`/api/v1/customer/cart/items/${encodeURIComponent(fishId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ quantity }),
+    });
+  },
+
+  /**
+   * Remove fish item from cart
+   * DELETE /api/v1/customer/cart/items/{id}
+   */
+  async removeFromCart(fishId) {
+    return request(`/api/v1/customer/cart/items/${encodeURIComponent(fishId)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Clear all items from cart
+   * DELETE /api/v1/customer/cart
+   */
+  async clearCart() {
+    return request('/api/v1/customer/cart', {
+      method: 'DELETE',
+    });
+  },
 };

@@ -1,10 +1,11 @@
 /**
  * Screen: CP-02 — Customer Home Dashboard Entry
- * Traceability: PondFish Customer Mobile App UI Specification (Section 14)
- * Post-authentication entry state showing customer profile, live truck status, and core actions.
+ * Traceability: PondFish Customer Mobile App UI Specification (Section 14-23)
+ * Dynamic authenticated home consuming profile, live truck status, today's catch preview,
+ * and entry points into Fish Marketplace & Cart.
  */
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,16 +13,48 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
+  Image,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { clearAuthTokens } from '../services/auth-storage';
+import { api } from '../services/api';
+import FreshnessBadge from '../components/FreshnessBadge';
+import CartBadgeButton from '../components/CartBadgeButton';
 
-export default function HomeScreen({ routeParams, onNavigate }) {
+export default function HomeScreen({ routeParams = {}, onNavigate, cartCount = 0 }) {
   const customer = routeParams?.customer || {};
+  const [todayFish, setTodayFish] = useState([]);
+  const [loadingFish, setLoadingFish] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [fishError, setFishError] = useState(null);
+
+  const fetchTodayFish = useCallback(async () => {
+    try {
+      setFishError(null);
+      const res = await api.getFish({ availability: true });
+      setTodayFish(res.data ? res.data.slice(0, 4) : []);
+    } catch (err) {
+      console.warn('[HOME TODAY FISH ERROR]', err.message);
+      setFishError(err.message || 'Unable to load today’s catch.');
+    } finally {
+      setLoadingFish(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTodayFish();
+  }, [fetchTodayFish]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchTodayFish();
+  }, [fetchTodayFish]);
 
   async function handleLogout() {
     try {
-      // Clear credentials securely from Android Keystore
       await clearAuthTokens();
     } catch (e) {
       console.warn('[LOGOUT ERROR]', e);
@@ -33,7 +66,18 @@ export default function HomeScreen({ routeParams, onNavigate }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bgMain} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.accent}
+            colors={[colors.primary]}
+          />
+        }
+      >
         {/* Top App Bar */}
         <View style={styles.appBar}>
           <View style={styles.brandRow}>
@@ -48,10 +92,12 @@ export default function HomeScreen({ routeParams, onNavigate }) {
             </View>
           </View>
 
-          {/* Secure Logout Action */}
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Sign Out</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <CartBadgeButton count={cartCount} onPress={() => onNavigate('CART')} />
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
+              <Text style={styles.logoutButtonText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 1. Customer Welcome Card */}
@@ -66,9 +112,7 @@ export default function HomeScreen({ routeParams, onNavigate }) {
             <Text style={styles.userName}>{customer.name || 'Valued Customer'}</Text>
             <View style={styles.metaRow}>
               <Text style={styles.metaPill}>📱 +91 {customer.mobileNumber || ''}</Text>
-              {Boolean(customer.area) && (
-                <Text style={styles.metaPill}>📍 {customer.area}</Text>
-              )}
+              {Boolean(customer.area) && <Text style={styles.metaPill}>📍 {customer.area}</Text>}
             </View>
           </View>
         </View>
@@ -90,26 +134,119 @@ export default function HomeScreen({ routeParams, onNavigate }) {
           </View>
         </View>
 
-        {/* 3. Quick Action Grid */}
-        <Text style={styles.sectionTitle}>Customer Services</Text>
+        {/* 3. Today's Fresh Fish Preview Section (CP-02 Section 18) */}
+        <View style={styles.sectionHeaderRow}>
+          <View>
+            <Text style={styles.sectionTitle}>Today's Fresh Catch</Text>
+            <Text style={styles.sectionSubtitle}>Direct lake harvest available now</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.seeAllButton}
+            onPress={() => onNavigate('MARKETPLACE')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.seeAllButtonText}>Marketplace →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loadingFish ? (
+          <View style={styles.previewLoadingBox}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={styles.previewLoadingText}>Loading fresh arrivals...</Text>
+          </View>
+        ) : fishError ? (
+          <View style={styles.previewErrorBox}>
+            <Text style={styles.previewErrorText}>Unable to load fresh catch preview.</Text>
+            <TouchableOpacity onPress={fetchTodayFish}>
+              <Text style={styles.previewRetryText}>Tap to Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : todayFish.length === 0 ? (
+          <View style={styles.previewEmptyBox}>
+            <Text style={styles.previewEmptyText}>No fish currently listed in store today.</Text>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalFishScroll}
+          >
+            {todayFish.map((item) => {
+              const effectivePrice = item.pricing ? item.pricing.effectivePrice : item.unitPrice;
+              const hasDiscount = item.pricing && item.pricing.hasDiscount;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.previewFishCard}
+                  onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.previewImageBox}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.previewImage} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 30 }}>🐟</Text>
+                    )}
+                    {hasDiscount && (
+                      <View style={styles.previewDiscountBadge}>
+                        <Text style={styles.previewDiscountText}>
+                          {item.pricing.discount?.percent ? `${item.pricing.discount.percent}% OFF` : 'DEAL'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.previewCardBody}>
+                    <FreshnessBadge freshness={item.freshness} style={{ marginBottom: 4 }} />
+                    <Text style={styles.previewFishName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <View style={styles.previewPriceRow}>
+                      <Text style={styles.previewPrice}>₹{effectivePrice}/kg</Text>
+                      {item.onlineBookable ? (
+                        <Text style={styles.bookableTag}>⚡ Bookable</Text>
+                      ) : (
+                        <Text style={styles.inStoreTag}>Counter Only</Text>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* 4. Quick Action Grid */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Customer Services</Text>
         <View style={styles.actionGrid}>
-          {/* Action 1: Catalogue */}
-          <View style={styles.actionCard}>
+          {/* Action 1: Catalogue (Clickable to Marketplace) */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => onNavigate('MARKETPLACE')}
+            activeOpacity={0.8}
+          >
             <View style={[styles.actionIconBox, { backgroundColor: 'rgba(2, 132, 199, 0.15)' }]}>
               <Text style={{ fontSize: 24 }}>🐟</Text>
             </View>
-            <Text style={styles.actionTitle}>Live Catch</Text>
-            <Text style={styles.actionDesc}>Reserve whole fish or cuts online</Text>
-          </View>
+            <Text style={styles.actionTitle}>Fish Marketplace</Text>
+            <Text style={styles.actionDesc}>Browse catalogue & reserve cuts online</Text>
+          </TouchableOpacity>
 
-          {/* Action 2: Bill Scan */}
-          <View style={styles.actionCard}>
+          {/* Action 2: Cart */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => onNavigate('CART')}
+            activeOpacity={0.8}
+          >
             <View style={[styles.actionIconBox, { backgroundColor: 'rgba(22, 163, 74, 0.15)' }]}>
-              <Text style={{ fontSize: 24 }}>🧾</Text>
+              <Text style={{ fontSize: 24 }}>🛒</Text>
             </View>
-            <Text style={styles.actionTitle}>Scan Bill</Text>
-            <Text style={styles.actionDesc}>Upload counter receipt & pay UPI</Text>
-          </View>
+            <Text style={styles.actionTitle}>My Cart</Text>
+            <Text style={styles.actionDesc}>
+              {cartCount > 0 ? `${cartCount} items in cart` : 'View reserved selections'}
+            </Text>
+          </TouchableOpacity>
 
           {/* Action 3: Subscriptions */}
           <View style={styles.actionCard}>
@@ -120,21 +257,22 @@ export default function HomeScreen({ routeParams, onNavigate }) {
             <Text style={styles.actionDesc}>Weekly credits & discount tier</Text>
           </View>
 
-          {/* Action 4: Live Delivery Tracking */}
+          {/* Action 4: Bill Scan */}
           <View style={styles.actionCard}>
             <View style={[styles.actionIconBox, { backgroundColor: 'rgba(147, 51, 234, 0.15)' }]}>
-              <Text style={{ fontSize: 24 }}>📍</Text>
+              <Text style={{ fontSize: 24 }}>🧾</Text>
             </View>
-            <Text style={styles.actionTitle}>Live GPS</Text>
-            <Text style={styles.actionDesc}>Track dedicated truck route</Text>
+            <Text style={styles.actionTitle}>Scan Bill</Text>
+            <Text style={styles.actionDesc}>Counter receipt upload</Text>
           </View>
         </View>
 
-        {/* 4. Security & Keystore Notice */}
+        {/* 5. Security & Hardware Notice */}
         <View style={styles.keystoreNotice}>
           <Text style={styles.keystoreTitle}>🛡️ Android Keystore Active</Text>
           <Text style={styles.keystoreDesc}>
-            Your session credentials are encrypted in hardware storage. No plaintext secrets stored on device.
+            Your session credentials are encrypted in hardware storage. All pricing and booking
+            eligibility authoritative from PondFish backend.
           </Text>
         </View>
       </ScrollView>
@@ -148,7 +286,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgMain,
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 40,
   },
   appBar: {
@@ -156,7 +294,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
-    marginBottom: 20,
+    marginBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -184,14 +322,14 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
     backgroundColor: colors.bgSurface,
     borderWidth: 1,
     borderColor: colors.border,
   },
   logoutButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
     fontWeight: '600',
   },
@@ -200,23 +338,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 20,
+    gap: 14,
+    marginBottom: 16,
   },
   userAvatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   userAvatarText: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
   },
   welcomeInfo: {
@@ -228,22 +366,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   userName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   metaPill: {
     fontSize: 11,
     color: colors.textSecondary,
     backgroundColor: colors.bgSurface,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -252,15 +390,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(2, 132, 199, 0.3)',
     borderRadius: 14,
-    padding: 16,
+    padding: 14,
     flexDirection: 'row',
-    gap: 14,
+    gap: 12,
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 20,
   },
   truckIconBox: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     borderRadius: 10,
     backgroundColor: 'rgba(2, 132, 199, 0.2)',
     alignItems: 'center',
@@ -270,7 +408,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   liveDot: {
     width: 7,
@@ -285,27 +423,153 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   truckTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: colors.textPrimary,
     marginBottom: 2,
   },
   truckSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
-    lineHeight: 16,
+    lineHeight: 15,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 14,
+  },
+  sectionSubtitle: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  seeAllButton: {
+    paddingVertical: 4,
+  },
+  seeAllButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  previewLoadingBox: {
+    padding: 24,
+    alignItems: 'center',
+    backgroundColor: colors.bgCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 8,
+  },
+  previewLoadingText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  previewErrorBox: {
+    padding: 16,
+    alignItems: 'center',
+    backgroundColor: colors.bgCard,
+    borderRadius: 14,
+    gap: 6,
+  },
+  previewErrorText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  previewRetryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  previewEmptyBox: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: colors.bgCard,
+    borderRadius: 14,
+  },
+  previewEmptyText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  horizontalFishScroll: {
+    gap: 12,
+    paddingRight: 16,
+  },
+  previewFishCard: {
+    width: 170,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  previewImageBox: {
+    width: '100%',
+    height: 100,
+    backgroundColor: colors.bgSurface,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  previewDiscountBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: colors.freshRed,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  previewDiscountText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  previewCardBody: {
+    padding: 10,
+  },
+  previewFishName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  previewPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  previewPrice: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: colors.textPrimary,
+  },
+  bookableTag: {
+    fontSize: 9,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  inStoreTag: {
+    fontSize: 9,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
   actionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 28,
+    marginBottom: 24,
+    marginTop: 12,
   },
   actionCard: {
     width: '48%',
@@ -313,18 +577,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
-    padding: 16,
+    padding: 14,
   },
   actionIconBox: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   actionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: colors.textPrimary,
     marginBottom: 4,
@@ -332,14 +596,14 @@ const styles = StyleSheet.create({
   actionDesc: {
     fontSize: 11,
     color: colors.textMuted,
-    lineHeight: 15,
+    lineHeight: 14,
   },
   keystoreNotice: {
     backgroundColor: colors.bgSurface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
   },
   keystoreTitle: {
     fontSize: 12,
@@ -350,6 +614,6 @@ const styles = StyleSheet.create({
   keystoreDesc: {
     fontSize: 11,
     color: colors.textMuted,
-    lineHeight: 16,
+    lineHeight: 15,
   },
 });
