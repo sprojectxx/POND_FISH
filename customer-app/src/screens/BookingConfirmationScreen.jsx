@@ -21,9 +21,11 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
   const booking = routeParams.booking || {};
   const [cancelling, setCancelling] = useState(false);
   const [cancelled, setCancelled] = useState(booking.status === 'CANCELLED');
+  const isCompleted = booking.status === 'COMPLETED';
+  const isPendingCollection = booking.status === 'PENDING_COLLECTION';
 
   const expiresAt = booking.expires_at ? new Date(booking.expires_at) : null;
-  const isExpired = expiresAt && expiresAt < new Date();
+  const isExpired = expiresAt && expiresAt < new Date() && !isCompleted && !cancelled;
 
   async function handleCancelBooking() {
     Alert.alert(
@@ -71,19 +73,29 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Status Hero Card */}
         <View style={[styles.heroCard, cancelled && styles.heroCardCancelled]}>
-          <Text style={styles.heroEmoji}>{cancelled ? '❌' : isExpired ? '⏰' : '🐟'}</Text>
+          <Text style={styles.heroEmoji}>
+            {isCompleted ? '✅' : cancelled ? '❌' : isExpired ? '⏰' : isPendingCollection ? '🔪' : '🐟'}
+          </Text>
           <Text style={styles.heroTitle}>
-            {cancelled
+            {isCompleted
+              ? 'Order Collected & Fulfilled!'
+              : cancelled
               ? 'Reservation Cancelled'
               : isExpired
               ? 'Booking Expired'
+              : isPendingCollection
+              ? 'Catch Being Prepared!'
               : 'Catch Reserved Successfully!'}
           </Text>
           <Text style={styles.heroSub}>
-            {cancelled
+            {isCompleted
+              ? 'Your fresh fish has been collected from the store. Thank you!'
+              : cancelled
               ? 'Reserved fish has been released back to available inventory.'
               : isExpired
               ? 'The 48-hour pickup window has lapsed.'
+              : isPendingCollection
+              ? 'The store worker is currently cleaning and packing your reserved catch.'
               : 'Your fresh fish has been reserved. Show this ticket upon arrival.'}
           </Text>
 
@@ -94,21 +106,37 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
         </View>
 
         {/* QR Ticket Container */}
-        <View style={[styles.qrContainer, (cancelled || isExpired) && styles.qrDisabled]}>
+        <View style={[styles.qrContainer, (cancelled || isExpired || isCompleted) && styles.qrDisabled]}>
           <View style={styles.qrHeader}>
             <Text style={styles.qrTitle}>STORE PICKUP QR CODE</Text>
             <Text
               style={[
                 styles.qrStatusTag,
-                cancelled ? styles.tagRed : isExpired ? styles.tagGrey : styles.tagGreen,
+                isCompleted
+                  ? styles.tagGreen
+                  : cancelled
+                  ? styles.tagRed
+                  : isExpired
+                  ? styles.tagGrey
+                  : isPendingCollection
+                  ? styles.tagYellow
+                  : styles.tagGreen,
               ]}
             >
-              {cancelled ? 'INVALID / CANCELLED' : isExpired ? 'EXPIRED' : 'ACTIVE TICKET'}
+              {isCompleted
+                ? 'COLLECTED / FULFILLED'
+                : cancelled
+                ? 'INVALID / CANCELLED'
+                : isExpired
+                ? 'EXPIRED'
+                : isPendingCollection
+                ? 'PREPARING FOR PICKUP'
+                : 'ACTIVE TICKET'}
             </Text>
           </View>
 
           {/* QR Graphical Simulated Pattern */}
-          <View style={styles.qrBox}>
+          <View style={[styles.qrBox, (isCompleted || cancelled || isExpired) && { opacity: 0.35 }]}>
             <View style={styles.qrCornerTL} />
             <View style={styles.qrCornerTR} />
             <View style={styles.qrCornerBL} />
@@ -125,6 +153,11 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
                 ███  ███  █  ███  ███
               </Text>
             </View>
+            {isCompleted && (
+              <View style={styles.qrRedeemedOverlay}>
+                <Text style={styles.qrRedeemedText}>REDEEMED</Text>
+              </View>
+            )}
           </View>
 
           {/* Cryptographic Token Reference */}
@@ -200,7 +233,7 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
             <Text style={styles.homeBtnText}>Continue Browsing Marketplace</Text>
           </TouchableOpacity>
 
-          {!cancelled && !isExpired && (
+          {!cancelled && !isExpired && !isCompleted && (
             <TouchableOpacity
               style={styles.cancelBtn}
               onPress={handleCancelBooking}
@@ -341,6 +374,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCFCE7',
     color: '#166534',
   },
+  tagYellow: {
+    backgroundColor: '#FEF3C7',
+    color: '#92400E',
+  },
   tagRed: {
     backgroundColor: '#FEE2E2',
     color: '#991B1B',
@@ -397,6 +434,21 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0F172A',
     lineHeight: 16,
+    letterSpacing: 2,
+  },
+  qrRedeemedOverlay: {
+    position: 'absolute',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#94A3B8',
+  },
+  qrRedeemedText: {
+    color: '#F8FAFC',
+    fontWeight: '900',
+    fontSize: 16,
     letterSpacing: 2,
   },
   tokenBox: {
