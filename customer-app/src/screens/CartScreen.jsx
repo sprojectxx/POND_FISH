@@ -240,12 +240,10 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
           </Text>
         </View>
 
-        {/* Slice 3 Scope: Cart & Review only */}
+        {/* Slice 4: Proceed to Checkout & Online Reservation */}
         <TouchableOpacity
           style={styles.checkoutButton}
-          onPress={() => {
-            alert('Cart confirmed! Online booking completion and pickup slots will be active in Vertical Slice 4.');
-          }}
+          onPress={() => onNavigate('CHECKOUT')}
           activeOpacity={0.8}
         >
           <Text style={styles.checkoutButtonText}>Review & Proceed to Booking →</Text>

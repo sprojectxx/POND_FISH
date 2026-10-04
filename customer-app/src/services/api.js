@@ -189,4 +189,66 @@ export const api = {
       method: 'DELETE',
     });
   },
+
+  /**
+   * Authoritative checkout preview
+   * POST /api/v1/customer/bookings/preview
+   */
+  async getCheckoutPreview() {
+    return request('/api/v1/customer/bookings/preview', {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Create online booking with atomic inventory reservation
+   * POST /api/v1/customer/bookings
+   * @param {object} [paymentVerification]
+   */
+  async createBooking(paymentVerification = null) {
+    return request('/api/v1/customer/bookings', {
+      method: 'POST',
+      body: JSON.stringify({ paymentVerification }),
+    });
+  },
+
+  /**
+   * List customer bookings history
+   * GET /api/v1/customer/bookings
+   */
+  async getBookings({ limit = 50, offset = 0 } = {}) {
+    return request(`/api/v1/customer/bookings?limit=${limit}&offset=${offset}`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Get single booking details with QR ticket
+   * GET /api/v1/customer/bookings/{id}
+   */
+  async getBookingDetails(bookingId) {
+    return request(`/api/v1/customer/bookings/${encodeURIComponent(bookingId)}`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Cancel an active booking and release reserved stock
+   * POST /api/v1/customer/bookings/{id}/cancel
+   */
+  async cancelBooking(bookingId) {
+    return request(`/api/v1/customer/bookings/${encodeURIComponent(bookingId)}/cancel`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Create Razorpay order intent for checkout
+   * POST /api/v1/payments/razorpay/orders
+   */
+  async createRazorpayOrder() {
+    return request('/api/v1/payments/razorpay/orders', {
+      method: 'POST',
+    });
+  },
 };

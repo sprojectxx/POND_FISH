@@ -24,8 +24,19 @@ import HomeScreen from './src/screens/HomeScreen';
 import MarketplaceScreen from './src/screens/MarketplaceScreen';
 import FishDetailsScreen from './src/screens/FishDetailsScreen';
 import CartScreen from './src/screens/CartScreen';
+import CheckoutScreen from './src/screens/CheckoutScreen';
+import BookingConfirmationScreen from './src/screens/BookingConfirmationScreen';
+import BookingHistoryScreen from './src/screens/BookingHistoryScreen';
 
-const AUTHENTICATED_SCREENS = ['HOME', 'MARKETPLACE', 'FISH_DETAILS', 'CART'];
+const AUTHENTICATED_SCREENS = [
+  'HOME',
+  'MARKETPLACE',
+  'FISH_DETAILS',
+  'CART',
+  'CHECKOUT',
+  'BOOKING_CONFIRMATION',
+  'BOOKING_HISTORY',
+];
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
@@ -124,6 +135,28 @@ export default function App() {
             onCartUpdated={handleCartUpdated}
           />
         )}
+
+        {currentScreen === 'CHECKOUT' && (
+          <CheckoutScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+            onCartUpdated={handleCartUpdated}
+          />
+        )}
+
+        {currentScreen === 'BOOKING_CONFIRMATION' && (
+          <BookingConfirmationScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'BOOKING_HISTORY' && (
+          <BookingHistoryScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
       </View>
 
       {/* Authenticated Global Bottom Navigation Bar */}
@@ -176,7 +209,13 @@ export default function App() {
             activeOpacity={0.7}
           >
             <View style={styles.cartNavBox}>
-              <Text style={[styles.navIcon, currentScreen === 'CART' && styles.navIconActive]}>
+              <Text
+                style={[
+                  styles.navIcon,
+                  (currentScreen === 'CART' || currentScreen === 'CHECKOUT') &&
+                    styles.navIconActive,
+                ]}
+              >
                 🛒
               </Text>
               {cartCount > 0 && (
@@ -185,8 +224,40 @@ export default function App() {
                 </View>
               )}
             </View>
-            <Text style={[styles.navLabel, currentScreen === 'CART' && styles.navLabelActive]}>
+            <Text
+              style={[
+                styles.navLabel,
+                (currentScreen === 'CART' || currentScreen === 'CHECKOUT') &&
+                  styles.navLabelActive,
+              ]}
+            >
               Cart
+            </Text>
+          </TouchableOpacity>
+
+          {/* Nav Item 4: Bookings (QR Tickets) */}
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => handleNavigate('BOOKING_HISTORY')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.navIcon,
+                (currentScreen === 'BOOKING_HISTORY' || currentScreen === 'BOOKING_CONFIRMATION') &&
+                  styles.navIconActive,
+              ]}
+            >
+              🎫
+            </Text>
+            <Text
+              style={[
+                styles.navLabel,
+                (currentScreen === 'BOOKING_HISTORY' || currentScreen === 'BOOKING_CONFIRMATION') &&
+                  styles.navLabelActive,
+              ]}
+            >
+              Bookings
             </Text>
           </TouchableOpacity>
         </View>
