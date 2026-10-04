@@ -27,6 +27,7 @@ import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import BookingConfirmationScreen from './src/screens/BookingConfirmationScreen';
 import BookingHistoryScreen from './src/screens/BookingHistoryScreen';
+import SubscriptionScreen from './src/screens/SubscriptionScreen';
 
 const AUTHENTICATED_SCREENS = [
   'HOME',
@@ -36,6 +37,7 @@ const AUTHENTICATED_SCREENS = [
   'CHECKOUT',
   'BOOKING_CONFIRMATION',
   'BOOKING_HISTORY',
+  'SUBSCRIPTION',
 ];
 
 export default function App() {
@@ -153,6 +155,13 @@ export default function App() {
 
         {currentScreen === 'BOOKING_HISTORY' && (
           <BookingHistoryScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'SUBSCRIPTION' && (
+          <SubscriptionScreen
             routeParams={screenParams}
             onNavigate={handleNavigate}
           />

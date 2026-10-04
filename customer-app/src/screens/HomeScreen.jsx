@@ -249,13 +249,17 @@ export default function HomeScreen({ routeParams = {}, onNavigate, cartCount = 0
           </TouchableOpacity>
 
           {/* Action 3: Subscriptions */}
-          <View style={styles.actionCard}>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => onNavigate('SUBSCRIPTION')}
+            activeOpacity={0.8}
+          >
             <View style={[styles.actionIconBox, { backgroundColor: 'rgba(217, 119, 6, 0.15)' }]}>
               <Text style={{ fontSize: 24 }}>💳</Text>
             </View>
             <Text style={styles.actionTitle}>Subscription</Text>
             <Text style={styles.actionDesc}>Weekly credits & discount tier</Text>
-          </View>
+          </TouchableOpacity>
 
           {/* Action 4: Bill Scan */}
           <View style={styles.actionCard}>

@@ -251,4 +251,65 @@ export const api = {
       method: 'POST',
     });
   },
+
+  /**
+   * Fetch authenticated customer's active subscription status
+   * GET /api/v1/customer/subscription
+   */
+  async getSubscription() {
+    return request('/api/v1/customer/subscription', {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Fetch available active subscription plans
+   * GET /api/v1/customer/subscription/plans
+   */
+  async getSubscriptionPlans() {
+    return request('/api/v1/customer/subscription/plans', {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Initiate subscription purchase intent (Razorpay order creation)
+   * POST /api/v1/customer/subscription/purchase
+   * @param {string} planId
+   */
+  async purchaseSubscription(planId) {
+    return request('/api/v1/customer/subscription/purchase', {
+      method: 'POST',
+      body: JSON.stringify({ planId }),
+    });
+  },
+
+  /**
+   * Verify Razorpay payment signature and activate subscription
+   * POST /api/v1/customer/subscription/verify
+   * @param {object} params
+   */
+  async verifySubscriptionPayment({ planId, razorpayOrderId, razorpayPaymentId, razorpaySignature }) {
+    return request('/api/v1/customer/subscription/verify', {
+      method: 'POST',
+      body: JSON.stringify({
+        planId,
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature,
+      }),
+    });
+  },
+
+  /**
+   * Retrieve customer subscription credit movements ledger
+   * GET /api/v1/customer/subscription/ledger
+   * @param {object} [params]
+   */
+  async getSubscriptionLedger({ limit = 50, offset = 0 } = {}) {
+    return request(`/api/v1/customer/subscription/ledger?limit=${limit}&offset=${offset}`, {
+      method: 'GET',
+    });
+  },
 };
+
