@@ -56,12 +56,18 @@ export default function BookingHistoryScreen({ onNavigate }) {
   }
 
   function renderStatusBadge(status, expiresAt) {
-    const isExpired = expiresAt && new Date(expiresAt) < new Date() && status === 'CONFIRMED';
+    const isExpired = expiresAt && new Date(expiresAt) <= new Date() && ['CONFIRMED', 'CREATED', 'PENDING_COLLECTION'].includes(status);
     const displayStatus = isExpired ? 'EXPIRED' : status;
 
     let badgeStyle = styles.badgePending;
+    let countdownText = null;
+
     if (displayStatus === 'CONFIRMED' || displayStatus === 'PENDING_COLLECTION') {
       badgeStyle = styles.badgeConfirmed;
+      if (expiresAt) {
+        const remainingHours = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60)));
+        countdownText = `${remainingHours}h left`;
+      }
     } else if (displayStatus === 'COMPLETED') {
       badgeStyle = styles.badgeCompleted;
     } else if (displayStatus === 'CANCELLED' || displayStatus === 'EXPIRED') {
@@ -69,8 +75,15 @@ export default function BookingHistoryScreen({ onNavigate }) {
     }
 
     return (
-      <View style={[styles.badge, badgeStyle]}>
-        <Text style={styles.badgeText}>{displayStatus}</Text>
+      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+        <View style={[styles.badge, badgeStyle]}>
+          <Text style={styles.badgeText}>{displayStatus}</Text>
+        </View>
+        {countdownText && (
+          <Text style={{ fontSize: 10, color: colors.accent, fontWeight: '700' }}>
+            ⏳ {countdownText}
+          </Text>
+        )}
       </View>
     );
   }

@@ -4,7 +4,7 @@
  * Secure digital pickup ticket with 48-hour lifecycle countdown and store instructions.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,10 +27,36 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
   const expiresAt = booking.expires_at ? new Date(booking.expires_at) : null;
   const isExpired = expiresAt && expiresAt < new Date() && !isCompleted && !cancelled;
 
+  const [timeLeft, setTimeLeft] = useState('');
+  const [isExpiredLive, setIsExpiredLive] = useState(isExpired);
+
+  useEffect(() => {
+    if (!expiresAt || isCompleted || cancelled) return;
+
+    function updateCountdown() {
+      const now = new Date();
+      const diffMs = expiresAt.getTime() - now.getTime();
+      if (diffMs <= 0) {
+        setIsExpiredLive(true);
+        setTimeLeft('Expired');
+        return;
+      }
+      const totalSecs = Math.floor(diffMs / 1000);
+      const hours = Math.floor(totalSecs / 3600);
+      const minutes = Math.floor((totalSecs % 3600) / 60);
+      const seconds = totalSecs % 60;
+      setTimeLeft(`${hours}h ${minutes}m ${seconds}s remaining`);
+    }
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt, isCompleted, cancelled]);
+
   async function handleCancelBooking() {
     Alert.alert(
       'Cancel Booking Reservation',
-      'Are you sure you want to cancel this booking? Reserved fish will be returned to store stock, and subscription benefits will be restored.',
+      'Are you sure you want to cancel this booking? Reserved fish will be returned to store stock, and subscription benefits and payment value will be restored.',
       [
         { text: 'Keep Booking', style: 'cancel' },
         {
@@ -41,7 +67,10 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
             try {
               await api.cancelBooking(booking.id);
               setCancelled(true);
-              Alert.alert('Booking Cancelled', 'Your reservation has been cancelled and inventory released.');
+              Alert.alert(
+                'Booking Cancelled',
+                'Your booking has been cancelled successfully. Your applicable booking benefits and payment value have been restored according to PondFish policy.'
+              );
             } catch (err) {
               Alert.alert('Cancellation Error', err.message || 'Unable to cancel booking.');
             } finally {
@@ -168,13 +197,22 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
             </Text>
           </View>
 
-          {/* 48-Hour Lifecycle Notice */}
-          <View style={styles.expiryRow}>
+          {/* 48-Hour Lifecycle Countdown Notice */}
+          <View style={[styles.expiryRow, (isExpired || isExpiredLive) && styles.expiryRowExpired]}>
             <Text style={styles.expiryIcon}>⏱️</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.expiryTitle}>48-Hour Collection Window</Text>
-              <Text style={styles.expiryTime}>
-                Valid until: {expiresAt ? expiresAt.toLocaleString() : '48 hours from confirmation'}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                <Text style={[styles.expiryTitle, (isExpired || isExpiredLive) && { color: colors.freshRed }]}>
+                  48-Hour Collection Window
+                </Text>
+                {Boolean(timeLeft) && !isCompleted && !cancelled && (
+                  <View style={[styles.countdownBadge, (isExpired || isExpiredLive) ? styles.countdownBadgeExpired : styles.countdownBadgeActive]}>
+                    <Text style={styles.countdownBadgeText}>{timeLeft}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.expiryTime, (isExpired || isExpiredLive) && { color: '#EF4444' }]}>
+                Valid until: {expiresAt ? expiresAt.toLocaleString('en-IN') : '48 hours from confirmation'}
               </Text>
             </View>
           </View>
@@ -490,6 +528,26 @@ const styles = StyleSheet.create({
   expiryTime: {
     fontSize: 11,
     color: '#B45309',
+  },
+  expiryRowExpired: {
+    backgroundColor: 'rgba(220, 38, 38, 0.15)',
+    borderColor: 'rgba(220, 38, 38, 0.3)',
+  },
+  countdownBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  countdownBadgeActive: {
+    backgroundColor: '#D97706',
+  },
+  countdownBadgeExpired: {
+    backgroundColor: colors.freshRed,
+  },
+  countdownBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   instructionsCard: {
     backgroundColor: colors.bgCard,

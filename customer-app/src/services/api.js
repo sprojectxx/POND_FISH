@@ -243,6 +243,17 @@ export const api = {
   },
 
   /**
+   * Trigger authoritative booking expiry processing
+   * POST /api/v1/customer/bookings/expire
+   */
+  async processBookingExpiry(bookingId = null) {
+    return request('/api/v1/customer/bookings/expire', {
+      method: 'POST',
+      body: JSON.stringify({ bookingId }),
+    });
+  },
+
+  /**
    * Create Razorpay order intent for checkout
    * POST /api/v1/payments/razorpay/orders
    */
