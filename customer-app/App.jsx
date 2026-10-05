@@ -28,6 +28,7 @@ import CheckoutScreen from './src/screens/CheckoutScreen';
 import BookingConfirmationScreen from './src/screens/BookingConfirmationScreen';
 import BookingHistoryScreen from './src/screens/BookingHistoryScreen';
 import SubscriptionScreen from './src/screens/SubscriptionScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
 
 const AUTHENTICATED_SCREENS = [
   'HOME',
@@ -38,6 +39,7 @@ const AUTHENTICATED_SCREENS = [
   'BOOKING_CONFIRMATION',
   'BOOKING_HISTORY',
   'SUBSCRIPTION',
+  'NOTIFICATIONS',
 ];
 
 export default function App() {
@@ -162,6 +164,13 @@ export default function App() {
 
         {currentScreen === 'SUBSCRIPTION' && (
           <SubscriptionScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'NOTIFICATIONS' && (
+          <NotificationsScreen
             routeParams={screenParams}
             onNavigate={handleNavigate}
           />

@@ -29,6 +29,7 @@ export default function HomeScreen({ routeParams = {}, onNavigate, cartCount = 0
   const [loadingFish, setLoadingFish] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fishError, setFishError] = useState(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
   const fetchTodayFish = useCallback(async () => {
     try {
@@ -41,6 +42,15 @@ export default function HomeScreen({ routeParams = {}, onNavigate, cartCount = 0
     } finally {
       setLoadingFish(false);
       setRefreshing(false);
+    }
+
+    try {
+      const notifRes = await api.getNotifications({ limit: 1 });
+      if (notifRes?.data?.unreadCount !== undefined) {
+        setUnreadNotificationsCount(notifRes.data.unreadCount);
+      }
+    } catch {
+      // Notification count error is non-blocking
     }
   }, []);
 
@@ -93,6 +103,20 @@ export default function HomeScreen({ routeParams = {}, onNavigate, cartCount = 0
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              style={styles.notifButton}
+              onPress={() => onNavigate('NOTIFICATIONS')}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 18 }}>🔔</Text>
+              {unreadNotificationsCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
             <CartBadgeButton count={cartCount} onPress={() => onNavigate('CART')} />
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
               <Text style={styles.logoutButtonText}>Sign Out</Text>
@@ -336,6 +360,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
     fontWeight: '600',
+  },
+  notifButton: {
+    position: 'relative',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.bgSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    backgroundColor: colors.accent,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: {
+    color: '#000000',
+    fontSize: 9,
+    fontWeight: '800',
   },
   welcomeCard: {
     backgroundColor: colors.bgCard,

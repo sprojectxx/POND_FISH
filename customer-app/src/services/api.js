@@ -322,5 +322,67 @@ export const api = {
       method: 'GET',
     });
   },
+
+  /**
+   * Retrieve customer notifications list with pagination and optional category filter
+   * GET /api/v1/customer/notifications
+   * @param {object} [params]
+   */
+  async getNotifications({ limit = 50, offset = 0, type = null } = {}) {
+    const query = new URLSearchParams({ limit, offset });
+    if (type && type.toUpperCase() !== 'ALL') {
+      query.set('type', type.toUpperCase());
+    }
+    return request(`/api/v1/customer/notifications?${query.toString()}`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Mark a single notification as read
+   * PATCH /api/v1/customer/notifications/[id]/read
+   * @param {string} notificationId
+   */
+  async markNotificationRead(notificationId) {
+    return request(`/api/v1/customer/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+    });
+  },
+
+  /**
+   * Mark all unread customer notifications as read
+   * POST /api/v1/customer/notifications/mark-all-read
+   */
+  async markAllNotificationsRead() {
+    return request('/api/v1/customer/notifications/mark-all-read', {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Register customer FCM device token
+   * POST /api/v1/customer/notifications/device
+   * @param {string} deviceToken
+   * @param {string} [platform='android']
+   */
+  async registerDeviceToken(deviceToken, platform = 'android') {
+    return request('/api/v1/customer/notifications/device', {
+      method: 'POST',
+      body: JSON.stringify({ deviceToken, platform }),
+    });
+  },
+
+  /**
+   * Unregister customer FCM device token on logout
+   * DELETE /api/v1/customer/notifications/device
+   * @param {string} deviceToken
+   */
+  async unregisterDeviceToken(deviceToken) {
+    return request('/api/v1/customer/notifications/device', {
+      method: 'DELETE',
+      body: JSON.stringify({ deviceToken }),
+    });
+  },
 };
+
 
