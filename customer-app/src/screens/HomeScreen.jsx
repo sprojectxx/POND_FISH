@@ -285,15 +285,32 @@ export default function HomeScreen({ routeParams = {}, onNavigate, cartCount = 0
             <Text style={styles.actionDesc}>Weekly credits & discount tier</Text>
           </TouchableOpacity>
 
-          {/* Action 4: Bill Scan */}
-          <View style={styles.actionCard}>
+          {/* Action 4: Bill Scan (Slice 10) */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => onNavigate('SCAN_BILL')}
+            activeOpacity={0.8}
+          >
             <View style={[styles.actionIconBox, { backgroundColor: 'rgba(147, 51, 234, 0.15)' }]}>
               <Text style={{ fontSize: 24 }}>🧾</Text>
             </View>
             <Text style={styles.actionTitle}>Scan Bill</Text>
-            <Text style={styles.actionDesc}>Counter receipt upload</Text>
-          </View>
+            <Text style={styles.actionDesc}>Counter receipt settlement</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* In-Store Transaction History Shortcut */}
+        <TouchableOpacity
+          style={styles.txnHistoryShortcut}
+          onPress={() => onNavigate('TRANSACTION_HISTORY')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.txnShortcutLeft}>
+            <Text style={{ fontSize: 18, marginRight: 10 }}>📜</Text>
+            <Text style={styles.txnShortcutTitle}>Past Purchases & Receipts</Text>
+          </View>
+          <Text style={styles.txnShortcutArrow}>View All →</Text>
+        </TouchableOpacity>
 
         {/* 5. Security & Hardware Notice */}
         <View style={styles.keystoreNotice}>
@@ -671,5 +688,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
     lineHeight: 15,
+  },
+  txnHistoryShortcut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.bgCard,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 20,
+  },
+  txnShortcutLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  txnShortcutTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  txnShortcutArrow: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.accent,
   },
 });

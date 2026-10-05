@@ -29,6 +29,10 @@ import BookingConfirmationScreen from './src/screens/BookingConfirmationScreen';
 import BookingHistoryScreen from './src/screens/BookingHistoryScreen';
 import SubscriptionScreen from './src/screens/SubscriptionScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import ScanBillScreen from './src/screens/ScanBillScreen';
+import BillReviewScreen from './src/screens/BillReviewScreen';
+import TransactionResultScreen from './src/screens/TransactionResultScreen';
+import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
 
 const AUTHENTICATED_SCREENS = [
   'HOME',
@@ -40,6 +44,10 @@ const AUTHENTICATED_SCREENS = [
   'BOOKING_HISTORY',
   'SUBSCRIPTION',
   'NOTIFICATIONS',
+  'SCAN_BILL',
+  'BILL_REVIEW',
+  'TRANSACTION_RESULT',
+  'TRANSACTION_HISTORY',
 ];
 
 export default function App() {
@@ -171,6 +179,34 @@ export default function App() {
 
         {currentScreen === 'NOTIFICATIONS' && (
           <NotificationsScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'SCAN_BILL' && (
+          <ScanBillScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'BILL_REVIEW' && (
+          <BillReviewScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'TRANSACTION_RESULT' && (
+          <TransactionResultScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'TRANSACTION_HISTORY' && (
+          <TransactionHistoryScreen
             routeParams={screenParams}
             onNavigate={handleNavigate}
           />

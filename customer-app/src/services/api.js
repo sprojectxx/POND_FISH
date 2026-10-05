@@ -383,6 +383,121 @@ export const api = {
       body: JSON.stringify({ deviceToken }),
     });
   },
+
+  /**
+   * Scan physical store bill via camera/image upload
+   * POST /api/v1/customer/bills/scan
+   * @param {object} params - { imageBase64, imageUrl, rawText }
+   */
+  async scanBill({ imageBase64, imageUrl, rawText }) {
+    return request('/api/v1/customer/bills/scan', {
+      method: 'POST',
+      body: JSON.stringify({
+        image_base64: imageBase64,
+        image_url: imageUrl,
+        raw_text: rawText,
+      }),
+    });
+  },
+
+  /**
+   * Retrieve extracted bill details by scan ID
+   * GET /api/v1/customer/bills/scans/{id}
+   * @param {string} scanId
+   */
+  async getBillScan(scanId) {
+    return request(`/api/v1/customer/bills/scans/${scanId}`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Set manual Bill Number when AI OCR missed or cannot read it
+   * POST /api/v1/customer/bills/scans/{id}/bill-number
+   * @param {string} scanId
+   * @param {string} billNumber
+   */
+  async updateBillNumber(scanId, billNumber) {
+    return request(`/api/v1/customer/bills/scans/${scanId}/bill-number`, {
+      method: 'POST',
+      body: JSON.stringify({ bill_number: billNumber }),
+    });
+  },
+
+  /**
+   * Authoritative preview of subscription coverage and final payable amount
+   * POST /api/v1/customer/bills/scans/{id}/preview
+   * @param {string} scanId
+   * @param {Array<object>} [items]
+   */
+  async previewPhysicalTransaction(scanId, items = []) {
+    return request(`/api/v1/customer/bills/scans/${scanId}/preview`, {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  /**
+   * Confirm bill before payment
+   * POST /api/v1/customer/bills/scans/{id}/confirm
+   * @param {string} scanId
+   */
+  async confirmBillScan(scanId) {
+    return request(`/api/v1/customer/bills/scans/${scanId}/confirm`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Commit physical store purchase transaction
+   * POST /api/v1/customer/transactions/commit
+   * @param {object} params
+   */
+  async commitPhysicalTransaction({
+    scanId,
+    billId,
+    paymentMethod = 'RAZORPAY',
+    razorpayPaymentId = null,
+    razorpayOrderId = null,
+    razorpaySignature = null,
+    items = [],
+  }) {
+    return request('/api/v1/customer/transactions/commit', {
+      method: 'POST',
+      body: JSON.stringify({
+        scan_id: scanId || billId,
+        bill_id: billId || scanId,
+        payment_method: paymentMethod,
+        razorpay_payment_id: razorpayPaymentId,
+        razorpay_order_id: razorpayOrderId,
+        razorpay_signature: razorpaySignature,
+        items,
+      }),
+    });
+  },
+
+  /**
+   * Retrieve customer physical purchase and booking transactions
+   * GET /api/v1/customer/transactions
+   * @param {object} [params]
+   */
+  async getCustomerTransactions({ limit = 50, offset = 0 } = {}) {
+    return request(`/api/v1/customer/transactions?limit=${limit}&offset=${offset}`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Retrieve a specific transaction receipt by ID
+   * GET /api/v1/customer/transactions/{id}
+   * @param {string} transactionId
+   */
+  async getCustomerTransactionById(transactionId) {
+    return request(`/api/v1/customer/transactions/${transactionId}`, {
+      method: 'GET',
+    });
+  },
 };
+
 
 
