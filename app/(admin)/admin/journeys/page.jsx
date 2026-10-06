@@ -25,29 +25,27 @@ export default function AdminJourneysPage() {
 
   // Create Journey Form
   const [createForm, setCreateForm] = useState({
-    truckNumber: 'AP-39-TF-1001',
-    driverName: 'Ramesh Kumar',
-    originName: 'Kakinada Fresh Catch Harbor',
-    originLat: 16.9891,
-    originLng: 82.2475,
+    truckNumber: '',
+    driverName: '',
+    originName: '',
+    originLat: '',
+    originLng: '',
     destinationName: 'PondFish Main Store',
     destinationAddress: '123 Fresh Lake Road, Water Town, AP',
-    destinationLat: 12.9716,
-    destinationLng: 77.5946,
+    destinationLat: '',
+    destinationLng: '',
     geofenceRadiusMeters: 500,
     fishItems: [
-      { fishName: 'Rohu (Fresh Cut)', quantityKg: 120 },
-      { fishName: 'Katla (Whole/Steaks)', quantityKg: 85 },
-      { fishName: 'Vanjaram (Seer Fish)', quantityKg: 60 },
+      { fishName: '', quantityKg: '' },
     ],
   });
 
   // GPS Ingestion Form
   const [ingestForm, setIngestForm] = useState({
-    latitude: 12.9720,
-    longitude: 77.5950,
-    speed: 38,
-    heading: 260,
+    latitude: '',
+    longitude: '',
+    speed: '',
+    heading: '',
   });
 
   const wsRef = useRef(null);
@@ -1019,27 +1017,6 @@ export default function AdminJourneysPage() {
                     onChange={(e) => setIngestForm({ ...ingestForm, heading: e.target.value })}
                     style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC' }}
                   />
-                </div>
-              </div>
-
-              {/* Quick Preset Buttons for Testing */}
-              <div style={{ marginBottom: '20px', padding: '12px', background: '#0F172A', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '8px' }}>QUICK PRESETS:</div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setIngestForm({ latitude: 13.0827, longitude: 80.2707, speed: 45, heading: 260 })}
-                    style={{ fontSize: '11px', padding: '6px 10px', background: '#334155', color: '#FFF', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                  >
-                    Highway en Route (Chennai)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIngestForm({ latitude: 12.9718, longitude: 77.5948, speed: 10, heading: 180 })}
-                    style={{ fontSize: '11px', padding: '6px 10px', background: '#15803D', color: '#FFF', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                  >
-                    Inside Geofence (Store Arrival)
-                  </button>
                 </div>
               </div>
 
