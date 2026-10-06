@@ -6,17 +6,20 @@ export default function AdminLayout({ children }) {
           PONDFISH ADMIN
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', color: '#94A3B8' }}>
-          <a href="/admin" style={{ color: '#94A3B8', textDecoration: 'none' }}>Overview</a>
-          <span>Fish Master & Pricing</span>
-          <span>Freshness Durations</span>
-          <span>Stock & Receiving</span>
-          <span>Subscription Plans</span>
-          <span>Customer Accounts</span>
-          <a href="/admin/journeys" style={{ color: '#38BDF8', textDecoration: 'none', fontWeight: 'bold' }}>
-            🚛 GPS Truck Journey
-          </a>
-          <span>Audit Logs</span>
-          <span>System Settings</span>
+          <a href="/admin" style={{ color: '#F8FAFC', textDecoration: 'none', padding: '6px 8px', borderRadius: '4px' }}>📊 Executive Dashboard</a>
+          <a href="/admin/journeys" style={{ color: '#38BDF8', textDecoration: 'none', padding: '6px 8px', borderRadius: '4px' }}>🚛 GPS Truck Journey</a>
+          <a href="/admin/settings" style={{ color: '#94A3B8', textDecoration: 'none', padding: '6px 8px', borderRadius: '4px' }}>⚙️ Business Settings</a>
+          <a href="/admin/reports" style={{ color: '#94A3B8', textDecoration: 'none', padding: '6px 8px', borderRadius: '4px' }}>📈 Reports & Exports</a>
+          <a href="/admin/audit" style={{ color: '#94A3B8', textDecoration: 'none', padding: '6px 8px', borderRadius: '4px' }}>📋 Audit Trail</a>
+          <a href="/admin/exceptions" style={{ color: '#94A3B8', textDecoration: 'none', padding: '6px 8px', borderRadius: '4px' }}>⚠️ Exceptions Center</a>
+          <div style={{ margin: '12px 0 6px 0', borderTop: '1px solid #334155', paddingTop: '12px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B' }}>
+            Catalog & Accounts
+          </div>
+          <span style={{ padding: '4px 8px', color: '#64748B' }}>Fish Master & Pricing</span>
+          <span style={{ padding: '4px 8px', color: '#64748B' }}>Freshness Durations</span>
+          <span style={{ padding: '4px 8px', color: '#64748B' }}>Stock & Receiving</span>
+          <span style={{ padding: '4px 8px', color: '#64748B' }}>Subscription Plans</span>
+          <span style={{ padding: '4px 8px', color: '#64748B' }}>Customer Accounts</span>
         </nav>
       </aside>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
