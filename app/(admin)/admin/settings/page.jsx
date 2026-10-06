@@ -83,7 +83,7 @@ export default function AdminSettingsPage() {
     fetchSettings();
   }, [fetchSettings]);
 
-  const saveSetting = async (key, value, reasonText) => {
+  const saveSetting = async (key, value, reasonText, confirmed = false) => {
     try {
       setSavingKey(key);
       setError(null);
@@ -99,6 +99,7 @@ export default function AdminSettingsPage() {
           key,
           value,
           reason: reasonText || auditReason || 'Admin updated configuration',
+          confirmed: Boolean(confirmed),
         }),
       });
 
@@ -132,7 +133,7 @@ export default function AdminSettingsPage() {
   const confirmDestinationSave = () => {
     setShowConfirmModal(false);
     if (pendingDestinationChange) {
-      saveSetting('store_destination', pendingDestinationChange, 'Admin confirmed elevated destination update');
+      saveSetting('store_destination', pendingDestinationChange, 'Admin confirmed elevated destination update', true);
       setPendingDestinationChange(null);
     }
   };

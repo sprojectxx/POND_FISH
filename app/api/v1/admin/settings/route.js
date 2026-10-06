@@ -43,7 +43,7 @@ export async function PATCH(request) {
     const admin = authenticateAdmin(request);
 
     const body = await request.json().catch(() => ({}));
-    const { key, value, reason } = body;
+    const { key, value, reason, confirmed } = body;
 
     if (!key || !value) {
       return NextResponse.json(
@@ -52,10 +52,24 @@ export async function PATCH(request) {
       );
     }
 
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
+      return NextResponse.json(
+        { success: false, error: { code: 'AUDIT_REASON_REQUIRED', message: 'A descriptive audit reason (at least 5 characters) is required for business settings changes.' } },
+        { status: 400 }
+      );
+    }
+
+    if (key === 'store_destination' && confirmed !== true) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ELEVATED_CONFIRMATION_REQUIRED', message: 'Modifying store destination and geofence coordinates requires elevated server-side confirmation.' } },
+        { status: 400 }
+      );
+    }
+
     const updated = await businessSettingsEngine.updateSetting(key, value, {
       actorId: admin.id,
       actorType: 'ADMIN',
-      reason: reason || 'Admin updated business settings',
+      reason: reason.trim(),
     });
 
     return NextResponse.json({

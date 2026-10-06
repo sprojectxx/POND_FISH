@@ -13,13 +13,13 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request, { params }) {
   try {
-    authenticateAdmin(request);
+    const admin = authenticateAdmin(request);
 
     const { id } = params;
     const body = await request.json().catch(() => ({}));
     const published = body.published !== undefined ? Boolean(body.published) : true;
 
-    const updated = await gpsTrackingEngine.setCustomerPublication(id, published);
+    const updated = await gpsTrackingEngine.setCustomerPublication(id, published, admin.id);
 
     return NextResponse.json({
       success: true,
