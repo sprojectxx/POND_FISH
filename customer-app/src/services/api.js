@@ -493,8 +493,23 @@ export const api = {
    * GET /api/v1/customer/transactions/{id}
    * @param {string} transactionId
    */
-  async getCustomerTransactionById(transactionId) {
-    return request(`/api/v1/customer/transactions/${transactionId}`, {
+  /**
+   * Retrieve active live GPS delivery tracking for customer
+   * GET /api/v1/customer/gps/live
+   */
+  async getCustomerLiveTracking() {
+    return request('/api/v1/customer/gps/live', {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Retrieve a specific customer-published GPS journey by ID
+   * GET /api/v1/customer/gps/journeys/{id}
+   * @param {string} journeyId
+   */
+  async getCustomerJourneyById(journeyId) {
+    return request(`/api/v1/customer/gps/journeys/${journeyId}`, {
       method: 'GET',
     });
   },

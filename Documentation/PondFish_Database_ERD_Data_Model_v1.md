@@ -878,24 +878,25 @@ Historical successful transactions remain in the database.
 
 ## 24.1 gps_journeys
 
-  Field                      Type
-  -------------------------- -----------
-  id                         UUID
-  journey_number             VARCHAR
-  created_by                 UUID
-  provider                   VARCHAR
-  provider_journey_id        VARCHAR
-  origin                     JSON
-  destination                JSON
-  status                     ENUM
-  tracking_published         BOOLEAN
-  published_at               TIMESTAMP
-  arrived_at                 TIMESTAMP
-  customer_tracking_end_at   TIMESTAMP
-  created_at                 TIMESTAMP
-  updated_at                 TIMESTAMP
+  Field                         Type
+  ----------------------------- ------------------------------------
+  id                            UUID (Primary Key)
+  truck_number                  TEXT
+  driver_name                   TEXT
+  origin                        JSONB
+  destination                   JSONB
+  fish_manifest                 JSONB (DEFAULT '[]'::jsonb)
+  status                        ENUM ('DRAFT', 'LIVE', 'STOPPED', 'CANCELLED')
+  published_to_customer         BOOLEAN (DEFAULT false)
+  started_at                    TIMESTAMP WITHOUT TIME ZONE
+  ended_at                      TIMESTAMP WITHOUT TIME ZONE
+  customer_tracking_closed_at   TIMESTAMPTZ
+  created_at                    TIMESTAMP WITHOUT TIME ZONE (DEFAULT CURRENT_TIMESTAMP)
 
-Destination is the configured PondFish store.
+Destination is the configured PondFish store geofence.
+Origin contains pickup location details ({ name, latitude, longitude }).
+Fish manifest contains JSON array of fish cuts, quantities ({ fishId, fishName, quantityKg }).
+Customer tracking closed timestamp marks when live customer-facing tracking ends post-arrival.
 
 ------------------------------------------------------------------------
 

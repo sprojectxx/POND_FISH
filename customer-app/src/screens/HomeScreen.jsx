@@ -142,21 +142,25 @@ export default function HomeScreen({ routeParams = {}, onNavigate, cartCount = 0
         </View>
 
         {/* 2. Live Truck & Cold-Chain Status Banner */}
-        <View style={styles.truckBanner}>
+        <TouchableOpacity
+          style={styles.truckBanner}
+          onPress={() => onNavigate('LIVE_TRACKING')}
+          activeOpacity={0.8}
+        >
           <View style={styles.truckIconBox}>
             <Text style={{ fontSize: 24 }}>🚚</Text>
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.truckBadgeRow}>
               <View style={styles.liveDot} />
-              <Text style={styles.truckBadgeText}>DAILY CATCH ARRIVED</Text>
+              <Text style={styles.truckBadgeText}>LIVE GPS TRACKING</Text>
             </View>
-            <Text style={styles.truckTitle}>Morning Lake Replenishment Complete</Text>
+            <Text style={styles.truckTitle}>Fresh Catch Harbor Delivery</Text>
             <Text style={styles.truckSubtitle}>
-              Insulated transport arrived at 07:30 AM • 0–24h Green Peak Freshness
+              Tap to view real-time dedicated truck GPS location & incoming fish manifest →
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* 3. Today's Fresh Fish Preview Section (CP-02 Section 18) */}
         <View style={styles.sectionHeaderRow}>

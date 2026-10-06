@@ -33,6 +33,7 @@ import ScanBillScreen from './src/screens/ScanBillScreen';
 import BillReviewScreen from './src/screens/BillReviewScreen';
 import TransactionResultScreen from './src/screens/TransactionResultScreen';
 import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
+import LiveTrackingScreen from './src/screens/LiveTrackingScreen';
 
 const AUTHENTICATED_SCREENS = [
   'HOME',
@@ -48,6 +49,7 @@ const AUTHENTICATED_SCREENS = [
   'BILL_REVIEW',
   'TRANSACTION_RESULT',
   'TRANSACTION_HISTORY',
+  'LIVE_TRACKING',
 ];
 
 export default function App() {
@@ -207,6 +209,13 @@ export default function App() {
 
         {currentScreen === 'TRANSACTION_HISTORY' && (
           <TransactionHistoryScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentScreen === 'LIVE_TRACKING' && (
+          <LiveTrackingScreen
             routeParams={screenParams}
             onNavigate={handleNavigate}
           />

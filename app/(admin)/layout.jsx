@@ -6,13 +6,15 @@ export default function AdminLayout({ children }) {
           PONDFISH ADMIN
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', color: '#94A3B8' }}>
-          <span>Overview</span>
+          <a href="/admin" style={{ color: '#94A3B8', textDecoration: 'none' }}>Overview</a>
           <span>Fish Master & Pricing</span>
           <span>Freshness Durations</span>
           <span>Stock & Receiving</span>
           <span>Subscription Plans</span>
           <span>Customer Accounts</span>
-          <span>GPS Truck Journey</span>
+          <a href="/admin/journeys" style={{ color: '#38BDF8', textDecoration: 'none', fontWeight: 'bold' }}>
+            🚛 GPS Truck Journey
+          </a>
           <span>Audit Logs</span>
           <span>System Settings</span>
         </nav>
