@@ -257,9 +257,10 @@ export const api = {
    * Create Razorpay order intent for checkout
    * POST /api/v1/payments/razorpay/orders
    */
-  async createRazorpayOrder() {
+  async createRazorpayOrder(payload = {}) {
     return request('/api/v1/payments/razorpay/orders', {
       method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 

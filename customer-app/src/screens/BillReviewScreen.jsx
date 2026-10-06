@@ -104,14 +104,31 @@ export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
       // 1. Confirm bill state before commit
       await api.confirmBillScan(scanId);
 
-      // 2. Commit transaction atomically
       const finalPayable = previewData?.payment?.finalPayable || 0;
-      const paymentMethod = finalPayable > 0 ? 'RAZORPAY' : 'SUBSCRIPTION_ONLY';
+      const paymentRequired = finalPayable > 0;
 
+      if (paymentRequired) {
+        // Enforce genuine server-side Razorpay order creation
+        const orderRes = await api.createRazorpayOrder({ billId: scanId, items: previewData?.items || [] });
+        if (!orderRes.configured || !orderRes.success) {
+          Alert.alert(
+            'Payment Gateway Unavailable',
+            orderRes.error?.message || orderRes.message || 'Genuine Razorpay credentials are required to complete online payment.'
+          );
+          setCommitting(false);
+          return;
+        }
+
+        // Razorpay Checkout flow triggers here in production native Android build.
+        // Client-side simulation of payment success is strictly prohibited by security rules.
+        throw new Error('Razorpay mobile checkout requires genuine signature verification from payment gateway.');
+      }
+
+      // 2. Commit transaction atomically (for SUBSCRIPTION_ONLY when finalPayable === 0)
       const res = await api.commitPhysicalTransaction({
         scanId,
-        paymentMethod,
-        razorpayPaymentId: finalPayable > 0 ? `pay_sim_${Date.now()}` : null,
+        paymentMethod: 'SUBSCRIPTION_ONLY',
+        razorpayPaymentId: null,
         items: previewData?.items || [],
       });
 

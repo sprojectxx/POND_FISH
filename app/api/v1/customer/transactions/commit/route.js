@@ -98,8 +98,15 @@ export async function POST(request) {
     if (error.code === 'UNAUTHORIZED') status = 401;
     else if (error.code === 'FORBIDDEN') status = 403;
     else if (error.code === 'BILL_NOT_FOUND') status = 404;
-    else if (error.code === 'BILL_ALREADY_PROCESSED') status = 409;
-    else if (error.code === 'BILL_NUMBER_MISSING' || error.code === 'INVALID_PAYMENT_SIGNATURE') status = 400;
+    else if (error.code === 'BILL_ALREADY_PROCESSED' || error.code === 'PAYMENT_ALREADY_USED') status = 409;
+    else if (error.code === 'PAYMENT_REQUIRED') status = 402;
+    else if (error.code === 'PAYMENT_GATEWAY_NOT_CONFIGURED') status = 503;
+    else if (
+      error.code === 'BILL_NUMBER_MISSING' ||
+      error.code === 'INVALID_PAYMENT_SIGNATURE' ||
+      error.code === 'PAYMENT_ORDER_NOT_FOUND' ||
+      error.code === 'PAYMENT_AMOUNT_MISMATCH'
+    ) status = 400;
     else if (error.code === 'INSUFFICIENT_INVENTORY' || error.code === 'INSUFFICIENT_SUBSCRIPTION_CREDIT') status = 409;
 
     return NextResponse.json(

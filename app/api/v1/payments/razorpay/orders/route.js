@@ -32,11 +32,28 @@ function authenticateRequest(request) {
 export async function POST(request) {
   try {
     const session = authenticateRequest(request);
+    const body = await request.json().catch(() => ({}));
+    const billId = body?.billId || body?.bill_id;
 
-    // Calculate authoritative payment amount from backend checkout preview
-    // Never trust client-supplied monetary amounts
-    const preview = await previewCheckout(session.customerId);
-    const authoritativeAmount = preview.summary.finalPayableAmount;
+    let authoritativeAmount = 0;
+    const notes = { customerId: session.customerId };
+
+    if (billId) {
+      // Physical Bill Purchase (Slice 10)
+      const { calculatePhysicalBillPreview } = require('../../../../../../lib/engines/billing-correction');
+      const preview = await calculatePhysicalBillPreview({
+        billId,
+        customerId: session.customerId,
+        items: body?.items || [],
+      });
+      authoritativeAmount = preview.payment.finalPayable;
+      notes.billId = billId;
+      notes.billNumber = preview.billNumber;
+    } else {
+      // Online Cart Booking (Slice 4)
+      const preview = await previewCheckout(session.customerId);
+      authoritativeAmount = preview.summary.finalPayableAmount;
+    }
 
     if (authoritativeAmount <= 0) {
       return NextResponse.json(
@@ -70,9 +87,7 @@ export async function POST(request) {
       amount: authoritativeAmount,
       currency: 'INR',
       receipt: `rcpt_${Date.now()}`,
-      notes: {
-        customerId: session.customerId,
-      },
+      notes,
     });
 
     return NextResponse.json({
