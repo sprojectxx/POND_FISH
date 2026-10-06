@@ -24,22 +24,14 @@ export default function AdminLayout({ children }) {
     }
 
     async function verifyAuth() {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_admin_token') : null;
-      if (!token) {
-        window.location.href = `/admin/login?redirect=${encodeURIComponent(pathname || '/admin')}`;
-        return;
-      }
-
       try {
         const res = await fetch('/api/v1/admin/auth/me', {
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
           },
         });
 
         if (res.status === 401) {
-          localStorage.removeItem('pondfish_admin_token');
           localStorage.removeItem('pondfish_admin_user');
           window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
           return;
@@ -65,21 +57,16 @@ export default function AdminLayout({ children }) {
   }, [pathname, isLoginPage]);
 
   const handleLogout = async () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_admin_token') : null;
     try {
-      if (token) {
-        await fetch('/api/v1/admin/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-      }
+      await fetch('/api/v1/admin/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
     } catch {}
 
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('pondfish_admin_token');
       localStorage.removeItem('pondfish_admin_user');
       window.location.href = '/admin/login';
     }

@@ -86,9 +86,9 @@ export default function AdminLoginPage() {
         return;
       }
 
-      // Successful login
+      // Successful login: authoritative session is stored in secure HttpOnly cookie.
+      // Cache non-sensitive user metadata strictly for UI hydration.
       if (typeof window !== 'undefined') {
-        localStorage.setItem('pondfish_admin_token', data.token);
         localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
 
         const params = new URLSearchParams(window.location.search);

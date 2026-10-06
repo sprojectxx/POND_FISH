@@ -32,10 +32,11 @@ export async function POST(request) {
       timestamp: new Date().toISOString(),
     });
 
-    // Set secure session cookie
+    // Set secure production-grade session cookie
     response.cookies.set('admin_session', result.token, {
       path: '/',
       httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 12 * 60 * 60, // 12 hours
     });

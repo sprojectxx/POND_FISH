@@ -17,9 +17,7 @@ export default function AdminProfilePage() {
   useEffect(() => {
     async function loadProfile() {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_admin_token') : null;
         const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
 
         const res = await fetch('/api/v1/admin/auth/me', { headers });
         if (res.status === 401) {

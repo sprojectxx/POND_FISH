@@ -29,11 +29,9 @@ export default function AdminSecurityPage() {
 
   const fetchSecurityData = async () => {
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_admin_token') : null;
       const headers = {
         'Content-Type': 'application/json',
       };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       // 1. Fetch profile
       const profRes = await fetch('/api/v1/admin/auth/me', { headers });
@@ -90,9 +88,7 @@ export default function AdminSecurityPage() {
     setSubmittingPassword(true);
 
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_admin_token') : null;
       const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/v1/admin/auth/change-password', {
         method: 'POST',
@@ -136,9 +132,7 @@ export default function AdminSecurityPage() {
     setSuccessMessage('');
 
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_admin_token') : null;
       const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/v1/admin/auth/sessions', {
         method: 'DELETE',
