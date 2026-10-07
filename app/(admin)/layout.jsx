@@ -206,6 +206,36 @@ export default function AdminLayout({ children }) {
           </a>
 
           <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
+            Subscriptions
+          </div>
+          <a
+            id="nav-admin-subscription-plans"
+            href="/admin/subscriptions/plans"
+            style={{
+              color: pathname === '/admin/subscriptions/plans' ? '#38BDF8' : '#94A3B8',
+              background: pathname === '/admin/subscriptions/plans' ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+            }}
+          >
+            💳 Subscription Plans
+          </a>
+          <a
+            id="nav-admin-customer-subscriptions"
+            href="/admin/subscriptions"
+            style={{
+              color: pathname === '/admin/subscriptions' ? '#38BDF8' : '#94A3B8',
+              background: pathname === '/admin/subscriptions' ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+            }}
+          >
+            👑 Customer Subscriptions
+          </a>
+
+          <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
             People & Teams
           </div>
           <a
