@@ -163,6 +163,79 @@ export default function AdminLayout({ children }) {
           </a>
 
           <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
+            Catalog & Sales
+          </div>
+          <a
+            id="nav-admin-fish"
+            href="/admin/fish"
+            style={{
+              color: pathname === '/admin/fish' ? '#38BDF8' : '#94A3B8',
+              background: pathname === '/admin/fish' ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+            }}
+          >
+            🐟 Fish Management
+          </a>
+          <a
+            id="nav-admin-categories"
+            href="/admin/categories"
+            style={{
+              color: pathname === '/admin/categories' ? '#38BDF8' : '#94A3B8',
+              background: pathname === '/admin/categories' ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+            }}
+          >
+            📁 Categories
+          </a>
+          <a
+            id="nav-admin-discounts"
+            href="/admin/discounts"
+            style={{
+              color: pathname === '/admin/discounts' ? '#38BDF8' : '#94A3B8',
+              background: pathname === '/admin/discounts' ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+            }}
+          >
+            🏷️ Discounts
+          </a>
+
+          <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
+            People & Teams
+          </div>
+          <a
+            id="nav-admin-customers"
+            href="/admin/customers"
+            style={{
+              color: pathname === '/admin/customers' ? '#38BDF8' : '#94A3B8',
+              background: pathname === '/admin/customers' ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+            }}
+          >
+            👥 Customers
+          </a>
+          <a
+            id="nav-admin-workers"
+            href="/admin/workers"
+            style={{
+              color: pathname === '/admin/workers' ? '#38BDF8' : '#94A3B8',
+              background: pathname === '/admin/workers' ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+            }}
+          >
+            👷 Workers
+          </a>
+
+          <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
             Governance
           </div>
           <a
