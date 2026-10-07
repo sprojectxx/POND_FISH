@@ -126,6 +126,20 @@ export default function AdminLayout({ children }) {
             📊 Executive Dashboard
           </a>
           <a
+            id="nav-admin-bookings"
+            href="/admin/bookings"
+            style={{
+              color: pathname?.startsWith('/admin/bookings') ? '#38BDF8' : '#94A3B8',
+              background: pathname?.startsWith('/admin/bookings') ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              fontWeight: pathname?.startsWith('/admin/bookings') ? '600' : '400',
+            }}
+          >
+            📦 Bookings
+          </a>
+          <a
             href="/admin/journeys"
             style={{
               color: pathname?.startsWith('/admin/journeys') ? '#38BDF8' : '#94A3B8',
