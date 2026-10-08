@@ -72,52 +72,6 @@ function BillCaptureContent() {
     }
   };
 
-  const handleLoadSampleBill = () => {
-    // Generates a mock receipt image via canvas for reliable automated testing or tablet demo
-    const canvas = document.createElement('canvas');
-    canvas.width = 400;
-    canvas.height = 500;
-    const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, 400, 500);
-
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 22px monospace';
-    ctx.fillText('PONDFISH RETAIL STORE', 60, 50);
-    ctx.font = '14px monospace';
-    ctx.fillText('SI-801 DIGITAL SCALE SLIP', 80, 80);
-    ctx.fillText(`BILL NO: BILL-${Math.floor(100000 + Math.random() * 900000)}`, 80, 110);
-    ctx.fillText(`DATE: ${new Date().toLocaleDateString('en-IN')}`, 80, 135);
-    ctx.fillText('--------------------------------', 40, 160);
-
-    ctx.font = 'bold 15px monospace';
-    ctx.fillText('ITEM          QTY      PRICE    TOTAL', 40, 185);
-    ctx.fillText('--------------------------------', 40, 205);
-
-    ctx.font = '14px monospace';
-    ctx.fillText('KATLA FISH   1.5 KG   ₹300/KG  ₹450', 40, 235);
-    ctx.fillText('ROHU FISH    1.0 KG   ₹250/KG  ₹250', 40, 265);
-    ctx.fillText('--------------------------------', 40, 295);
-
-    ctx.font = 'bold 18px monospace';
-    ctx.fillText('TOTAL AMOUNT:          ₹700.00', 40, 340);
-    ctx.font = '12px monospace';
-    ctx.fillText('THANK YOU! VISIT AGAIN.', 110, 420);
-
-    const dataUrl = canvas.toDataURL('image/jpeg');
-    setImagePreview(dataUrl);
-
-    // Convert dataUrl to blob file
-    fetch(dataUrl)
-      .then((res) => res.blob())
-      .then((blob) => {
-        const file = new File([blob], 'sample-scale-receipt.jpg', { type: 'image/jpeg' });
-        setSelectedFile(file);
-        setError(null);
-      });
-  };
-
   const handleUploadAndScan = async () => {
     if (!selectedFile && !imagePreview) {
       setError('Please take a photo or select an image file first.');
@@ -386,27 +340,6 @@ function BillCaptureContent() {
             </div>
           </div>
         )}
-
-        {/* Demo / Test Receipt Button */}
-        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            onClick={handleLoadSampleBill}
-            disabled={processing}
-            style={{
-              background: 'transparent',
-              border: '1px dashed #475569',
-              color: '#94A3B8',
-              padding: '8px 14px',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: '600',
-              cursor: 'pointer',
-            }}
-          >
-            📋 Generate Sample Scale Slip
-          </button>
-        </div>
       </div>
 
       {/* Error Banner */}

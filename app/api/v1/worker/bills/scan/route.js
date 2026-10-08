@@ -72,17 +72,26 @@ export async function POST(request) {
       imageInput = buffer;
       imageUrl = `/uploads/bills/worker-${Date.now()}-${file.name || 'bill.jpg'}`;
     } else {
-      // JSON body (e.g. { customerId, image_base64, raw_text, image_url })
+      // JSON body (e.g. { customerId, image_base64, image_url })
       const body = await request.json().catch(() => ({}));
       customerId = body.customerId || body.customer_id;
 
-      if (body.image_base64) {
-        const base64Data = body.image_base64.replace(/^data:image\/\w+;base64,/, '');
+      if (body.image_base64 && typeof body.image_base64 === 'string') {
+        const base64Data = body.image_base64.replace(/^data:image\/\w+;base64,/, '').trim();
+        if (!base64Data) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                code: 'IMAGE_REQUIRED',
+                message: 'A valid bill image file or base64 photo is required.',
+              },
+            },
+            { status: 400 }
+          );
+        }
         imageInput = Buffer.from(base64Data, 'base64');
-      } else if (body.raw_text) {
-        // Direct text simulation for testing
-        imageInput = body.raw_text;
-      } else if (body.image_url) {
+      } else if (body.image_url && typeof body.image_url === 'string' && body.image_url.startsWith('http')) {
         imageInput = body.image_url;
         imageUrl = body.image_url;
       } else {
@@ -91,7 +100,7 @@ export async function POST(request) {
             success: false,
             error: {
               code: 'IMAGE_REQUIRED',
-              message: 'Please capture or upload the customer bill image.',
+              message: 'Please capture or upload the customer bill image. Raw text or simulated bills are not permitted.',
             },
           },
           { status: 400 }

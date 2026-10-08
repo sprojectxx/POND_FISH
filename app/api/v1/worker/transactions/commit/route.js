@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server';
 const { verifyWorkerSessionToken } = require('../../../../../../lib/engines/worker');
 const workerRepository = require('../../../../../../lib/db/repositories/workerRepository');
 const customerRepository = require('../../../../../../lib/db/repositories/customerRepository');
+const billRepository = require('../../../../../../lib/db/repositories/billRepository');
 const { finalizePhysicalPurchaseAtomic } = require('../../../../../../lib/engines/pos-finalization');
 
 export const dynamic = 'force-dynamic';
@@ -68,8 +69,33 @@ export async function POST(request) {
       );
     }
 
+    // Verify bill exists
+    const bill = await billRepository.getBillById(billId);
+    if (!bill) {
+      return NextResponse.json(
+        { success: false, error: { code: 'BILL_NOT_FOUND', message: 'Bill record not found.' } },
+        { status: 404 }
+      );
+    }
+
+    // Authoritative Invariant: Customer on the bill MUST match the requested customer
+    if (bill.customer_id && customerId && bill.customer_id !== customerId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'CUSTOMER_BILL_MISMATCH',
+            message: 'The requested customer does not match the customer associated with this bill.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    const authoritativeCustomerId = bill.customer_id || customerId;
+
     // Verify customer exists
-    const customer = await customerRepository.findCustomerById(customerId);
+    const customer = await customerRepository.findCustomerById(authoritativeCustomerId);
     if (!customer) {
       return NextResponse.json(
         { success: false, error: { code: 'CUSTOMER_NOT_FOUND', message: 'The specified customer could not be found.' } },
@@ -80,7 +106,7 @@ export async function POST(request) {
     // Call authoritative business engine with worker ID
     const transaction = await finalizePhysicalPurchaseAtomic({
       billId,
-      customerId,
+      customerId: authoritativeCustomerId,
       workerId: worker.id,
       paymentMethod: paymentMethod.toUpperCase(),
       razorpayPaymentId,
@@ -104,10 +130,10 @@ export async function POST(request) {
   } catch (error) {
     let status = 500;
     if (error.code === 'UNAUTHORIZED') status = 401;
-    else if (error.code === 'FORBIDDEN') status = 403;
-    else if (error.code === 'BILL_NOT_FOUND') status = 404;
+    else if (error.code === 'FORBIDDEN' || error.code === 'CUSTOMER_BILL_MISMATCH') status = 403;
+    else if (error.code === 'BILL_NOT_FOUND' || error.code === 'CUSTOMER_NOT_FOUND') status = 404;
     else if (error.code === 'BILL_ALREADY_PROCESSED') status = 409;
-    else if (error.code === 'BILL_NUMBER_MISSING' || error.code === 'INVALID_PAYMENT_SIGNATURE' || error.code === 'PAYMENT_REQUIRED') status = 400;
+    else if (error.code === 'BILL_NUMBER_MISSING' || error.code === 'INVALID_PAYMENT_SIGNATURE' || error.code === 'PAYMENT_REQUIRED' || error.code === 'BILL_ID_REQUIRED' || error.code === 'CUSTOMER_ID_REQUIRED') status = 400;
 
     console.error('[API ERROR] POST /api/v1/worker/transactions/commit:', error.message);
     return NextResponse.json(

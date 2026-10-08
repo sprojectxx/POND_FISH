@@ -23,7 +23,7 @@ function BillCheckoutContent() {
   const [loading, setLoading] = useState(true);
   const [bill, setBill] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('CASH'); // 'CASH' | 'RAZORPAY'
+  const paymentMethod = 'CASH'; // Counter transactions accept Cash or Subscription coverage
   const [cashReceived, setCashReceived] = useState('');
   const [committing, setCommitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -301,55 +301,17 @@ function BillCheckoutContent() {
               </div>
             ) : (
               <div>
-                {/* Payment Method Selector */}
-                <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', marginBottom: '8px' }}>
-                  Select Counter Collection Method
+                {/* Payment Method Badge */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '10px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '18px' }}>💵</span>
+                    <span style={{ fontSize: '13px', fontWeight: '800', color: '#38BDF8' }}>In-Store Cash Collection</span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#94A3B8' }}>Counter Assisted</span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('CASH')}
-                    style={{
-                      background: paymentMethod === 'CASH' ? 'rgba(56, 189, 248, 0.15)' : '#0B1120',
-                      border: paymentMethod === 'CASH' ? '2px solid #38BDF8' : '1px solid #334155',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      color: paymentMethod === 'CASH' ? '#38BDF8' : '#94A3B8',
-                      fontSize: '13px',
-                      fontWeight: '800',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}
-                  >
-                    <span style={{ fontSize: '20px' }}>💵</span>
-                    <span>Cash Payment</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('RAZORPAY')}
-                    style={{
-                      background: paymentMethod === 'RAZORPAY' ? 'rgba(56, 189, 248, 0.15)' : '#0B1120',
-                      border: paymentMethod === 'RAZORPAY' ? '2px solid #38BDF8' : '1px solid #334155',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      color: paymentMethod === 'RAZORPAY' ? '#38BDF8' : '#94A3B8',
-                      fontSize: '13px',
-                      fontWeight: '800',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}
-                  >
-                    <span style={{ fontSize: '20px' }}>📱</span>
-                    <span>Online / Razorpay</span>
-                  </button>
+                <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '14px' }}>
+                  ℹ️ Online Razorpay payments are currently available on customer self-service app only. Counter checkout processes Cash payments.
                 </div>
 
                 {/* Cash Calculator Box */}
@@ -402,7 +364,7 @@ function BillCheckoutContent() {
               id="btn-confirm-counter-sale"
               type="button"
               onClick={() => setShowConfirmModal(true)}
-              disabled={committing || (paymentMethod === 'CASH' && finalPayable > 0 && numCashReceived < finalPayable)}
+              disabled={committing || (finalPayable > 0 && numCashReceived < finalPayable)}
               style={{
                 width: '100%',
                 background: committing
