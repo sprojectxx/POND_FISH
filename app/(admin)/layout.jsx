@@ -140,6 +140,20 @@ export default function AdminLayout({ children }) {
             📦 Bookings
           </a>
           <a
+            id="nav-admin-transactions"
+            href="/admin/transactions"
+            style={{
+              color: pathname?.startsWith('/admin/transactions') ? '#38BDF8' : '#94A3B8',
+              background: pathname?.startsWith('/admin/transactions') ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              fontWeight: pathname?.startsWith('/admin/transactions') ? '600' : '400',
+            }}
+          >
+            💳 Transactions
+          </a>
+          <a
             href="/admin/journeys"
             style={{
               color: pathname?.startsWith('/admin/journeys') ? '#38BDF8' : '#94A3B8',
