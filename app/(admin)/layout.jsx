@@ -154,6 +154,20 @@ export default function AdminLayout({ children }) {
             💳 Transactions
           </a>
           <a
+            id="nav-admin-notifications"
+            href="/admin/notifications"
+            style={{
+              color: pathname?.startsWith('/admin/notifications') ? '#38BDF8' : '#94A3B8',
+              background: pathname?.startsWith('/admin/notifications') ? '#0F172A' : 'transparent',
+              textDecoration: 'none',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              fontWeight: pathname?.startsWith('/admin/notifications') ? '600' : '400',
+            }}
+          >
+            🔔 Notifications
+          </a>
+          <a
             href="/admin/journeys"
             style={{
               color: pathname?.startsWith('/admin/journeys') ? '#38BDF8' : '#94A3B8',
