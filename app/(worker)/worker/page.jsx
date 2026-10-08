@@ -187,8 +187,53 @@ export default function WorkerDashboardPage() {
       </div>
 
       {/* Quick Action Buttons */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '28px' }}>
         <Link
+          id="btn-worker-instore-sale"
+          href="/worker/customers"
+          style={{
+            textDecoration: 'none',
+            background: 'linear-gradient(135deg, #15803D, #16A34A)',
+            borderRadius: '12px',
+            padding: '20px',
+            color: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
+          }}
+        >
+          <div style={{ fontSize: '32px' }}>🛒</div>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: '800' }}>In-Store Counter Sale</div>
+            <div style={{ fontSize: '12px', opacity: 0.9 }}>Scale slip OCR & cash checkout</div>
+          </div>
+        </Link>
+
+        <Link
+          id="btn-worker-customer-search"
+          href="/worker/customers"
+          style={{
+            textDecoration: 'none',
+            background: '#1E293B',
+            border: '1px solid #334155',
+            borderRadius: '12px',
+            padding: '20px',
+            color: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+          }}
+        >
+          <div style={{ fontSize: '32px' }}>👥</div>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: '800' }}>Customer Search</div>
+            <div style={{ fontSize: '12px', color: '#94A3B8' }}>Lookup subscriptions & credit</div>
+          </div>
+        </Link>
+
+        <Link
+          id="btn-worker-scan-qr"
           href="/worker/bookings/scan"
           style={{
             textDecoration: 'none',
@@ -198,18 +243,19 @@ export default function WorkerDashboardPage() {
             color: '#FFFFFF',
             display: 'flex',
             alignItems: 'center',
-            gap: '16px',
+            gap: '14px',
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
           }}
         >
-          <div style={{ fontSize: '36px' }}>📷</div>
+          <div style={{ fontSize: '32px' }}>📷</div>
           <div>
-            <div style={{ fontSize: '18px', fontWeight: '800' }}>Scan Customer QR Code</div>
-            <div style={{ fontSize: '13px', opacity: 0.9 }}>Open tablet camera to verify pickup ticket</div>
+            <div style={{ fontSize: '16px', fontWeight: '800' }}>Scan Booking QR</div>
+            <div style={{ fontSize: '12px', opacity: 0.9 }}>Camera pickup ticket verify</div>
           </div>
         </Link>
 
         <Link
+          id="btn-worker-booking-lookup"
           href="/worker/bookings/search"
           style={{
             textDecoration: 'none',
@@ -220,13 +266,13 @@ export default function WorkerDashboardPage() {
             color: '#FFFFFF',
             display: 'flex',
             alignItems: 'center',
-            gap: '16px',
+            gap: '14px',
           }}
         >
-          <div style={{ fontSize: '36px' }}>🔍</div>
+          <div style={{ fontSize: '32px' }}>🔍</div>
           <div>
-            <div style={{ fontSize: '18px', fontWeight: '800' }}>Manual Booking Lookup</div>
-            <div style={{ fontSize: '13px', color: '#94A3B8' }}>Search by Booking Code, name, or phone</div>
+            <div style={{ fontSize: '16px', fontWeight: '800' }}>Booking Lookup</div>
+            <div style={{ fontSize: '12px', color: '#94A3B8' }}>Search by code, name, phone</div>
           </div>
         </Link>
       </div>
