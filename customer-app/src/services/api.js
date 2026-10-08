@@ -6,9 +6,9 @@
 
 import { getAuthTokens } from './auth-storage';
 
-// Production API URL for PondFish ecosystem. In development (__DEV__), fallback to emulator loopback.
+// Production API URL for PondFish ecosystem. In development (__DEV__), fallback to localhost loopback for ADB reverse.
 const API_BASE_URL = __DEV__
-  ? (process.env.API_BASE_URL || 'http://10.0.2.2:3000')
+  ? (process.env.API_BASE_URL || 'http://127.0.0.1:3000')
   : 'https://pondfish.in';
 
 /**

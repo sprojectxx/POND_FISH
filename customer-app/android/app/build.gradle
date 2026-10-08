@@ -49,6 +49,10 @@ android {
 
 dependencies {
     implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+    implementation project(":react-native-firebase_app")
+    implementation project(":react-native-firebase_auth")
+    implementation project(":react-native-keychain")
 }
 
 apply plugin: "com.google.gms.google-services"
