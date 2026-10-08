@@ -353,11 +353,11 @@ export default function SubscriptionsPage() {
           Fresh Catch Subscription Plans
         </h1>
         <p style={{ fontSize: '16px', color: '#94A3B8', maxWidth: '720px', margin: '0 auto', lineHeight: '1.6' }}>
-          Pay upfront and receive 100% PondFish Store Credit to spend on daily fresh lake harvest, paired with a guaranteed weekly reservation allowance to secure morning catches before walk-ins open.
+          Subscriptions convert your upfront plan fee into PondFish Store Credit to spend on daily fresh lake harvest, combined with a weekly quantity allowance to reserve prime morning catches.
         </p>
       </div>
 
-      {/* 2. Visual Direction Callout: Lead with the Store Credit Concept (PW-04 Spec) */}
+      {/* 2. Visual Direction Callout: Store Credit Concept (PW-04 Spec) */}
       <div style={{
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(2, 132, 199, 0.15) 100%)',
         border: '1px solid #0284C7',
@@ -372,13 +372,13 @@ export default function SubscriptionsPage() {
       }}>
         <div style={{ maxWidth: '640px' }}>
           <div style={{ fontSize: '12px', fontWeight: '800', color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-            The Store Credit Guarantee
+            Store Credit & Weekly Allowance
           </div>
           <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
-            Pay ₹2,000 → Get ₹2,000 PondFish Store Credit
+            Upfront Plan Fees Become PondFish Store Credit
           </h2>
           <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: '1.6', margin: 0 }}>
-            Every rupee you pay becomes liquid PondFish Store Credit. When you buy daily catch, cost is deducted directly from your balance. The weekly kg quota guarantees your reservation weight limit without locking you into fixed bundles.
+            Subscriptions convert your upfront plan fee into PondFish Store Credit to spend on daily fresh lake harvest, combined with a weekly quantity allowance to reserve prime morning catches before walk-ins open.
           </p>
         </div>
         <div style={{
@@ -394,8 +394,8 @@ export default function SubscriptionsPage() {
             textAlign: 'center',
             minWidth: '140px'
           }}>
-            <div style={{ fontSize: '20px', fontWeight: '900', color: '#22C55E' }}>100%</div>
-            <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>Credit Deposited</div>
+            <div style={{ fontSize: '20px', fontWeight: '900', color: '#22C55E' }}>Store Credit</div>
+            <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>Account Balance</div>
           </div>
           <div style={{
             background: '#0B1120',
@@ -405,8 +405,8 @@ export default function SubscriptionsPage() {
             textAlign: 'center',
             minWidth: '140px'
           }}>
-            <div style={{ fontSize: '20px', fontWeight: '900', color: '#38BDF8' }}>07:00 AM</div>
-            <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>Priority Reservation</div>
+            <div style={{ fontSize: '20px', fontWeight: '900', color: '#38BDF8' }}>Weekly Quota</div>
+            <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>Weight Allowance</div>
           </div>
         </div>
       </div>
@@ -463,142 +463,117 @@ export default function SubscriptionsPage() {
           gap: '28px',
           marginBottom: '64px'
         }}>
-          {plans.map((plan) => {
-            const isPremium = plan.price >= 5000;
-            return (
-              <div
-                key={plan.id}
-                style={{
-                  background: isPremium
-                    ? 'linear-gradient(180deg, #131E33 0%, #0F172A 100%)'
-                    : '#0F172A',
-                  border: isPremium ? '2px solid #0284C7' : '1px solid #1E293B',
-                  borderRadius: '16px',
-                  padding: '36px 32px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  position: 'relative',
-                  boxShadow: isPremium ? '0 8px 32px rgba(2, 132, 199, 0.2)' : 'none'
-                }}
-              >
-                {/* Popular / Best Value Badge */}
-                {isPremium && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '-12px',
-                    right: '28px',
-                    background: '#0284C7',
-                    color: '#FFFFFF',
-                    fontSize: '11px',
-                    fontWeight: '800',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.8px',
-                    padding: '4px 12px',
-                    borderRadius: '12px'
-                  }}>
-                    Recommended • Best Value
+          {plans.map((plan) => (
+            <div
+              key={plan.id}
+              style={{
+                background: '#0F172A',
+                border: '1px solid #1E293B',
+                borderRadius: '16px',
+                padding: '36px 32px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                position: 'relative'
+              }}
+            >
+              <div>
+                {/* Plan Title */}
+                <h3 style={{ fontSize: '24px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
+                  {plan.title}
+                </h3>
+
+                {/* Price */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '20px' }}>
+                  <span style={{ fontSize: '38px', fontWeight: '900', color: '#F8FAFC' }}>
+                    ₹{plan.price.toLocaleString('en-IN')}
+                  </span>
+                  <span style={{ fontSize: '13px', color: '#94A3B8', fontWeight: '500' }}>
+                    / {plan.validityDays} days validity
+                  </span>
+                </div>
+
+                {/* Store Credit Box */}
+                <div style={{
+                  background: 'rgba(2, 132, 199, 0.1)',
+                  border: '1px solid rgba(2, 132, 199, 0.3)',
+                  borderRadius: '10px',
+                  padding: '16px',
+                  marginBottom: '24px'
+                }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                    Monetary Store Credit
                   </div>
-                )}
-
-                <div>
-                  {/* Plan Title */}
-                  <h3 style={{ fontSize: '24px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
-                    {plan.title}
-                  </h3>
-
-                  {/* Price */}
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '20px' }}>
-                    <span style={{ fontSize: '38px', fontWeight: '900', color: '#F8FAFC' }}>
-                      ₹{plan.price.toLocaleString('en-IN')}
-                    </span>
-                    <span style={{ fontSize: '13px', color: '#94A3B8', fontWeight: '500' }}>
-                      / {plan.validityDays} days validity
-                    </span>
+                  <div style={{ fontSize: '20px', fontWeight: '800', color: '#22C55E' }}>
+                    Get ₹{plan.creditAmount.toLocaleString('en-IN')} Store Credit
                   </div>
-
-                  {/* Hero Store Credit Box */}
-                  <div style={{
-                    background: 'rgba(2, 132, 199, 0.1)',
-                    border: '1px solid rgba(2, 132, 199, 0.3)',
-                    borderRadius: '10px',
-                    padding: '16px',
-                    marginBottom: '24px'
-                  }}>
-                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
-                      Monetary Store Credit
-                    </div>
-                    <div style={{ fontSize: '20px', fontWeight: '800', color: '#22C55E' }}>
-                      Get ₹{plan.creditAmount.toLocaleString('en-IN')} Store Credit
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '4px', lineHeight: '1.4' }}>
-                      Full 100% monetary balance deposited to spend on fresh lake catch.
-                    </div>
-                  </div>
-
-                  {/* Weekly Limits & Key Features List */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '32px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                      <span style={{ color: '#38BDF8', fontSize: '16px' }}>⚖️</span>
-                      <div>
-                        <strong style={{ color: '#F8FAFC' }}>Weekly Reservation Quota:</strong>{' '}
-                        <span style={{ color: '#94A3B8' }}>Up to <strong style={{ color: '#38BDF8' }}>{plan.weeklyQtyLimitKg} kg/week</strong> priority reserve allowance.</span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                      <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
-                      <div>
-                        <strong style={{ color: '#F8FAFC' }}>100% Credit Spendable:</strong>{' '}
-                        <span style={{ color: '#94A3B8' }}>Valid against all eligible daily fresh fish varieties at Bangalore counter.</span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                      <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
-                      <div>
-                        <strong style={{ color: '#F8FAFC' }}>07:00 AM Morning Truck Priority:</strong>{' '}
-                        <span style={{ color: '#94A3B8' }}>Lock in peak freshness before the morning walk-in counter rush.</span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                      <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
-                      <div>
-                        <strong style={{ color: '#F8FAFC' }}>Validity Window:</strong>{' '}
-                        <span style={{ color: '#94A3B8' }}>Active for {plan.validityDays} days from server activation.</span>
-                      </div>
-                    </div>
+                  <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '4px', lineHeight: '1.4' }}>
+                    Full monetary balance credited to your account balance to spend on fresh lake catch.
                   </div>
                 </div>
 
-                {/* Purchase CTA Button */}
-                <button
-                  onClick={() => handleSelectPlan(plan)}
-                  style={{
-                    width: '100%',
-                    padding: '14px 20px',
-                    background: isPremium ? '#0284C7' : '#1E293B',
-                    color: '#FFFFFF',
-                    borderRadius: '8px',
-                    fontSize: '15px',
-                    fontWeight: '700',
-                    border: isPremium ? 'none' : '1px solid #334155',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    transition: 'all 0.2s',
-                    boxShadow: isPremium ? '0 4px 14px rgba(2, 132, 199, 0.4)' : 'none'
-                  }}
-                >
-                  <span>Subscribe to {plan.title}</span>
-                  <span>&rarr;</span>
-                </button>
+                {/* Weekly Limits & Key Features List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
+                    <span style={{ color: '#38BDF8', fontSize: '16px' }}>⚖️</span>
+                    <div>
+                      <strong style={{ color: '#F8FAFC' }}>Weekly Reservation Quota:</strong>{' '}
+                      <span style={{ color: '#94A3B8' }}>Up to <strong style={{ color: '#38BDF8' }}>{plan.weeklyQtyLimitKg} kg/week</strong> priority reserve allowance.</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
+                    <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
+                    <div>
+                      <strong style={{ color: '#F8FAFC' }}>Store Credit Balance:</strong>{' '}
+                      <span style={{ color: '#94A3B8' }}>Valid against all eligible daily fresh fish varieties at Bangalore counter.</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
+                    <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
+                    <div>
+                      <strong style={{ color: '#F8FAFC' }}>07:00 AM Morning Truck Priority:</strong>{' '}
+                      <span style={{ color: '#94A3B8' }}>Lock in peak freshness before the morning walk-in counter rush.</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
+                    <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
+                    <div>
+                      <strong style={{ color: '#F8FAFC' }}>Validity Window:</strong>{' '}
+                      <span style={{ color: '#94A3B8' }}>Active for {plan.validityDays} days from server activation.</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            );
-          })}
+
+              {/* Purchase CTA Button */}
+              <button
+                onClick={() => handleSelectPlan(plan)}
+                style={{
+                  width: '100%',
+                  padding: '14px 20px',
+                  background: '#0284C7',
+                  color: '#FFFFFF',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '700',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.3)'
+                }}
+              >
+                <span>Subscribe to {plan.title}</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -634,7 +609,7 @@ export default function SubscriptionsPage() {
               Weekly Allowance Quota (kg)
             </h3>
             <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: '1.6' }}>
-              The weekly weight cap (e.g. 20 kg/week) protects supply integrity. It allows home subscribers to reserve premium morning truck arrivals while preventing commercial hoarding.
+              The weekly weight quota (e.g. 2 kg to 3 kg/week depending on plan) protects supply integrity. It allows home subscribers to reserve premium morning truck arrivals while preventing commercial hoarding.
             </p>
           </div>
 
@@ -1132,7 +1107,7 @@ export default function SubscriptionsPage() {
                     Subscription Activated!
                   </h3>
                   <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: '1.5' }}>
-                    Your subscription to <strong style={{ color: '#F8FAFC' }}>{selectedPlan.title}</strong> is now verified and active.
+                    Your subscription to <strong style={{ color: '#F8FAFC' }}>{selectedPlan.title}</strong> is now verified and active. ₹{parseFloat(activationResult.ledger?.resulting_balance || selectedPlan.creditAmount).toLocaleString('en-IN')} Store Credit has been credited to your account balance.
                   </p>
                 </div>
 
