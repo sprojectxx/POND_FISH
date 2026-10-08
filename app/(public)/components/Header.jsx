@@ -65,6 +65,9 @@ export default function Header() {
           <Link href="/discounts" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
             Offers
           </Link>
+          <Link href="/subscriptions" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
+            Subscriptions
+          </Link>
           <Link href="/about" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
             About
           </Link>
@@ -136,6 +139,9 @@ export default function Header() {
           </Link>
           <Link href="/discounts" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
             Special Offers
+          </Link>
+          <Link href="/subscriptions" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
+            Subscription Plans
           </Link>
           <Link href="/about" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
             Our Sourcing & Guarantee

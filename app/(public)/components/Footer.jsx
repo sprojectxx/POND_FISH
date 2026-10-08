@@ -61,6 +61,11 @@ export default function Footer() {
               </Link>
             </li>
             <li>
+              <Link href="/subscriptions" style={{ color: '#94A3B8', transition: 'color 0.2s' }}>
+                Subscription Plans
+              </Link>
+            </li>
+            <li>
               <Link href="/about" style={{ color: '#94A3B8', transition: 'color 0.2s' }}>
                 Our Freshness Promise
               </Link>

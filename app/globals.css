@@ -75,3 +75,12 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+@media (max-width: 900px) {
+  .pf-desktop-nav {
+    display: none !important;
+  }
+  .pf-mobile-toggle {
+    display: block !important;
+  }
+}
