@@ -6,8 +6,10 @@
 
 import { getAuthTokens } from './auth-storage';
 
-// In Android emulator 10.0.2.2 points to host localhost; fallback to localhost for development
-const API_BASE_URL = process.env.API_BASE_URL || 'http://10.0.2.2:3000';
+// Production API URL for PondFish ecosystem. In development (__DEV__), fallback to emulator loopback.
+const API_BASE_URL = __DEV__
+  ? (process.env.API_BASE_URL || 'http://10.0.2.2:3000')
+  : 'https://pondfish.in';
 
 /**
  * Standard API request wrapper with bearer token attachment
