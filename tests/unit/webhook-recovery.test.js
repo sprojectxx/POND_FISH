@@ -12,7 +12,7 @@ const paymentRecoveryEngine = require('../../lib/engines/payment-recovery');
 console.log('=== PURE IN-MEMORY WEBHOOK & RECOVERY UNIT TESTS ===\n');
 
 let passed = 0;
-const TEST_SECRET = 'whsec_pondFishTestSecret999888777';
+const TEST_SECRET = 'mock-unit-test-hmac-key-non-production-only-pond-fish-fixture';
 
 function generateSignature(body, secret = TEST_SECRET) {
   return crypto.createHmac('sha256', secret).update(body).digest('hex');
