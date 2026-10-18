@@ -26,10 +26,19 @@ export default function OtpVerifyScreen({ routeParams = {}, onNavigate }) {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [countdown, setCountdown] = useState(0);
+  const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const [resending, setResending] = useState(false);
   const [cursorVisible, setCursorVisible] = useState(true);
   const inputRef = useRef(null);
+  const isVerifyingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // If mobile number is not provided, return to phone entry
   useEffect(() => {
@@ -50,7 +59,7 @@ export default function OtpVerifyScreen({ routeParams = {}, onNavigate }) {
   useEffect(() => {
     if (countdown <= 0) return;
     const timer = setInterval(() => {
-      setCountdown((prev) => prev - 1);
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
   }, [countdown]);
@@ -61,16 +70,20 @@ export default function OtpVerifyScreen({ routeParams = {}, onNavigate }) {
     : `+91 ${mobileNumber}`;
 
   async function handleVerifyOtp(codeToVerify) {
-    if (loading) return; // Prevent duplicate/concurrent requests
+    if (loading || isVerifyingRef.current) return; // Prevent duplicate/concurrent requests
     const cleanOtp = (codeToVerify || otp).trim();
-    setErrorMessage('');
+    if (isMountedRef.current) setErrorMessage('');
 
     if (cleanOtp.length < 6) {
-      setErrorMessage('Please enter the 6-digit verification code.');
+      if (isMountedRef.current) {
+        setErrorMessage('Please enter the 6-digit verification code.');
+      }
       return;
     }
 
-    setLoading(true);
+    isVerifyingRef.current = true;
+    if (isMountedRef.current) setLoading(true);
+
     try {
       // 1. Confirm OTP with Firebase to obtain genuine Firebase ID token
       const fbResult = await verifyFirebasePhoneOtp(cleanOtp);
@@ -121,27 +134,47 @@ export default function OtpVerifyScreen({ routeParams = {}, onNavigate }) {
       }
     } catch (err) {
       console.error('[OTP VERIFY ERROR]', err?.message || err);
-      setErrorMessage(err?.message || 'Verification failed. Please check the code and try again.');
+      if (isMountedRef.current) {
+        let displayError = err?.message || 'Verification failed. Please check the code and try again.';
+        const lower = displayError.toLowerCase();
+        if (lower.includes('invalid') || lower.includes('incorrect') || lower.includes('mismatch')) {
+          displayError = 'The OTP is incorrect. Please try again.';
+        } else if (lower.includes('expired')) {
+          displayError = 'This OTP has expired. Request a new OTP.';
+        } else if (lower.includes('too many') || lower.includes('quota') || lower.includes('limit')) {
+          displayError = 'Too many attempts. Please wait and try again.';
+        }
+        setErrorMessage(displayError);
+      }
     } finally {
-      setLoading(false);
+      isVerifyingRef.current = false;
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }
 
   async function handleResendCode() {
-    if (countdown > 0 || resending) return;
+    if (countdown > 0 || resending || loading) return;
     setResending(true);
-    setErrorMessage('');
+    if (isMountedRef.current) setErrorMessage('');
 
     try {
       await api.sendOtp(mobileNumber);
       await sendFirebasePhoneOtp(mobileNumber);
-      setCountdown(COUNTDOWN_SECONDS);
-      setOtp('');
+      if (isMountedRef.current) {
+        setCountdown(COUNTDOWN_SECONDS);
+        setOtp('');
+      }
     } catch (err) {
       console.error('[RESEND OTP ERROR]', err?.message || err);
-      setErrorMessage(err?.message || 'Failed to resend verification code. Please try again.');
+      if (isMountedRef.current) {
+        setErrorMessage(err?.message || 'Failed to resend verification code. Please try again.');
+      }
     } finally {
-      setResending(false);
+      if (isMountedRef.current) {
+        setResending(false);
+      }
     }
   }
 
@@ -320,13 +353,17 @@ export default function OtpVerifyScreen({ routeParams = {}, onNavigate }) {
                 </Text>
               </Text>
             ) : (
-              <TouchableOpacity onPress={handleResendCode} disabled={resending}>
+              <TouchableOpacity
+                onPress={handleResendCode}
+                disabled={resending || loading}
+                accessibilityRole="button"
+                accessibilityLabel="Resend SMS Code"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 {resending ? (
                   <ActivityIndicator size="small" color="#1D61B4" />
                 ) : (
-                  <Text style={styles.resendText}>
-                    Resend SMS in <Text style={styles.resendTimerDigits}>00:00</Text>
-                  </Text>
+                  <Text style={styles.resendActiveText}>Resend SMS Code</Text>
                 )}
               </TouchableOpacity>
             )}
@@ -655,6 +692,11 @@ const styles = StyleSheet.create({
   resendTimerDigits: {
     fontWeight: '800',
     color: '#0B1E36',
+  },
+  resendActiveText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1D61B4',
   },
 
   // 7. Bottom Security Footer

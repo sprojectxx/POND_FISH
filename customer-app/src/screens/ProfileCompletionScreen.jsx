@@ -4,7 +4,7 @@
  * Collects required Name, Age, and Area for newly registered customers.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,37 +20,80 @@ import { colors } from '../theme/colors';
 import { api } from '../services/api';
 
 export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
-  const customer = routeParams?.customer || {};
+  const initialCustomer = routeParams?.customer || {};
   const token = routeParams?.token || '';
 
-  const [name, setName] = useState(customer.name || '');
-  const [age, setAge] = useState(customer.age ? String(customer.age) : '');
-  const [area, setArea] = useState(customer.area || '');
+  const [customerData, setCustomerData] = useState(initialCustomer);
+  const [name, setName] = useState(initialCustomer.name || '');
+  const [age, setAge] = useState(initialCustomer.age ? String(initialCustomer.age) : '');
+  const [area, setArea] = useState(initialCustomer.area || '');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const isSubmittingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // If customer mobile number is not in route params, fetch authoritative profile
+  useEffect(() => {
+    let active = true;
+    async function loadCustomerProfile() {
+      if (!customerData?.mobileNumber) {
+        try {
+          const res = await api.getProfile(token);
+          if (active && res?.data) {
+            setCustomerData(res.data);
+            if (res.data.name && !name) setName(res.data.name);
+            if (res.data.age && !age) setAge(String(res.data.age));
+            if (res.data.area && !area) setArea(res.data.area);
+          }
+        } catch (e) {
+          // If network error, retain current customerData
+        }
+      }
+    }
+    loadCustomerProfile();
+    return () => {
+      active = false;
+    };
+  }, [customerData?.mobileNumber, token, name, age, area]);
 
   async function handleSubmitProfile() {
-    setErrorMessage('');
+    if (loading || isSubmittingRef.current) return;
+    if (isMountedRef.current) setErrorMessage('');
 
     const trimmedName = name.trim();
     if (!trimmedName || trimmedName.length < 2) {
-      setErrorMessage('Please enter your full name (minimum 2 characters).');
+      if (isMountedRef.current) {
+        setErrorMessage('Please enter your full name (minimum 2 characters).');
+      }
       return;
     }
 
     const numAge = parseInt(age, 10);
     if (isNaN(numAge) || numAge < 18 || numAge > 120) {
-      setErrorMessage('Please enter a valid age between 18 and 120.');
+      if (isMountedRef.current) {
+        setErrorMessage('Please enter a valid age between 18 and 120.');
+      }
       return;
     }
 
     const trimmedArea = area.trim();
     if (!trimmedArea || trimmedArea.length < 2) {
-      setErrorMessage('Please enter your locality or delivery area in Bangalore.');
+      if (isMountedRef.current) {
+        setErrorMessage('Please enter your locality or delivery area in Bangalore.');
+      }
       return;
     }
 
-    setLoading(true);
+    isSubmittingRef.current = true;
+    if (isMountedRef.current) setLoading(true);
+
     try {
       const response = await api.updateProfile(
         {
@@ -61,13 +104,22 @@ export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
         token
       );
 
+      if (!response || !response.success || !response.data) {
+        throw new Error(response?.error?.message || response?.message || 'We couldn’t complete your profile. Please try again.');
+      }
+
       const updatedCustomer = response.data;
       onNavigate('HOME', { customer: updatedCustomer, token });
     } catch (err) {
       console.error('[PROFILE COMPLETION ERROR]', err);
-      setErrorMessage(err.message || 'We couldn’t complete your profile. Please try again.');
+      if (isMountedRef.current) {
+        setErrorMessage(err.message || 'We couldn’t complete your profile. Please try again.');
+      }
     } finally {
-      setLoading(false);
+      isSubmittingRef.current = false;
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }
 
@@ -102,7 +154,7 @@ export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
             <Text style={styles.fieldLabel}>Verified Mobile Number</Text>
             <View style={styles.readOnlyInput}>
               <Text style={styles.readOnlyText}>
-                {customer.mobileNumber ? `🇮🇳 +91 ${customer.mobileNumber}` : 'Not available'}
+                {customerData.mobileNumber ? `🇮🇳 +91 ${customerData.mobileNumber}` : 'Loading verified mobile...'}
               </Text>
               <Text style={styles.verifiedTag}>✓ Verified</Text>
             </View>
@@ -121,6 +173,8 @@ export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
                 if (errorMessage) setErrorMessage('');
               }}
               editable={!loading}
+              accessibilityLabel="Full Name input"
+              autoCapitalize="words"
             />
           </View>
 
@@ -139,6 +193,7 @@ export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
                 if (errorMessage) setErrorMessage('');
               }}
               editable={!loading}
+              accessibilityLabel="Age input"
             />
           </View>
 
@@ -155,6 +210,7 @@ export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
                 if (errorMessage) setErrorMessage('');
               }}
               editable={!loading}
+              accessibilityLabel="Bangalore Area or Locality input"
             />
           </View>
 
@@ -164,6 +220,9 @@ export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
             onPress={handleSubmitProfile}
             disabled={loading}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Complete Profile and Enter PondFish"
+            accessibilityState={{ disabled: loading, busy: loading }}
           >
             {loading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />

@@ -4,7 +4,7 @@
  * Upgraded to match the modern, ultra-premium maritime UI design system.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,37 +24,55 @@ export default function PhoneAuthScreen({ onNavigate }) {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const isSubmittingRef = useRef(false);
 
-  // Validate 10-digit Indian mobile format
+  // Sanitize Indian mobile number (handles +91, 91, or leading 0 prefix gracefully)
+  function sanitizeMobile(input) {
+    if (typeof input !== 'string') return '';
+    let digits = input.replace(/\D/g, '');
+    if (digits.startsWith('91') && digits.length === 12) {
+      digits = digits.slice(2);
+    } else if (digits.startsWith('0') && digits.length === 11) {
+      digits = digits.slice(1);
+    }
+    return digits;
+  }
+
+  // Validate 10-digit Indian mobile format (starts with 6, 7, 8, 9)
   function validatePhone(number) {
-    const cleaned = number.replace(/\D/g, '');
-    return /^[6-9]\d{9}$/.test(cleaned);
+    return /^[6-9]\d{9}$/.test(number);
   }
 
   async function handleSendOtp() {
+    if (isSubmittingRef.current || loading) return;
     setErrorMessage('');
-    const cleaned = phone.replace(/\D/g, '').slice(-10);
+
+    const cleaned = sanitizeMobile(phone);
 
     if (!validatePhone(cleaned)) {
-      setErrorMessage('Please enter a valid 10-digit Indian mobile number.');
+      setErrorMessage('Please enter a valid 10-digit Indian mobile number (e.g. 98765 43210).');
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
+
     try {
       // 1. Initiate backend validation & rate limit checks
       await api.sendOtp(cleaned);
 
-      // 2. Initiate Firebase Phone OTP dispatch
+      // 2. Initiate real Firebase Phone OTP dispatch
       await sendFirebasePhoneOtp(cleaned);
 
       // 3. Navigate to OTP Verification Screen
       onNavigate('OTP_VERIFY', { mobileNumber: cleaned });
     } catch (err) {
       console.error('[SEND OTP ERROR]', err?.message || err);
-      setErrorMessage(err?.message || 'Failed to dispatch verification code. Please check your network and phone number.');
+      const userMessage = err?.error?.message || err?.message || 'Failed to dispatch verification code. Please check your network and phone number.';
+      setErrorMessage(userMessage);
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   }
 
@@ -123,13 +141,14 @@ export default function PhoneAuthScreen({ onNavigate }) {
               placeholder="98765 43210"
               placeholderTextColor="#94A3B8"
               keyboardType="phone-pad"
-              maxLength={11}
+              maxLength={14}
               value={phone}
               onChangeText={(text) => {
                 setPhone(text);
                 if (errorMessage) setErrorMessage('');
               }}
               editable={!loading}
+              accessibilityLabel="10-digit mobile number input"
             />
           </View>
 
@@ -139,6 +158,8 @@ export default function PhoneAuthScreen({ onNavigate }) {
             onPress={handleSendOtp}
             disabled={loading}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Send Verification Code"
           >
             {loading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />

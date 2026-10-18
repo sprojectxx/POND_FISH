@@ -174,3 +174,8 @@ export async function PATCH(request) {
     );
   }
 }
+
+export async function PUT(request) {
+  return PATCH(request);
+}
+

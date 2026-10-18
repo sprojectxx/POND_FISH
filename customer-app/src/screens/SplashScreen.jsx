@@ -4,7 +4,7 @@
  * Checks secure Android Keystore session and determines initial route.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,28 +18,41 @@ import { api } from '../services/api';
 
 export default function SplashScreen({ onNavigate }) {
   const [error, setError] = useState(null);
+  const isCheckingRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   async function checkSession() {
-    setError(null);
+    if (isCheckingRef.current) return;
+    isCheckingRef.current = true;
+    if (isMountedRef.current) {
+      setError(null);
+    }
+
     try {
       // 1. Read hardware-backed Android Keystore
       const stored = await getAuthTokens();
 
       if (!stored || !stored.token) {
-        // No existing session -> go to welcome / phone entry
-        onNavigate('PHONE_AUTH');
+        // No existing session -> go to phone authentication
+        if (isMountedRef.current) {
+          onNavigate('PHONE_AUTH');
+        }
         return;
       }
 
       // 2. Validate session with PondFish backend
       try {
         const response = await api.getProfile(stored.token);
-        const customer = response.data;
+        const customer = response?.data;
 
         if (customer && customer.isProfileComplete) {
-          onNavigate('HOME', { customer, token: stored.token });
+          if (isMountedRef.current) {
+            onNavigate('HOME', { customer, token: stored.token });
+          }
         } else {
-          onNavigate('PROFILE_COMPLETION', { customer, token: stored.token });
+          if (isMountedRef.current) {
+            onNavigate('PROFILE_COMPLETION', { customer, token: stored.token });
+          }
         }
       } catch (apiErr) {
         if (apiErr.status === 401) {
@@ -47,23 +60,35 @@ export default function SplashScreen({ onNavigate }) {
           try {
             await clearAuthTokens();
           } catch (_) {}
-          onNavigate('PHONE_AUTH');
+          if (isMountedRef.current) {
+            onNavigate('PHONE_AUTH');
+          }
         } else {
           // Network failure or backend temporarily unreachable -> present retry without clearing credentials
-          setError('Unable to connect to PondFish. Please check your connection and try again.');
+          if (isMountedRef.current) {
+            setError('Unable to connect to PondFish. Please check your connection and try again.');
+            isCheckingRef.current = false;
+          }
         }
       }
     } catch (e) {
       console.error('[SPLASH ERROR]', e);
-      setError('We couldn’t start PondFish.');
+      if (isMountedRef.current) {
+        setError('We couldn’t start PondFish.');
+        isCheckingRef.current = false;
+      }
     }
   }
 
   useEffect(() => {
+    isMountedRef.current = true;
     const timer = setTimeout(() => {
       checkSession();
     }, 600);
-    return () => clearTimeout(timer);
+    return () => {
+      isMountedRef.current = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   return (
@@ -84,7 +109,13 @@ export default function SplashScreen({ onNavigate }) {
         {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={checkSession}>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={checkSession}
+              accessibilityRole="button"
+              accessibilityLabel="Try Again"
+              activeOpacity={0.75}
+            >
               <Text style={styles.retryButtonText}>Try Again</Text>
             </TouchableOpacity>
           </View>

@@ -128,12 +128,12 @@ export const api = {
 
   /**
    * Update customer profile
-   * PATCH /api/v1/customer/profile
+   * PUT /api/v1/customer/profile
    */
   async updateProfile({ name, age, area }, token = null) {
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     return request('/api/v1/customer/profile', {
-      method: 'PATCH',
+      method: 'PUT',
       headers,
       body: JSON.stringify({ name, age, area }),
     });
