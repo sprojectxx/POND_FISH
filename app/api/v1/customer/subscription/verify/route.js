@@ -57,7 +57,10 @@ export async function POST(request) {
       );
     }
 
-    const { planId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = body;
+    const planId = body.planId;
+    const razorpayOrderId = body.razorpayOrderId || body.razorpay_order_id || body.orderId;
+    const razorpayPaymentId = body.razorpayPaymentId || body.razorpay_payment_id || body.paymentId;
+    const razorpaySignature = body.razorpaySignature || body.razorpay_signature || body.signature;
 
     if (!planId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
       return NextResponse.json(

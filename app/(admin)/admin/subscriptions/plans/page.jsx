@@ -30,6 +30,18 @@ export default function AdminSubscriptionPlansPage() {
     active: true,
   });
 
+  // Fish Eligibility Modal State
+  const [isFishModalOpen, setIsFishModalOpen] = useState(false);
+  const [eligibilityPlan, setEligibilityPlan] = useState(null);
+  const [eligibilityLoading, setEligibilityLoading] = useState(false);
+  const [eligibilityFish, setEligibilityFish] = useState([]);
+  const [selectedFishIds, setSelectedFishIds] = useState(new Set());
+  const [fishSearch, setFishSearch] = useState('');
+  const [fishCategoryFilter, setFishCategoryFilter] = useState('ALL');
+  const [fishModalError, setFishModalError] = useState(null);
+  const [fishModalSaving, setFishModalSaving] = useState(false);
+
+
   const fetchPlans = async () => {
     try {
       setLoading(true);
@@ -77,6 +89,96 @@ export default function AdminSubscriptionPlansPage() {
     });
     setIsModalOpen(true);
   };
+
+  const openFishEligibilityModal = async (plan) => {
+    setEligibilityPlan(plan);
+    setIsFishModalOpen(true);
+    setEligibilityLoading(true);
+    setFishModalError(null);
+    setFishSearch('');
+    setFishCategoryFilter('ALL');
+
+    try {
+      const res = await fetch(`/api/v1/admin/subscriptions/plans/${plan.id}/fish`);
+      const data = await res.json();
+      if (data.success) {
+        setEligibilityFish(data.fish || []);
+        const eligibleIds = new Set(
+          (data.fish || []).filter((f) => f.isEligible).map((f) => f.fishId)
+        );
+        setSelectedFishIds(eligibleIds);
+      } else {
+        setFishModalError(data.error?.message || 'Failed to load fish eligibility for this plan.');
+      }
+    } catch (err) {
+      setFishModalError(err.message || 'Network error fetching plan fish eligibility.');
+    } finally {
+      setEligibilityLoading(false);
+    }
+  };
+
+  const handleToggleFish = (fishId) => {
+    setSelectedFishIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fishId)) {
+        next.delete(fishId);
+      } else {
+        next.add(fishId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFiltered = (filteredList) => {
+    setSelectedFishIds((prev) => {
+      const next = new Set(prev);
+      filteredList.forEach((f) => next.add(f.fishId));
+      return next;
+    });
+  };
+
+  const handleDeselectAllFiltered = (filteredList) => {
+    setSelectedFishIds((prev) => {
+      const next = new Set(prev);
+      filteredList.forEach((f) => next.delete(f.fishId));
+      return next;
+    });
+  };
+
+  const handleSaveFishEligibility = async () => {
+    if (!eligibilityPlan) return;
+    setFishModalError(null);
+    setFishModalSaving(true);
+
+    try {
+      const payload = {
+        fishIds: Array.from(selectedFishIds),
+      };
+
+      const res = await fetch(`/api/v1/admin/subscriptions/plans/${eligibilityPlan.id}/fish`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setSuccessMsg(
+          `Eligible fish for plan "${eligibilityPlan.title}" saved successfully (${data.eligibleFishCount} fish eligible).`
+        );
+        setIsFishModalOpen(false);
+        fetchPlans();
+        setTimeout(() => setSuccessMsg(null), 5000);
+      } else {
+        setFishModalError(data.error?.message || 'Failed to save fish eligibility.');
+      }
+    } catch (err) {
+      setFishModalError(err.message || 'Error saving fish eligibility.');
+    } finally {
+      setFishModalSaving(false);
+    }
+  };
+
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -398,7 +500,28 @@ export default function AdminSubscriptionPlansPage() {
                     </span>
                   </td>
                   <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      <button
+                        id={`btn-fish-plan-${p.id}`}
+                        onClick={() => openFishEligibilityModal(p)}
+                        disabled={actionLoading}
+                        style={{
+                          background: 'rgba(16, 185, 129, 0.1)',
+                          color: '#10B981',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                        }}
+                      >
+                        <span>🐟</span>
+                        <span>Eligible Fish</span>
+                      </button>
                       <button
                         id={`btn-edit-plan-${p.id}`}
                         onClick={() => openEditModal(p)}
@@ -689,6 +812,314 @@ export default function AdminSubscriptionPlansPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Fish Eligibility Management Modal */}
+      {isFishModalOpen && eligibilityPlan && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(11, 17, 32, 0.85)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px',
+        }}>
+          <div style={{
+            background: '#1E293B',
+            borderRadius: '16px',
+            border: '1px solid #334155',
+            width: '100%',
+            maxWidth: '780px',
+            maxHeight: '90vh',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #334155',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#0F172A',
+            }}>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 4px 0', color: '#F8FAFC' }}>
+                  🐟 Manage Eligible Fish — {eligibilityPlan.title}
+                </h2>
+                <p style={{ margin: 0, fontSize: '12px', color: '#94A3B8' }}>
+                  Plan quota: {eligibilityPlan.weekly_qty_limit_kg} kg/week • Plan price: ₹{Number(eligibilityPlan.price).toLocaleString('en-IN')}
+                </p>
+              </div>
+              <button
+                id="btn-close-fish-modal"
+                onClick={() => setIsFishModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94A3B8',
+                  fontSize: '22px',
+                  cursor: 'pointer',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Error Banner */}
+            {fishModalError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                borderBottom: '1px solid #EF4444',
+                color: '#FCA5A5',
+                padding: '12px 24px',
+                fontSize: '13px',
+              }}>
+                ⚠️ {fishModalError}
+              </div>
+            )}
+
+            {/* Controls Bar: Search & Quick Selection */}
+            <div style={{
+              padding: '16px 24px',
+              background: '#1E293B',
+              borderBottom: '1px solid #334155',
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+            }}>
+              <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: '240px' }}>
+                <input
+                  id="input-search-eligible-fish"
+                  type="text"
+                  placeholder="Search catalogue fish..."
+                  value={fishSearch}
+                  onChange={(e) => setFishSearch(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    background: '#0F172A',
+                    border: '1px solid #334155',
+                    borderRadius: '6px',
+                    color: '#F8FAFC',
+                    fontSize: '13px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{
+                  background: '#0F172A',
+                  color: '#38BDF8',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  border: '1px solid #334155',
+                }}>
+                  {selectedFishIds.size} of {eligibilityFish.length} eligible
+                </span>
+
+                <button
+                  id="btn-select-all-filtered-fish"
+                  type="button"
+                  onClick={() => {
+                    const filtered = eligibilityFish.filter((f) =>
+                      f.name.toLowerCase().includes(fishSearch.toLowerCase()) ||
+                      (f.categoryName || '').toLowerCase().includes(fishSearch.toLowerCase())
+                    );
+                    handleSelectAllFiltered(filtered);
+                  }}
+                  style={{
+                    background: '#0F172A',
+                    color: '#F8FAFC',
+                    border: '1px solid #334155',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Select All
+                </button>
+                <button
+                  id="btn-deselect-all-filtered-fish"
+                  type="button"
+                  onClick={() => {
+                    const filtered = eligibilityFish.filter((f) =>
+                      f.name.toLowerCase().includes(fishSearch.toLowerCase()) ||
+                      (f.categoryName || '').toLowerCase().includes(fishSearch.toLowerCase())
+                    );
+                    handleDeselectAllFiltered(filtered);
+                  }}
+                  style={{
+                    background: '#0F172A',
+                    color: '#94A3B8',
+                    border: '1px solid #334155',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+
+            {/* Fish List Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+              {eligibilityLoading ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94A3B8' }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
+                  <div>Loading catalogue fish and plan eligibility...</div>
+                </div>
+              ) : eligibilityFish.length === 0 ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94A3B8' }}>
+                  No fish found in the catalogue.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {eligibilityFish
+                    .filter((f) =>
+                      f.name.toLowerCase().includes(fishSearch.toLowerCase()) ||
+                      (f.categoryName || '').toLowerCase().includes(fishSearch.toLowerCase())
+                    )
+                    .map((fish) => {
+                      const isChecked = selectedFishIds.has(fish.fishId);
+                      return (
+                        <div
+                          key={fish.fishId}
+                          id={`fish-eligibility-row-${fish.fishId}`}
+                          onClick={() => handleToggleFish(fish.fishId)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            background: isChecked ? 'rgba(16, 185, 129, 0.08)' : '#0F172A',
+                            border: `1px solid ${isChecked ? 'rgba(16, 185, 129, 0.3)' : '#334155'}`,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <input
+                              id={`checkbox-fish-${fish.fishId}`}
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleFish(fish.fishId)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                            />
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontWeight: '600', color: '#F8FAFC', fontSize: '14px' }}>
+                                  {fish.name}
+                                </span>
+                                {fish.categoryName && (
+                                  <span style={{
+                                    fontSize: '11px',
+                                    background: '#1E293B',
+                                    color: '#94A3B8',
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #334155',
+                                  }}>
+                                    {fish.categoryName}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>
+                                ₹{fish.unitPrice}/kg • {fish.physicalAvailable ? '✓ In Stock' : '✗ Out of Stock'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '3px 10px',
+                              borderRadius: '999px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              background: isChecked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.1)',
+                              color: isChecked ? '#10B981' : '#64748B',
+                              border: `1px solid ${isChecked ? 'rgba(16, 185, 129, 0.3)' : 'rgba(148, 163, 184, 0.2)'}`,
+                            }}>
+                              {isChecked ? 'ELIGIBLE' : 'NOT ELIGIBLE'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #334155',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#0F172A',
+            }}>
+              <div style={{ fontSize: '13px', color: '#94A3B8' }}>
+                Changes will take effect immediately for customer checkout.
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsFishModalOpen(false)}
+                  style={{
+                    background: '#1E293B',
+                    color: '#94A3B8',
+                    border: '1px solid #334155',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  id="btn-save-eligible-fish"
+                  type="button"
+                  onClick={handleSaveFishEligibility}
+                  disabled={fishModalSaving || eligibilityLoading}
+                  style={{
+                    background: '#0284C7',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    padding: '8px 20px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)',
+                  }}
+                >
+                  {fishModalSaving ? 'Saving...' : `Save Eligible Fish (${selectedFishIds.size})`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
