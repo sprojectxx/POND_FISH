@@ -177,9 +177,8 @@ setTimeout(async () => {
 setTimeout(async () => {
   const mockClient = {
     query: async (sql, params) => {
-      if (sql.includes('INSERT INTO webhook_events')) {
-        // ON CONFLICT DO NOTHING RETURNING id returns empty rows for duplicate!
-        return { rows: [] };
+      if (sql.includes('FROM webhook_events WHERE event_id = $1')) {
+        return { rows: [{ id: 'existing-event-uuid' }] };
       }
       return { rows: [] };
     },

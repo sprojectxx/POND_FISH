@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 const { verifySessionToken } = require('../../../../../../lib/engines/customer');
 const { createRazorpayOrder, isRazorpayConfigured } = require('../../../../../../lib/engines/payment');
 const { previewCheckout } = require('../../../../../../lib/engines/booking');
+const checkoutIntentRepository = require('../../../../../../lib/db/repositories/checkoutIntentRepository');
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +96,24 @@ export async function POST(request) {
       receipt: `rcpt_${Date.now()}`,
       notes,
     });
+
+    // Durable Checkout Intent Persistence (Phase 2J-K)
+    // Persist immutable snapshot before initiating Razorpay payment
+    const orderId = order.orderId || order.id;
+    if (orderId) {
+      await checkoutIntentRepository.createIntent({
+        razorpayOrderId: orderId,
+        customerId: session.customerId,
+        cartSnapshot: billId ? (body?.items || []) : (preview?.items || []),
+        subscriptionSnapshot: preview?.subscription || null,
+        feeBreakdown: preview?.summary || { finalPayableAmount: authoritativeAmount },
+        amountPaise: Math.round(authoritativeAmount * 100),
+        currency: 'INR',
+        status: 'CREATED',
+      }).catch((intentErr) => {
+        console.warn('[CHECKOUT INTENT PERSISTENCE WARNING]', intentErr.message);
+      });
+    }
 
     return NextResponse.json({
       success: true,

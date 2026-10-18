@@ -1,6 +1,6 @@
 -- Migration: 0018_checkout_intents.sql
 -- Description: Durable checkout intent and payment attempt tracking for offline/dropped Razorpay webhook recovery
--- Traceability: PondFish Phase 2J-J (Razorpay Webhook & Payment Recovery) & API Spec (Section 31)
+-- Traceability: PondFish Phase 2J-K (Durable Checkout Intent Persistence) & API Spec (Section 31)
 -- Status: PROPOSED / UNAPPLIED (Preserves shared database during audit)
 
 CREATE TABLE IF NOT EXISTS checkout_intents (
@@ -12,10 +12,13 @@ CREATE TABLE IF NOT EXISTS checkout_intents (
   fee_breakdown JSONB NOT NULL,
   amount_paise INTEGER NOT NULL,
   currency TEXT NOT NULL DEFAULT 'INR',
-  status TEXT NOT NULL DEFAULT 'CREATED', -- 'CREATED', 'PAID', 'COMPLETED', 'FAILED', 'ORPHANED'
+  status TEXT NOT NULL DEFAULT 'CREATED', -- 'CREATED', 'PROCESSING', 'PAID', 'COMPLETED', 'FAILED', 'REQUIRES_RECONCILIATION'
   booking_id UUID REFERENCES bookings(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT chk_checkout_intents_status CHECK (
+    status IN ('CREATED', 'PROCESSING', 'PAID', 'COMPLETED', 'FAILED', 'REQUIRES_RECONCILIATION')
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_checkout_intents_order_id ON checkout_intents(razorpay_order_id);
