@@ -192,6 +192,71 @@ export async function POST(request) {
       );
     }
 
+    if (error.code === 'INSUFFICIENT_SUBSCRIPTION_CREDIT') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'INSUFFICIENT_SUBSCRIPTION_CREDIT',
+            message: 'Your remaining subscription credit is insufficient for this order.',
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    if (error.code === 'WEEKLY_SUBSCRIPTION_LIMIT_EXCEEDED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'WEEKLY_SUBSCRIPTION_LIMIT_EXCEEDED',
+            message: 'Your remaining weekly subscription fish allowance has been exceeded.',
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    if (error.code === 'SUBSCRIPTION_INACTIVE') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'SUBSCRIPTION_INACTIVE',
+            message: error.message || 'Your subscription is no longer active or has expired.',
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    if (error.code === 'CART_ALREADY_PROCESSED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'CART_ALREADY_PROCESSED',
+            message: error.message || 'Cart has already been processed or is empty.',
+          },
+        },
+        { status: 409 }
+      );
+    }
+
+    if (error.code === 'PAYMENT_AMOUNT_MISMATCH') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'PAYMENT_AMOUNT_MISMATCH',
+            message: error.message,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
     console.error('[API ERROR] POST /api/v1/customer/bookings:', error.message);
     return NextResponse.json(
       {

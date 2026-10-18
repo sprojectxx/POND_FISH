@@ -44,10 +44,12 @@ export async function POST(request) {
 
     let imageInput = null;
     let imageUrl = '/uploads/bills/receipt.jpg';
+    let clientDryRunBody = false;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
       const file = formData.get('bill_image') || formData.get('image');
+      clientDryRunBody = formData.get('dry_run') === 'true';
       if (!file) {
         return NextResponse.json(
           {
@@ -64,8 +66,9 @@ export async function POST(request) {
       imageInput = buffer;
       imageUrl = `/uploads/bills/${Date.now()}-${file.name || 'bill.jpg'}`;
     } else {
-      // JSON body (e.g. { image_base64, image_url, raw_text })
+      // JSON body (e.g. { image_base64, image_url, raw_text, dry_run })
       const body = await request.json().catch(() => ({}));
+      clientDryRunBody = Boolean(body.dry_run);
       if (body.image_base64) {
         // Strip data prefix if present
         const base64Data = body.image_base64.replace(/^data:image\/\w+;base64,/, '');
@@ -90,10 +93,49 @@ export async function POST(request) {
       }
     }
 
+    // Explicit dry-run check: client flag alone is never trusted.
+    // Must be non-production AND explicitly enabled via server environment.
+    const url = new URL(request.url);
+    const clientDryRunParam = url.searchParams.get('dry_run') === 'true';
+    const clientDryRunHeader = request.headers.get('x-scan-dry-run') === 'true';
+    const clientWantsDryRun = clientDryRunParam || clientDryRunHeader || clientDryRunBody;
+
+    if (clientWantsDryRun) {
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'DRY_RUN_FORBIDDEN',
+              message: 'Scan dry-run is strictly prohibited in production environments.',
+            },
+          },
+          { status: 403 }
+        );
+      }
+      if (process.env.ENABLE_DEV_SCAN_DRY_RUN !== 'true') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'DRY_RUN_DISABLED',
+              message: 'Scan dry-run is disabled by server configuration.',
+            },
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    const dryRun = Boolean(clientWantsDryRun && process.env.ENABLE_DEV_SCAN_DRY_RUN === 'true' && process.env.NODE_ENV !== 'production');
+
+    const customerId = session.customerId || session.id || session.sub;
+
     const extractionResult = await processBillImage({
-      customerId: session.customerId,
+      customerId,
       imageInput,
       imageUrl,
+      dryRun,
     });
 
     return NextResponse.json(
@@ -110,6 +152,7 @@ export async function POST(request) {
           items: extractionResult.items,
           warnings: extractionResult.warnings,
           created_at: extractionResult.createdAt,
+          dry_run: Boolean(extractionResult.dryRun),
         },
         timestamp: new Date().toISOString(),
       },
