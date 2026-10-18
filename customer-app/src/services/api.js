@@ -11,26 +11,41 @@ const API_BASE_URL = __DEV__
   ? (process.env.API_BASE_URL || 'http://127.0.0.1:3000')
   : 'https://pondfish.in';
 
+// Global handler for authenticated session expiration (HTTP 401)
+let onUnauthorizedCallback = null;
+let lastRejectedToken = null;
+let lastRejectedTime = 0;
+
+export function setUnauthorizedHandler(callback) {
+  onUnauthorizedCallback = callback;
+}
+
 /**
  * Standard API request wrapper with bearer token attachment
  */
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   };
 
   // Attach secure Android Keystore token if not already provided
+  let requestToken = null;
   if (!headers.Authorization) {
     try {
       const tokens = await getAuthTokens();
       if (tokens && tokens.token) {
+        requestToken = tokens.token;
         headers.Authorization = `Bearer ${tokens.token}`;
       }
     } catch (e) {
       console.warn('[API CLIENT] Could not read keystore credentials', e);
     }
+  } else if (typeof headers.Authorization === 'string') {
+    const match = headers.Authorization.match(/^Bearer\s+(.*)$/i);
+    requestToken = match ? match[1] : headers.Authorization;
   }
 
   const response = await fetch(url, {
@@ -46,6 +61,30 @@ async function request(endpoint, options = {}) {
     err.code = json?.error?.code || 'API_REQUEST_FAILED';
     err.status = response.status;
     err.details = json?.error?.details || [];
+
+    // Trigger unauthorized session expiration only for authenticated requests that return HTTP 401
+    // Explicitly exclude initial unauthenticated auth routes (send-otp and verify-otp)
+    const isAuthEndpoint = !endpoint.includes('/auth/send-otp') && !endpoint.includes('/auth/verify-otp');
+    if (response.status === 401 && isAuthEndpoint) {
+      const now = Date.now();
+      const isDuplicate = requestToken === lastRejectedToken && (now - lastRejectedTime < 1500);
+
+      if (typeof onUnauthorizedCallback === 'function' && !isDuplicate) {
+        lastRejectedToken = requestToken;
+        lastRejectedTime = now;
+        try {
+          const res = onUnauthorizedCallback(requestToken);
+          if (res && typeof res.catch === 'function') {
+            res.catch((handlerErr) => {
+              console.warn('[API CLIENT] Error in unauthorized session handler', handlerErr);
+            });
+          }
+        } catch (handlerErr) {
+          console.warn('[API CLIENT] Error in unauthorized session handler', handlerErr);
+        }
+      }
+    }
+
     throw err;
   }
 
@@ -390,15 +429,28 @@ export const api = {
   /**
    * Scan physical store bill via camera/image upload
    * POST /api/v1/customer/bills/scan
-   * @param {object} params - { imageBase64, imageUrl, rawText }
+   * @param {object} params - { imageBase64, imageUrl, formData }
    */
-  async scanBill({ imageBase64, imageUrl, rawText }) {
-    return request('/api/v1/customer/bills/scan', {
+  async scanBill({ imageBase64, imageUrl, formData, dryRun = false } = {}) {
+    const query = dryRun ? '?dry_run=true' : '';
+    const headers = dryRun ? { 'x-scan-dry-run': 'true' } : {};
+    if (formData) {
+      if (dryRun) {
+        formData.append('dry_run', 'true');
+      }
+      return request(`/api/v1/customer/bills/scan${query}`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+    }
+    return request(`/api/v1/customer/bills/scan${query}`, {
       method: 'POST',
+      headers,
       body: JSON.stringify({
         image_base64: imageBase64,
         image_url: imageUrl,
-        raw_text: rawText,
+        dry_run: dryRun,
       }),
     });
   },
@@ -495,6 +547,12 @@ export const api = {
    * GET /api/v1/customer/transactions/{id}
    * @param {string} transactionId
    */
+  async getTransactionDetails(transactionId) {
+    return request(`/api/v1/customer/transactions/${encodeURIComponent(transactionId)}`, {
+      method: 'GET',
+    });
+  },
+
   /**
    * Retrieve active live GPS delivery tracking for customer
    * GET /api/v1/customer/gps/live

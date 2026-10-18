@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
+import RazorpayCheckout from 'react-native-razorpay';
 
 export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
   const [loading, setLoading] = useState(true);
@@ -87,16 +88,52 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
       let paymentVerification = null;
 
       if (paymentRequired) {
-        // Real Razorpay flow would be invoked here with order ID
+        // Create authoritative Razorpay order on backend
         const orderRes = await api.createRazorpayOrder();
-        if (!orderRes.configured) {
-          Alert.alert('Payment Boundary', orderRes.message);
+        if (!orderRes.success || !orderRes.data?.orderId) {
+          Alert.alert('Payment Initialization Failed', orderRes.error?.message || 'Could not initiate Razorpay order.');
           setSubmitting(false);
           return;
         }
-        // In real Android build, Razorpay Checkout SDK opens here
-        // If not completed: throw payment cancelled
-        throw new Error('Razorpay Checkout requires genuine Android API keys.');
+
+        const orderData = orderRes.data;
+        const razorpayOptions = {
+          description: 'PondFish Booking Checkout',
+          image: 'https://pondfish.in/favicon.ico',
+          currency: orderData.currency || 'INR',
+          key: orderData.keyId,
+          amount: orderData.amount, // in paise
+          name: 'PondFish',
+          order_id: orderData.orderId,
+          theme: { color: colors.accent || '#007A78' },
+        };
+
+        let razorpayResponse;
+        try {
+          razorpayResponse = await RazorpayCheckout.open(razorpayOptions);
+        } catch (payErr) {
+          const isCancelled = payErr?.code === 0 ||
+            (typeof payErr?.description === 'string' &&
+              (payErr.description.toLowerCase().includes('cancelled') ||
+               payErr.description.toLowerCase().includes('canceled')));
+
+          if (isCancelled) {
+            Alert.alert('Payment Cancelled', 'Payment was cancelled. Your booking has not been confirmed.');
+          } else {
+            Alert.alert('Payment Failed', payErr?.description || payErr?.message || 'Payment processing failed. Please try again.');
+          }
+          setSubmitting(false);
+          return;
+        }
+
+        paymentVerification = {
+          orderId: razorpayResponse.razorpay_order_id || orderData.orderId,
+          paymentId: razorpayResponse.razorpay_payment_id,
+          signature: razorpayResponse.razorpay_signature,
+          razorpayOrderId: razorpayResponse.razorpay_order_id || orderData.orderId,
+          razorpayPaymentId: razorpayResponse.razorpay_payment_id,
+          razorpaySignature: razorpayResponse.razorpay_signature,
+        };
       }
 
       // Execute booking creation (fully covered by subscription or verified payment)
@@ -139,8 +176,8 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
         <Text style={styles.emptyEmoji}>🛒</Text>
         <Text style={styles.emptyTitle}>Your cart is empty</Text>
         <Text style={styles.emptySub}>Add fresh fish from the marketplace to proceed to checkout.</Text>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => onNavigate('MARKETPLACE')}>
-          <Text style={styles.primaryBtnText}>Browse Fish Marketplace</Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => onNavigate('HOME')}>
+          <Text style={styles.primaryBtnText}>Browse Today’s Catch</Text>
         </TouchableOpacity>
       </View>
     );
@@ -219,12 +256,32 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
                 </View>
               </View>
 
-              <View style={{ alignItems: 'flex-end' }}>
+              <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                 <Text style={styles.itemPrice}>₹{item.subtotal}</Text>
-                {item.subscriptionCoveredKg > 0 && (
-                  <Text style={styles.coveredBadge}>
-                    Covered: {item.subscriptionCoveredKg} kg
-                  </Text>
+
+                {subscription.active && (
+                  item.isSubscriptionEligible ? (
+                    item.subscriptionCoveredKg > 0 ? (
+                      <View style={{ alignItems: 'flex-end', marginTop: 4 }}>
+                        <Text style={styles.coveredBadge}>
+                          ✓ Covered: {item.subscriptionCoveredKg} kg (-₹{item.subscriptionCreditUsed})
+                        </Text>
+                        {item.extraQuantityKg > 0 && (
+                          <Text style={styles.extraQtyBadge}>
+                            + Extra: {item.extraQuantityKg} kg (₹{item.extraAmountPayable})
+                          </Text>
+                        )}
+                      </View>
+                    ) : (
+                      <Text style={styles.ineligibleBadge}>
+                        Eligible (Allowance Exhausted): ₹{item.extraAmountPayable}
+                      </Text>
+                    )
+                  ) : (
+                    <Text style={styles.ineligibleBadge}>
+                      ✗ Ineligible for Plan (₹{item.extraAmountPayable})
+                    </Text>
+                  )
                 )}
               </View>
             </View>
@@ -259,6 +316,10 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
                   -₹{summary.subscriptionCreditUsed}
                 </Text>
               </View>
+              <View style={styles.subRow}>
+                <Text style={styles.subLabel}>Remaining Credit Balance:</Text>
+                <Text style={styles.subValue}>₹{subscription.remainingCreditBalance}</Text>
+              </View>
             </View>
           ) : (
             <View style={styles.noSubBox}>
@@ -285,6 +346,13 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
               <Text style={[styles.feeVal, { color: colors.freshGreen }]}>
                 -₹{summary.subscriptionCreditUsed}
               </Text>
+            </View>
+          )}
+
+          {subscription.active && summary.extraQuantityKg > 0 && (
+            <View style={styles.feeRow}>
+              <Text style={styles.feeLabel}>Extra Fish Payable ({summary.extraQuantityKg} kg)</Text>
+              <Text style={styles.feeVal}>₹{summary.basePayableAmount}</Text>
             </View>
           )}
 
@@ -549,9 +617,25 @@ const styles = StyleSheet.create({
   },
   coveredBadge: {
     fontSize: 11,
-    color: colors.accent,
+    color: colors.freshGreen,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  extraQtyBadge: {
+    fontSize: 11,
+    color: '#F59E0B',
     fontWeight: '600',
     marginTop: 2,
+  },
+  ineligibleBadge: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginTop: 4,
+    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   subStatusBadge: {
     fontSize: 10,

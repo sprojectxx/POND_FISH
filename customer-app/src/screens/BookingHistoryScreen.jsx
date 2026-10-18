@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
@@ -51,7 +52,7 @@ export default function BookingHistoryScreen({ onNavigate }) {
       const res = await api.getBookingDetails(bookingId);
       onNavigate('BOOKING_CONFIRMATION', { booking: res.data });
     } catch (err) {
-      alert(err.message || 'Could not load booking details.');
+      Alert.alert('Booking Details Error', err.message || 'Could not load booking details.');
     }
   }
 
@@ -125,6 +126,17 @@ export default function BookingHistoryScreen({ onNavigate }) {
         </View>
 
         <View style={styles.cardFooter}>
+          {['CONFIRMED', 'PENDING_COLLECTION'].includes(item.status) ? (
+            <TouchableOpacity
+              onPress={() => onNavigate('LIVE_TRACKING')}
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Text style={styles.trackCatchText}>🧭 Track Harbor Truck</Text>
+            </TouchableOpacity>
+          ) : (
+            <View />
+          )}
           <Text style={styles.viewQrText}>View Digital QR Ticket →</Text>
         </View>
       </TouchableOpacity>
@@ -166,8 +178,8 @@ export default function BookingHistoryScreen({ onNavigate }) {
           <Text style={styles.emptySub}>
             Reserve fresh lake catch online and pick it up at the store with your digital QR ticket.
           </Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => onNavigate('MARKETPLACE')}>
-            <Text style={styles.retryBtnText}>Explore Fish Marketplace</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => onNavigate('HOME')}>
+            <Text style={styles.retryBtnText}>Explore Today’s Fresh Catch</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -308,7 +320,14 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     marginTop: 10,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  trackCatchText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.freshGreen,
   },
   viewQrText: {
     fontSize: 12,

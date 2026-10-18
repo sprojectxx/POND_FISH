@@ -62,6 +62,46 @@ export default function LiveTrackingScreen({ onNavigate }) {
     );
   }
 
+  if (error && !trackingData) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => onNavigate('HOME')}
+            style={styles.backButton}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerTitle}>Live Catch Tracking</Text>
+            <Text style={styles.headerSubtitle}>Harbor-to-Counter Dedicated Truck</Text>
+          </View>
+        </View>
+
+        <View style={styles.centerContainer}>
+          <Text style={{ fontSize: 36, marginBottom: 12 }}>⚠️</Text>
+          <Text style={styles.emptyTitle}>Live Tracking Unavailable</Text>
+          <Text style={styles.emptyMessage}>{error}</Text>
+          <TouchableOpacity
+            style={[styles.browseButton, { marginTop: 16 }]}
+            onPress={() => fetchTracking(false)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.browseButtonText}>Retry Connection</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.browseButton, { marginTop: 10, backgroundColor: colors.bgSurface }]}
+            onPress={() => onNavigate('HOME')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.browseButtonText, { color: colors.textPrimary }]}>Return to Home</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   const isLive = trackingData?.active;
   const tracking = trackingData;
 
@@ -119,10 +159,10 @@ export default function LiveTrackingScreen({ onNavigate }) {
 
             <TouchableOpacity
               style={styles.browseButton}
-              onPress={() => onNavigate('MARKETPLACE')}
+              onPress={() => onNavigate('HOME')}
               activeOpacity={0.8}
             >
-              <Text style={styles.browseButtonText}>Browse Counter Marketplace</Text>
+              <Text style={styles.browseButtonText}>Browse Today’s Catch</Text>
             </TouchableOpacity>
           </View>
         ) : (

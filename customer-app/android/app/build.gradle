@@ -53,6 +53,8 @@ dependencies {
     implementation project(":react-native-firebase_app")
     implementation project(":react-native-firebase_auth")
     implementation project(":react-native-keychain")
+    implementation project(":react-native-razorpay")
+    implementation project(":react-native-image-picker")
 }
 
 apply plugin: "com.google.gms.google-services"

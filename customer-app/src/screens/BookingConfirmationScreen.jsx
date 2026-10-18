@@ -19,6 +19,8 @@ import { api } from '../services/api';
 
 export default function BookingConfirmationScreen({ routeParams = {}, onNavigate }) {
   const booking = routeParams.booking || {};
+  const hasValidBooking = Boolean(booking && booking.id);
+
   const [cancelling, setCancelling] = useState(false);
   const [cancelled, setCancelled] = useState(booking.status === 'CANCELLED');
   const isCompleted = booking.status === 'COMPLETED';
@@ -29,6 +31,17 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
 
   const [timeLeft, setTimeLeft] = useState('');
   const [isExpiredLive, setIsExpiredLive] = useState(isExpired);
+
+  // Return to booking history if missing or invalid booking
+  useEffect(() => {
+    if (!hasValidBooking) {
+      Alert.alert(
+        'Booking Not Found',
+        'No active booking reservation details were found. Returning to your bookings.',
+        [{ text: 'View Bookings', onPress: () => onNavigate('BOOKING_HISTORY') }]
+      );
+    }
+  }, [hasValidBooking, onNavigate]);
 
   useEffect(() => {
     if (!expiresAt || isCompleted || cancelled) return;
@@ -54,6 +67,15 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
   }, [expiresAt, isCompleted, cancelled]);
 
   async function handleCancelBooking() {
+    if (!booking?.id) {
+      Alert.alert(
+        'Invalid Booking',
+        'No active booking reservation found to cancel. Returning to your bookings.',
+        [{ text: 'Return to Bookings', onPress: () => onNavigate('BOOKING_HISTORY') }]
+      );
+      return;
+    }
+
     Alert.alert(
       'Cancel Booking Reservation',
       'Are you sure you want to cancel this booking? Reserved fish will be returned to store stock, and subscription benefits and payment value will be restored.',
@@ -79,6 +101,26 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
           },
         },
       ]
+    );
+  }
+
+  if (!hasValidBooking) {
+    return (
+      <View style={[styles.container, styles.emptyContainer]}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.bgMain} />
+        <Text style={{ fontSize: 40, marginBottom: 16 }}>🎫</Text>
+        <Text style={styles.heroTitle}>No Booking Selected</Text>
+        <Text style={[styles.heroSub, { textAlign: 'center', marginBottom: 24, maxWidth: 280 }]}>
+          Please select an active booking from your booking history to view your pickup QR ticket.
+        </Text>
+        <TouchableOpacity
+          style={styles.homeBtn}
+          onPress={() => onNavigate('BOOKING_HISTORY')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.homeBtnText}>Return to Bookings →</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
@@ -265,10 +307,10 @@ export default function BookingConfirmationScreen({ routeParams = {}, onNavigate
         <View style={styles.actionColumn}>
           <TouchableOpacity
             style={styles.homeBtn}
-            onPress={() => onNavigate('MARKETPLACE')}
+            onPress={() => onNavigate('HOME')}
             activeOpacity={0.8}
           >
-            <Text style={styles.homeBtnText}>Continue Browsing Marketplace</Text>
+            <Text style={styles.homeBtnText}>Continue Browsing Fresh Catch</Text>
           </TouchableOpacity>
 
           {!cancelled && !isExpired && !isCompleted && (
@@ -640,5 +682,10 @@ const styles = StyleSheet.create({
     color: colors.freshRed,
     fontWeight: '700',
     fontSize: 13,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
 });

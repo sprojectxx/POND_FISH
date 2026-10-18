@@ -21,12 +21,14 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
+import RazorpayCheckout from 'react-native-razorpay';
 
 export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
-  const { scanId, initialScan } = routeParams;
+  const { scanId, initialScan, capturedImageUri } = routeParams;
 
   const [loading, setLoading] = useState(true);
   const [previewData, setPreviewData] = useState(null);
@@ -42,7 +44,7 @@ export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
     try {
       setLoading(true);
       setErrorMessage(null);
-      const res = await api.previewPhysicalTransaction(currentScanId);
+      const res = await api.previewPhysicalTransaction(currentScanId, initialScan?.items || []);
       if (res.success && res.data) {
         setPreviewData(res.data);
         if (res.data.billNumber) {
@@ -107,6 +109,10 @@ export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
       const finalPayable = previewData?.payment?.finalPayable || 0;
       const paymentRequired = finalPayable > 0;
 
+      let razorpayPaymentId = null;
+      let razorpayOrderId = null;
+      let razorpaySignature = null;
+
       if (paymentRequired) {
         // Enforce genuine server-side Razorpay order creation
         const orderRes = await api.createRazorpayOrder({ billId: scanId, items: previewData?.items || [] });
@@ -119,16 +125,50 @@ export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
           return;
         }
 
-        // Razorpay Checkout flow triggers here in production native Android build.
-        // Client-side simulation of payment success is strictly prohibited by security rules.
-        throw new Error('Razorpay mobile checkout requires genuine signature verification from payment gateway.');
+        const orderData = orderRes.data || orderRes;
+        const razorpayOptions = {
+          description: `PondFish Bill #${scanId ? scanId.slice(0, 8) : 'Catch'}`,
+          currency: orderData.currency || 'INR',
+          key: orderData.keyId,
+          amount: orderData.amount || Math.round(finalPayable * 100),
+          name: 'PondFish',
+          order_id: orderData.orderId,
+          prefill: {
+            email: 'customer@pondfish.in',
+            contact: '9876543210',
+            name: 'PondFish Customer',
+          },
+          theme: { color: colors.accent || '#007A78' },
+        };
+
+        let paymentData;
+        try {
+          paymentData = await RazorpayCheckout.open(razorpayOptions);
+        } catch (payErr) {
+          console.warn('[TRANSACTION COMMIT] Razorpay payment cancelled or failed:', payErr);
+          const isCancelled = payErr?.code === 0 || payErr?.description?.toLowerCase()?.includes('cancel');
+          Alert.alert(
+            isCancelled ? 'Payment Cancelled' : 'Payment Failed',
+            isCancelled
+              ? 'Payment was cancelled. Your transaction has not been confirmed.'
+              : (payErr?.description || 'Payment could not be completed. Please try again.')
+          );
+          setCommitting(false);
+          return;
+        }
+
+        razorpayPaymentId = paymentData?.razorpay_payment_id;
+        razorpayOrderId = paymentData?.razorpay_order_id || orderData.orderId;
+        razorpaySignature = paymentData?.razorpay_signature;
       }
 
-      // 2. Commit transaction atomically (for SUBSCRIPTION_ONLY when finalPayable === 0)
+      // 2. Commit transaction atomically
       const res = await api.commitPhysicalTransaction({
         scanId,
-        paymentMethod: 'SUBSCRIPTION_ONLY',
-        razorpayPaymentId: null,
+        paymentMethod: paymentRequired ? 'RAZORPAY' : 'SUBSCRIPTION_ONLY',
+        razorpayPaymentId,
+        razorpayOrderId,
+        razorpaySignature,
         items: previewData?.items || [],
       });
 
@@ -150,8 +190,15 @@ export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
 
   const subCoverage = previewData?.subscriptionCoverage || {};
   const payment = previewData?.payment || {};
-  const items = previewData?.items || [];
-  const finalPayable = payment.finalPayable !== undefined ? payment.finalPayable : previewData?.totalBillAmount || 0;
+  const items = previewData?.items || initialScan?.items || [];
+  const finalPayable = payment.finalPayable !== undefined ? payment.finalPayable : previewData?.totalBillAmount || initialScan?.total || 0;
+  const rawConfidence = initialScan?.confidence_score ?? previewData?.confidenceScore ?? 0.85;
+  const confidencePercent = Math.round(rawConfidence * 100);
+  const isLowConfidence = confidencePercent < 70;
+  const warnings = [
+    ...(initialScan?.warnings || []),
+    ...(previewData?.warnings || []),
+  ].filter((w, i, arr) => arr.indexOf(w) === i);
 
   return (
     <View style={styles.container}>
@@ -170,8 +217,10 @@ export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
           <Text style={styles.headerTitle}>Review Extracted Bill</Text>
           <Text style={styles.headerSub}>Verify cuts, weights & subscription benefits</Text>
         </View>
-        <View style={styles.aiBadge}>
-          <Text style={styles.aiBadgeText}>AI OCR</Text>
+        <View style={[styles.aiBadge, isLowConfidence && styles.aiBadgeWarning]}>
+          <Text style={[styles.aiBadgeText, isLowConfidence && styles.aiBadgeTextWarning]}>
+            {confidencePercent}% AI OCR
+          </Text>
         </View>
       </View>
 
@@ -192,6 +241,45 @@ export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
               </View>
             </View>
           )}
+
+          {/* Extraction Warnings & Uncertain Fields Banner */}
+          {warnings.length > 0 && (
+            <View style={styles.warningAlertCard}>
+              <Text style={styles.warningAlertTitle}>⚠️ Please Verify Extracted Information</Text>
+              {warnings.map((w, idx) => (
+                <Text key={idx} style={styles.warningAlertText}>• {w}</Text>
+              ))}
+            </View>
+          )}
+
+          {/* Original Receipt Image Card (CP-15 Spec) */}
+          {(capturedImageUri || initialScan?.image_url) && (
+            <View style={styles.card}>
+              <View style={styles.cardHeaderRow}>
+                <View>
+                  <Text style={styles.cardTitle}>Original Store Receipt</Text>
+                  <Text style={styles.receiptHintText}>Verify paper bill against AI extraction</Text>
+                </View>
+                <View style={styles.imageVerifiedPill}>
+                  <Text style={styles.imageVerifiedPillText}>📷 Captured Image</Text>
+                </View>
+              </View>
+              <View style={styles.receiptImageContainer}>
+                <Image
+                  source={{ uri: capturedImageUri || initialScan?.image_url }}
+                  style={styles.receiptImage}
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Advisory Notice */}
+          <View style={styles.advisoryNoteCard}>
+            <Text style={styles.advisoryNoteText}>
+              ℹ️ AI extraction is advisory. Please confirm that the Bill ID, fish cuts, weights, and prices match your printed counter receipt before proceeding.
+            </Text>
+          </View>
 
           {/* 1. Bill ID Status Section */}
           <View style={styles.card}>
@@ -248,24 +336,42 @@ export default function BillReviewScreen({ routeParams = {}, onNavigate }) {
 
           {/* 2. Extracted Line Items */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Fish Cuts & Weights</Text>
-            {items.map((item, index) => (
-              <View key={item.fishId || index} style={styles.itemRow}>
-                <View style={styles.itemLeft}>
-                  <Text style={styles.itemName}>{item.fishName}</Text>
-                  <Text style={styles.itemSub}>
-                    {item.quantityKg} kg • ₹{item.unitPrice}/kg
-                  </Text>
-                </View>
-                <Text style={styles.itemPrice}>₹{item.subtotal?.toFixed(2)}</Text>
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.cardTitle}>Fish Cuts & Weights</Text>
+              <Text style={styles.itemCountTag}>{items.length} cut{items.length === 1 ? '' : 's'} detected</Text>
+            </View>
+
+            {items.length === 0 ? (
+              <View style={styles.emptyItemsBox}>
+                <Text style={styles.emptyItemsText}>⚠️ No fish cuts recognized from receipt text</Text>
+                <Text style={styles.emptyItemsSub}>You can retake the photo with better lighting or scan another bill.</Text>
               </View>
-            ))}
+            ) : (
+              items.map((item, index) => (
+                <View key={item.fishId || index} style={styles.itemRow}>
+                  <View style={styles.itemLeft}>
+                    <Text style={styles.itemName}>{item.fishName || 'Fresh Fish Cut'}</Text>
+                    <Text style={styles.itemSub}>
+                      {item.quantityKg} kg • ₹{item.unitPrice}/kg
+                    </Text>
+                    {item.confidence !== undefined && item.confidence < 0.8 && (
+                      <View style={styles.uncertainBadge}>
+                        <Text style={styles.uncertainBadgeText}>⚠️ Uncertain Cut Match</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.itemPrice}>₹{item.subtotal?.toFixed(2)}</Text>
+                </View>
+              ))
+            )}
 
             <View style={styles.divider} />
 
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Total Bill Amount</Text>
-              <Text style={styles.summaryValue}>₹{previewData?.totalBillAmount?.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>
+                ₹{(previewData?.totalBillAmount !== undefined ? previewData.totalBillAmount : initialScan?.total || 0).toFixed(2)}
+              </Text>
             </View>
           </View>
 
@@ -435,10 +541,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
+  aiBadgeWarning: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+  },
   aiBadgeText: {
     color: colors.accent,
     fontSize: 11,
     fontWeight: '800',
+  },
+  aiBadgeTextWarning: {
+    color: '#D97706',
   },
   loadingContainer: {
     flex: 1,
@@ -492,6 +604,101 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  receiptHintText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  imageVerifiedPill: {
+    backgroundColor: 'rgba(2, 132, 199, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  imageVerifiedPillText: {
+    fontSize: 11,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  receiptImageContainer: {
+    height: 200,
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+  receiptImage: {
+    width: '100%',
+    height: '100%',
+  },
+  warningAlertCard: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  warningAlertTitle: {
+    color: '#D97706',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  warningAlertText: {
+    color: '#B45309',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  advisoryNoteCard: {
+    backgroundColor: 'rgba(2, 132, 199, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.25)',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
+  },
+  advisoryNoteText: {
+    color: colors.accent,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  itemCountTag: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  emptyItemsBox: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  emptyItemsText: {
+    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptyItemsSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  uncertainBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  uncertainBadgeText: {
+    color: '#D97706',
+    fontSize: 10,
+    fontWeight: '700',
   },
   cardTitle: {
     fontSize: 15,

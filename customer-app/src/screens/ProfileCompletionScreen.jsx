@@ -102,7 +102,7 @@ export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
             <Text style={styles.fieldLabel}>Verified Mobile Number</Text>
             <View style={styles.readOnlyInput}>
               <Text style={styles.readOnlyText}>
-                🇮🇳 +91 {customer.mobileNumber || '98765 43210'}
+                {customer.mobileNumber ? `🇮🇳 +91 ${customer.mobileNumber}` : 'Not available'}
               </Text>
               <Text style={styles.verifiedTag}>✓ Verified</Text>
             </View>
@@ -171,6 +171,8 @@ export default function ProfileCompletionScreen({ routeParams, onNavigate }) {
               <Text style={styles.submitButtonText}>Complete & Enter PondFish &rarr;</Text>
             )}
           </TouchableOpacity>
+
+
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -295,4 +297,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+
 });

@@ -105,6 +105,13 @@ export default function TransactionHistoryScreen({ onNavigate }) {
           >
             <Text style={styles.emptyScanBtnText}>Scan Counter Bill</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.emptyScanBtn, { backgroundColor: colors.bgSurface, marginTop: 10 }]}
+            onPress={() => onNavigate('HOME')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.emptyScanBtnText, { color: colors.textPrimary }]}>Browse Today’s Fresh Catch</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
@@ -122,6 +129,27 @@ export default function TransactionHistoryScreen({ onNavigate }) {
           {transactions.map((tx) => {
             const items = Array.isArray(tx.items) ? tx.items : [];
             const isSubOnly = tx.paymentMethod === 'SUBSCRIPTION_ONLY';
+            const status = tx.status || 'COMPLETED';
+            const statusColor =
+              status === 'COMPLETED'
+                ? colors.freshGreen
+                : status === 'PENDING'
+                ? colors.warning
+                : status === 'FAILED'
+                ? colors.freshRed
+                : colors.textMuted;
+
+            const paymentMethodLabel =
+              tx.paymentMethod === 'SUBSCRIPTION_ONLY'
+                ? 'Subscription'
+                : tx.paymentMethod === 'RAZORPAY'
+                ? 'Razorpay'
+                : tx.paymentMethod === 'CASH'
+                ? 'Cash'
+                : tx.paymentMethod === 'UPI'
+                ? 'UPI'
+                : tx.paymentMethod || 'Counter';
+
             const dateStr = tx.createdAt ? new Date(tx.createdAt).toLocaleDateString('en-IN', {
               day: 'numeric',
               month: 'short',
@@ -134,24 +162,39 @@ export default function TransactionHistoryScreen({ onNavigate }) {
               <View key={tx.id} style={styles.card}>
                 {/* Card Top Row */}
                 <View style={styles.cardTopRow}>
-                  <View>
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.txNumber}>{tx.transactionNumber}</Text>
                     <Text style={styles.txDate}>{dateStr}</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.methodPill,
-                      isSubOnly ? styles.methodPillSub : styles.methodPillRazorpay,
-                    ]}
-                  >
-                    <Text
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {/* Status Pill */}
+                    <View
                       style={[
-                        styles.methodPillText,
-                        isSubOnly ? styles.methodTextSub : styles.methodTextRazorpay,
+                        styles.statusPill,
+                        { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}55` },
                       ]}
                     >
-                      {isSubOnly ? 'Subscription' : 'Razorpay'}
-                    </Text>
+                      <Text style={[styles.statusPillText, { color: statusColor }]}>
+                        {status}
+                      </Text>
+                    </View>
+
+                    {/* Method Pill */}
+                    <View
+                      style={[
+                        styles.methodPill,
+                        isSubOnly ? styles.methodPillSub : styles.methodPillRazorpay,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.methodPillText,
+                          isSubOnly ? styles.methodTextSub : styles.methodTextRazorpay,
+                        ]}
+                      >
+                        {paymentMethodLabel}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -167,14 +210,20 @@ export default function TransactionHistoryScreen({ onNavigate }) {
 
                 {/* Items Summary */}
                 <View style={styles.itemsBox}>
-                  {items.map((it, idx) => (
-                    <View key={it.id || idx} style={styles.itemRow}>
-                      <Text style={styles.itemName}>
-                        • {it.fishName} ({it.quantityKg} kg)
-                      </Text>
-                      <Text style={styles.itemSubtotal}>₹{it.subtotal?.toFixed(2)}</Text>
-                    </View>
-                  ))}
+                  {items.length > 0 ? (
+                    items.map((it, idx) => (
+                      <View key={it.id || idx} style={styles.itemRow}>
+                        <Text style={styles.itemName}>
+                          • {it.fishName} ({it.quantityKg} kg)
+                        </Text>
+                        <Text style={styles.itemSubtotal}>₹{it.subtotal?.toFixed(2)}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic' }}>
+                      In-store counter purchase settlement
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.divider} />
@@ -190,6 +239,11 @@ export default function TransactionHistoryScreen({ onNavigate }) {
                     <Text style={styles.totalLabel}>
                       Total Bill: ₹{tx.totalBillAmount?.toFixed(2)}
                     </Text>
+                    {tx.razorpayGatewayFee > 0 && (
+                      <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                        Gateway Fee: ₹{tx.razorpayGatewayFee.toFixed(2)}
+                      </Text>
+                    )}
                   </View>
 
                   <View style={{ alignItems: 'flex-end' }}>
@@ -360,6 +414,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   methodPill: {
     paddingHorizontal: 8,

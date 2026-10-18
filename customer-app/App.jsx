@@ -4,7 +4,7 @@
  * Orchestrates customer authentication state machine, secure storage, and authenticated navigation shell.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
   StatusBar,
@@ -12,16 +12,18 @@ import {
   View,
   Text,
   TouchableOpacity,
+  BackHandler,
 } from 'react-native';
 import { colors } from './src/theme/colors';
-import { api } from './src/services/api';
+import { api, setUnauthorizedHandler } from './src/services/api';
+import { getAuthTokens, clearAuthTokens } from './src/services/auth-storage';
 
 import SplashScreen from './src/screens/SplashScreen';
 import PhoneAuthScreen from './src/screens/PhoneAuthScreen';
 import OtpVerifyScreen from './src/screens/OtpVerifyScreen';
 import ProfileCompletionScreen from './src/screens/ProfileCompletionScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 import HomeScreen from './src/screens/HomeScreen';
-import MarketplaceScreen from './src/screens/MarketplaceScreen';
 import FishDetailsScreen from './src/screens/FishDetailsScreen';
 import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
@@ -37,7 +39,6 @@ import LiveTrackingScreen from './src/screens/LiveTrackingScreen';
 
 const AUTHENTICATED_SCREENS = [
   'HOME',
-  'MARKETPLACE',
   'FISH_DETAILS',
   'CART',
   'CHECKOUT',
@@ -50,49 +51,208 @@ const AUTHENTICATED_SCREENS = [
   'TRANSACTION_RESULT',
   'TRANSACTION_HISTORY',
   'LIVE_TRACKING',
+  'PROFILE',
+  'PROFILE_COMPLETION',
 ];
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
   const [screenParams, setScreenParams] = useState({});
-  const [cartCount, setCartCount] = useState(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isProfileComplete, setIsProfileComplete] = useState(false);
+  const isLoggingOutRef = useRef(false);
 
-  const fetchCartCount = useCallback(async () => {
+  const [cartSummary, setCartSummary] = useState({
+    totalItems: 0,
+    totalQuantity: 0,
+    totalAmount: 0,
+    isAllBookable: true,
+  });
+  const cartCount = cartSummary?.totalItems || 0;
+
+  const fetchCartSummary = useCallback(async () => {
     try {
       const res = await api.getCart();
-      if (res.data?.summary?.totalItems !== undefined) {
-        setCartCount(res.data.summary.totalItems);
+      if (res.data?.summary) {
+        setCartSummary(res.data.summary);
       }
     } catch {
-      // Unauthenticated or network error; keep current cart count
+      // Unauthenticated or network error; keep current cart summary
     }
   }, []);
 
-  // Update cart count when entering authenticated flow
+  // Update cart count and summary when entering authenticated flow
   useEffect(() => {
-    if (AUTHENTICATED_SCREENS.includes(currentScreen)) {
-      fetchCartCount();
+    if (AUTHENTICATED_SCREENS.includes(currentScreen) && isProfileComplete && currentScreen !== 'PROFILE_COMPLETION') {
+      fetchCartSummary();
     }
-  }, [currentScreen, fetchCartCount]);
+  }, [currentScreen, isProfileComplete, fetchCartSummary]);
+
+  const handleLogout = useCallback(async (expectedToken = null) => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
+    let didClear = false;
+
+    try {
+      didClear = await clearAuthTokens(expectedToken);
+      if (!didClear && expectedToken) {
+        console.warn('[LOGOUT] Session token changed before clearing; aborting obsolete logout');
+        return;
+      }
+    } catch (e) {
+      console.warn('[LOGOUT] Error clearing tokens', e);
+    } finally {
+      isLoggingOutRef.current = false;
+    }
+
+    if (didClear || !expectedToken) {
+      setIsAuthenticated(false);
+      setIsProfileComplete(false);
+      setScreenParams({});
+      setCartSummary({ totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true });
+      setCurrentScreen('PHONE_AUTH');
+    }
+  }, []);
+
+  // Handle HTTP 401 unauthorized session expiration with token identity validation
+  const handleUnauthorized = useCallback(async (rejectedToken) => {
+    if (isLoggingOutRef.current) return;
+
+    try {
+      const current = await getAuthTokens();
+
+      // If the customer has an active token in Keystore:
+      if (current?.token) {
+        // Safe handling for missing/unidentifiable tokens:
+        // Do not let an unidentifiable 401 clear a known active session
+        if (!rejectedToken) {
+          console.warn('[AUTH] Ignored 401 without token while active session exists');
+          return;
+        }
+
+        // Compare rejected token against current stored token
+        if (rejectedToken !== current.token) {
+          console.warn('[AUTH] Ignored 401 from obsolete session token');
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[AUTH] Error inspecting current auth tokens during 401 handling', e);
+    }
+
+    await handleLogout(rejectedToken);
+  }, [handleLogout]);
+
+  // Register shared API client HTTP 401 unauthorized session expiration listener
+  useEffect(() => {
+    setUnauthorizedHandler((rejectedToken) => {
+      handleUnauthorized(rejectedToken);
+    });
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, [handleUnauthorized]);
 
   function handleNavigate(targetScreen, params = {}) {
+    const resolvedScreen = targetScreen === 'MARKETPLACE' ? 'HOME' : targetScreen;
+
+    const isTargetAuthenticated = AUTHENTICATED_SCREENS.includes(resolvedScreen);
+    const isExplicitAuthTransition = Boolean(params?.token || params?.customer);
+
+    // Stale requests cannot navigate the customer back into authenticated screens after logout
+    if (isTargetAuthenticated && !isAuthenticated && !isExplicitAuthTransition) {
+      console.warn(`[NAVIGATION GUARD] Blocked unauthenticated navigation to ${resolvedScreen}`);
+      return;
+    }
+
+    // Authoritative profile-completion state tracking from genuine backend customer payload
+    let nextProfileComplete = isProfileComplete;
+    if (params?.customer && typeof params.customer.isProfileComplete === 'boolean') {
+      nextProfileComplete = params.customer.isProfileComplete;
+      setIsProfileComplete(nextProfileComplete);
+    }
+
+    // Centralized onboarding gate:
+    // Any screen in AUTHENTICATED_SCREENS except PROFILE_COMPLETION requires isProfileComplete === true
+    const isProtectedScreen = isTargetAuthenticated && resolvedScreen !== 'PROFILE_COMPLETION';
+    if (isProtectedScreen && !nextProfileComplete) {
+      console.warn(`[ONBOARDING GATE] Blocked uncompleted profile navigation to ${resolvedScreen}`);
+      if (currentScreen !== 'PROFILE_COMPLETION') {
+        setCurrentScreen('PROFILE_COMPLETION');
+      }
+      return;
+    }
+
+    if (isExplicitAuthTransition) {
+      setIsAuthenticated(true);
+    }
+
     setScreenParams((prev) => ({ ...prev, ...params }));
-    setCurrentScreen(targetScreen);
+    setCurrentScreen(resolvedScreen);
   }
 
+  // Intercept Android hardware back press to avoid escaping authenticated boundary or returning after logout
+  useEffect(() => {
+    const backAction = () => {
+      if (currentScreen === 'PHONE_AUTH' || currentScreen === 'SPLASH') {
+        BackHandler.exitApp();
+        return true;
+      }
+      if (currentScreen === 'OTP_VERIFY') {
+        setCurrentScreen('PHONE_AUTH');
+        return true;
+      }
+      if (currentScreen === 'PROFILE_COMPLETION') {
+        // Prevent bypassing profile completion to HOME (Task 1)
+        BackHandler.exitApp();
+        return true;
+      }
+      if (!isProfileComplete && AUTHENTICATED_SCREENS.includes(currentScreen)) {
+        BackHandler.exitApp();
+        return true;
+      }
+      if (currentScreen === 'CHECKOUT') {
+        // Map hardware back from CHECKOUT to CART (Task 3)
+        setCurrentScreen('CART');
+        return true;
+      }
+      if (currentScreen === 'HOME') {
+        BackHandler.exitApp();
+        return true;
+      }
+      if (AUTHENTICATED_SCREENS.includes(currentScreen)) {
+        setCurrentScreen('HOME');
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [currentScreen, isProfileComplete]);
+
   function handleCartUpdated(cartData) {
-    if (cartData?.summary?.totalItems !== undefined) {
-      setCartCount(cartData.summary.totalItems);
+    if (cartData?.summary) {
+      setCartSummary(cartData.summary);
     } else if (Array.isArray(cartData?.items)) {
-      setCartCount(cartData.items.length);
+      setCartSummary((prev) => ({
+        ...prev,
+        totalItems: cartData.items.length,
+      }));
     }
   }
 
-  const showBottomNav = AUTHENTICATED_SCREENS.includes(currentScreen);
+  // Hide bottom navigation during initial auth, splash, and mandatory profile completion (Task 1)
+  const showBottomNav = AUTHENTICATED_SCREENS.includes(currentScreen) &&
+    isProfileComplete &&
+    currentScreen !== 'SPLASH' &&
+    currentScreen !== 'PHONE_AUTH' &&
+    currentScreen !== 'OTP_VERIFY' &&
+    currentScreen !== 'PROFILE_COMPLETION';
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bgMain} />
+      <StatusBar barStyle="light-content" backgroundColor="#0A192F" />
 
       <View style={styles.screenContainer}>
         {currentScreen === 'SPLASH' && (
@@ -117,19 +277,21 @@ export default function App() {
           />
         )}
 
+        {currentScreen === 'PROFILE' && (
+          <ProfileScreen
+            routeParams={screenParams}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        )}
+
         {currentScreen === 'HOME' && (
           <HomeScreen
             routeParams={screenParams}
             onNavigate={handleNavigate}
             cartCount={cartCount}
-          />
-        )}
-
-        {currentScreen === 'MARKETPLACE' && (
-          <MarketplaceScreen
-            routeParams={screenParams}
-            onNavigate={handleNavigate}
-            cartCount={cartCount}
+            cartSummary={cartSummary}
+            onCartUpdated={handleCartUpdated}
           />
         )}
 
@@ -222,107 +384,92 @@ export default function App() {
         )}
       </View>
 
-      {/* Authenticated Global Bottom Navigation Bar */}
+      {/* Authenticated Global 5-Tab Bottom Navigation Bar */}
       {showBottomNav && (
-        <View style={styles.bottomNav}>
-          {/* Nav Item 1: Home */}
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => handleNavigate('HOME')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.navIcon, currentScreen === 'HOME' && styles.navIconActive]}>
-              🏠
-            </Text>
-            <Text style={[styles.navLabel, currentScreen === 'HOME' && styles.navLabelActive]}>
-              Home
-            </Text>
-          </TouchableOpacity>
-
-          {/* Nav Item 2: Marketplace */}
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => handleNavigate('MARKETPLACE')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.navIcon,
-                (currentScreen === 'MARKETPLACE' || currentScreen === 'FISH_DETAILS') &&
-                  styles.navIconActive,
-              ]}
+        <View style={styles.bottomNavWrapper}>
+          <View style={styles.bottomNav}>
+            {/* Nav Item 1: Home */}
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => handleNavigate('HOME')}
+              activeOpacity={0.7}
             >
-              🐟
-            </Text>
-            <Text
-              style={[
-                styles.navLabel,
-                (currentScreen === 'MARKETPLACE' || currentScreen === 'FISH_DETAILS') &&
-                  styles.navLabelActive,
-              ]}
-            >
-              Marketplace
-            </Text>
-          </TouchableOpacity>
+              <Text style={[styles.navIcon, currentScreen === 'HOME' && styles.navIconActive]}>
+                🏪
+              </Text>
+              <Text style={[styles.navLabel, currentScreen === 'HOME' && styles.navLabelActive]}>
+                Home
+              </Text>
+            </TouchableOpacity>
 
-          {/* Nav Item 3: Cart */}
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => handleNavigate('CART')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.cartNavBox}>
+            {/* Nav Item 2: Track */}
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => handleNavigate('LIVE_TRACKING')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.navIcon, currentScreen === 'LIVE_TRACKING' && styles.navIconActive]}>
+                🧭
+              </Text>
+              <Text style={[styles.navLabel, currentScreen === 'LIVE_TRACKING' && styles.navLabelActive]}>
+                Track
+              </Text>
+            </TouchableOpacity>
+
+            {/* Nav Item 3: Center Elevated Scan Bill */}
+            <TouchableOpacity
+              style={styles.scanNavItem}
+              onPress={() => handleNavigate('SCAN_BILL')}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.scanIconCircle, currentScreen === 'SCAN_BILL' && styles.scanIconCircleActive]}>
+                <Text style={styles.scanIconText}>▣</Text>
+              </View>
+              <Text style={[styles.navLabel, currentScreen === 'SCAN_BILL' && styles.navLabelActive, { marginTop: 2 }]}>
+                Scan Bill
+              </Text>
+            </TouchableOpacity>
+
+            {/* Nav Item 4: Bookings */}
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => handleNavigate('BOOKING_HISTORY')}
+              activeOpacity={0.7}
+            >
               <Text
                 style={[
                   styles.navIcon,
-                  (currentScreen === 'CART' || currentScreen === 'CHECKOUT') &&
+                  (currentScreen === 'BOOKING_HISTORY' || currentScreen === 'BOOKING_CONFIRMATION') &&
                     styles.navIconActive,
                 ]}
               >
-                🛒
+                📅
               </Text>
-              {cartCount > 0 && (
-                <View style={styles.navBadge}>
-                  <Text style={styles.navBadgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
-                </View>
-              )}
-            </View>
-            <Text
-              style={[
-                styles.navLabel,
-                (currentScreen === 'CART' || currentScreen === 'CHECKOUT') &&
-                  styles.navLabelActive,
-              ]}
-            >
-              Cart
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.navLabel,
+                  (currentScreen === 'BOOKING_HISTORY' || currentScreen === 'BOOKING_CONFIRMATION') &&
+                    styles.navLabelActive,
+                ]}
+              >
+                Bookings
+              </Text>
+            </TouchableOpacity>
 
-          {/* Nav Item 4: Bookings (QR Tickets) */}
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => handleNavigate('BOOKING_HISTORY')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.navIcon,
-                (currentScreen === 'BOOKING_HISTORY' || currentScreen === 'BOOKING_CONFIRMATION') &&
-                  styles.navIconActive,
-              ]}
+            {/* Nav Item 5: Profile */}
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => handleNavigate('PROFILE')}
+              activeOpacity={0.7}
             >
-              🎫
-            </Text>
-            <Text
-              style={[
-                styles.navLabel,
-                (currentScreen === 'BOOKING_HISTORY' || currentScreen === 'BOOKING_CONFIRMATION') &&
-                  styles.navLabelActive,
-              ]}
-            >
-              Bookings
-            </Text>
-          </TouchableOpacity>
+              <Text style={[styles.navIcon, currentScreen === 'PROFILE' && styles.navIconActive]}>
+                👤
+              </Text>
+              <Text style={[styles.navLabel, currentScreen === 'PROFILE' && styles.navLabelActive]}>
+                Profile
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -332,29 +479,64 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bgMain,
+    backgroundColor: '#0A192F',
   },
   screenContainer: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  bottomNavWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
   },
   bottomNav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    height: 60,
-    backgroundColor: colors.bgCard,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    height: 62,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
+  },
+  scanNavItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -16,
+  },
+  scanIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#0D2040',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  scanIconCircleActive: {
+    backgroundColor: '#0284C7',
+  },
+  scanIconText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '900',
   },
   navIcon: {
     fontSize: 20,
-    opacity: 0.7,
+    opacity: 0.65,
+    marginBottom: 2,
   },
   navIconActive: {
     opacity: 1,
@@ -363,30 +545,10 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.textMuted,
-    marginTop: 2,
+    color: '#64748B',
   },
   navLabelActive: {
-    color: colors.accent,
-  },
-  cartNavBox: {
-    position: 'relative',
-  },
-  navBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -10,
-    backgroundColor: colors.freshGreen,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  navBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
+    color: '#0284C7',
     fontWeight: '800',
   },
 });

@@ -42,13 +42,15 @@ export default function SplashScreen({ onNavigate }) {
           onNavigate('PROFILE_COMPLETION', { customer, token: stored.token });
         }
       } catch (apiErr) {
-        // If 401 Unauthorized -> session expired, clear keystore and prompt sign in
         if (apiErr.status === 401) {
-          await clearAuthTokens();
+          // Token expired or revoked -> clear stale session and navigate to phone entry
+          try {
+            await clearAuthTokens();
+          } catch (_) {}
           onNavigate('PHONE_AUTH');
         } else {
-          // Network failure or backend temporarily unreachable
-          setError('We couldn’t connect to PondFish. Check your connection and try again.');
+          // Network failure or backend temporarily unreachable -> present retry without clearing credentials
+          setError('Unable to connect to PondFish. Please check your connection and try again.');
         }
       }
     } catch (e) {

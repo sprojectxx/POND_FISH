@@ -20,88 +20,180 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
+  Image,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
 
-const SAMPLE_BILLS = [
-  {
-    id: 'sample-1',
-    title: 'Flagship Receipt #1042',
-    desc: 'Rohu 1.5kg (₹400/kg) • Total ₹600',
-    rawText: `PONDFISH BANGALORE FLAGSHIP COUNTER
-================================
-BILL NO: BILL-1042
-DATE: 2026-10-06 10:30 AM
-ITEMS:
-Rohu 1.5 kg @ 400.00 = 600.00
---------------------------------
-TOTAL AMOUNT: 600.00
-THANK YOU FOR VISITING PONDFISH!`,
-  },
-  {
-    id: 'sample-2',
-    title: 'Flagship Receipt #2088',
-    desc: 'Catla 2.0kg (₹450/kg) • Total ₹900',
-    rawText: `PONDFISH BANGALORE FLAGSHIP COUNTER
-================================
-RECEIPT #: BILL-2088
-DATE: 2026-10-06 11:15 AM
-ITEMS:
-Catla 2.0 kg @ 450.00 = 900.00
---------------------------------
-GRAND TOTAL: 900.00
-FRESH LAKE HARVEST`,
-  },
-  {
-    id: 'sample-3',
-    title: 'Smudged Receipt (Missing Bill ID)',
-    desc: 'Tilapia 1.0kg • Tests Manual Bill ID Fallback',
-    rawText: `PONDFISH COUNTER
-ITEMS:
-Tilapia 1.0 kg @ 300.00 = 300.00
-TOTAL: 300.00`,
-  },
-];
 
 export default function ScanBillScreen({ onNavigate }) {
   const [processing, setProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [errorMessage, setErrorMessage] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
 
-  async function handleProcessReceipt(rawText, title = 'Sample Counter Bill') {
+  async function requestCameraPermission() {
+    if (Platform.OS !== 'android') return true;
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        {
+          title: 'PondFish Camera Access',
+          message: 'PondFish needs camera access to capture printed store counter receipts for OCR reading.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Deny',
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      console.warn('[CAMERA PERMISSION ERROR]', err);
+      return false;
+    }
+  }
+
+  async function handleLaunchCamera() {
+    setErrorMessage(null);
+    const hasPermission = await requestCameraPermission();
+    if (!hasPermission) {
+      Alert.alert(
+        'Camera Permission Denied',
+        'Camera permission is required to capture counter bills. You can also select an existing receipt image from your gallery.',
+        [
+          { text: 'Choose from Gallery', onPress: handleLaunchGallery },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    try {
+      const result = await launchCamera({
+        mediaType: 'photo',
+        cameraType: 'back',
+        quality: 0.85,
+        maxWidth: 1600,
+        maxHeight: 2000,
+        includeBase64: true,
+        saveToPhotos: false,
+      });
+
+      if (result.didCancel) {
+        return; // User cancelled gracefully
+      }
+
+      if (result.errorCode) {
+        if (result.errorCode === 'permission') {
+          Alert.alert('Permission Error', 'Camera permission was not granted by Android.');
+        } else {
+          Alert.alert('Camera Error', result.errorMessage || 'Unable to open camera.');
+        }
+        return;
+      }
+
+      const asset = result.assets?.[0];
+      if (!asset || (!asset.uri && !asset.base64)) {
+        Alert.alert('Capture Error', 'No image data captured. Please try again.');
+        return;
+      }
+
+      setSelectedImage(asset);
+    } catch (err) {
+      console.warn('[CAMERA LAUNCH ERROR]', err);
+      setErrorMessage('Unable to launch camera. Please try selecting an image from gallery.');
+    }
+  }
+
+  async function handleLaunchGallery() {
+    setErrorMessage(null);
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        quality: 0.85,
+        maxWidth: 1600,
+        maxHeight: 2000,
+        includeBase64: true,
+      });
+
+      if (result.didCancel) {
+        return; // User cancelled gracefully
+      }
+
+      if (result.errorCode) {
+        Alert.alert('Gallery Error', result.errorMessage || 'Unable to open gallery.');
+        return;
+      }
+
+      const asset = result.assets?.[0];
+      if (!asset || (!asset.uri && !asset.base64)) {
+        Alert.alert('Image Error', 'No image selected.');
+        return;
+      }
+
+      setSelectedImage(asset);
+    } catch (err) {
+      console.warn('[GALLERY LAUNCH ERROR]', err);
+      setErrorMessage('Unable to open photo gallery.');
+    }
+  }
+
+  async function handleUploadAndExtract() {
+    if (!selectedImage) {
+      Alert.alert('Image Required', 'Please capture or select a bill image first.');
+      return;
+    }
+
     try {
       setErrorMessage(null);
       setProcessing(true);
-      setProcessingStep('Reading your bill...');
+      setProcessingStep('Uploading receipt image...');
 
-      // Call central OCR scan API
-      const res = await api.scanBill({
-        rawText,
-        imageUrl: `/uploads/bills/${title.toLowerCase().replace(/\s+/g, '-')}.jpg`,
-      });
+      let res;
+      const isDryRun = Boolean(__DEV__);
+      if (selectedImage.base64) {
+        setProcessingStep('AI reading receipt with OCR...');
+        const base64Data = `data:${selectedImage.type || 'image/jpeg'};base64,${selectedImage.base64}`;
+        res = await api.scanBill({
+          imageBase64: base64Data,
+          imageUrl: `/uploads/bills/${selectedImage.fileName || 'captured-bill.jpg'}`,
+          dryRun: isDryRun,
+        });
+      } else {
+        setProcessingStep('Uploading receipt image...');
+        const formData = new FormData();
+        formData.append('bill_image', {
+          uri: selectedImage.uri,
+          name: selectedImage.fileName || 'bill.jpg',
+          type: selectedImage.type || 'image/jpeg',
+        });
+        res = await api.scanBill({ formData, dryRun: isDryRun });
+      }
 
       if (!res.success || !res.data) {
-        throw new Error(res.error?.message || 'Unable to extract bill data.');
+        throw new Error(res.error?.message || "We couldn't identify a bill in this image. Please scan the bill again.");
+      }
+
+      if (res.data.status === 'UNREADABLE' || (res.data.confidence_score !== undefined && res.data.confidence_score < 0.15 && (!res.data.items || res.data.items.length === 0))) {
+        throw new Error("We couldn't read this bill clearly. Please take another photo.");
       }
 
       setProcessingStep('Preparing review...');
       onNavigate('BILL_REVIEW', {
         scanId: res.data.scan_id || res.data.bill_id,
         initialScan: res.data,
+        capturedImageUri: selectedImage.uri,
       });
     } catch (err) {
-      console.warn('[SCAN BILL ERROR]', err);
-      setErrorMessage(err.message || 'We could not read this bill clearly. Please try again.');
+      console.warn('[OCR SCAN ERROR]', err);
+      const msg = err.message || "We couldn't read this bill clearly. Please take another photo.";
+      setErrorMessage(msg);
+      Alert.alert('Scan Unsuccessful', msg, [{ text: 'OK' }]);
     } finally {
       setProcessing(false);
       setProcessingStep('');
     }
-  }
-
-  function handleCapturePhoto() {
-    // Uses standard sample receipt 1 as simulated camera capture
-    handleProcessReceipt(SAMPLE_BILLS[0].rawText, 'Camera Captured Bill');
   }
 
   return (
@@ -119,46 +211,101 @@ export default function ScanBillScreen({ onNavigate }) {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Scan Counter Bill</Text>
-          <Text style={styles.headerSub}>Physical store purchase settlement</Text>
+          <Text style={styles.headerSub}>Capture physical store receipt for OCR verification</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Camera Viewfinder Box */}
+        {/* Camera / Preview Viewfinder Box */}
         <View style={styles.viewfinderCard}>
           <View style={styles.reticleFrame}>
-            <View style={[styles.corner, styles.cornerTL]} />
-            <View style={[styles.corner, styles.cornerTR]} />
-            <View style={[styles.corner, styles.cornerBL]} />
-            <View style={[styles.corner, styles.cornerBR]} />
-
-            {processing ? (
-              <View style={styles.processingOverlay}>
-                <ActivityIndicator size="large" color={colors.accent} />
-                <Text style={styles.processingText}>{processingStep}</Text>
-                <Text style={styles.processingSub}>AI is extracting cuts and totals</Text>
-              </View>
+            {selectedImage ? (
+              <Image
+                source={{ uri: selectedImage.uri }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
             ) : (
-              <View style={styles.viewfinderInner}>
-                <Text style={{ fontSize: 44, marginBottom: 12 }}>🧾</Text>
-                <Text style={styles.viewfinderPrompt}>Align printed bill inside this frame</Text>
-                <Text style={styles.viewfinderSub}>Ensure Bill ID and fish cuts are clearly visible</Text>
+              <>
+                <View style={[styles.corner, styles.cornerTL]} />
+                <View style={[styles.corner, styles.cornerTR]} />
+                <View style={[styles.corner, styles.cornerBL]} />
+                <View style={[styles.corner, styles.cornerBR]} />
+
+                {processing ? (
+                  <View style={styles.processingOverlay}>
+                    <ActivityIndicator size="large" color={colors.accent} />
+                    <Text style={styles.processingText}>{processingStep}</Text>
+                    <Text style={styles.processingSub}>AI is analyzing receipt items & totals</Text>
+                  </View>
+                ) : (
+                  <View style={styles.viewfinderInner}>
+                    <Text style={{ fontSize: 44, marginBottom: 12 }}>🧾</Text>
+                    <Text style={styles.viewfinderPrompt}>Align printed bill inside this frame</Text>
+                    <Text style={styles.viewfinderSub}>Ensure Bill ID and fish cuts are clearly visible</Text>
+                  </View>
+                )}
+              </>
+            )}
+
+            {selectedImage && (
+              <View style={styles.previewBadge}>
+                <Text style={styles.previewBadgeText}>📷 Image Ready for OCR</Text>
               </View>
             )}
           </View>
 
-          {/* Capture Trigger Button */}
-          <TouchableOpacity
-            style={[styles.captureButton, processing && styles.captureButtonDisabled]}
-            onPress={handleCapturePhoto}
-            disabled={processing}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.captureButtonIcon}>📷</Text>
-            <Text style={styles.captureButtonText}>
-              {processing ? 'Processing Bill...' : 'Capture Receipt Photo'}
-            </Text>
-          </TouchableOpacity>
+          {/* Action Trigger Buttons */}
+          {selectedImage ? (
+            <View style={styles.previewActionsRow}>
+              <TouchableOpacity
+                style={[styles.confirmButton, processing && styles.buttonDisabled]}
+                onPress={handleUploadAndExtract}
+                disabled={processing}
+                activeOpacity={0.8}
+              >
+                {processing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                ) : (
+                  <Text style={styles.actionIcon}>⚡</Text>
+                )}
+                <Text style={styles.confirmButtonText}>
+                  {processing ? processingStep : 'Scan & Extract Bill with AI →'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.retakeButton, processing && styles.buttonDisabled]}
+                onPress={() => setSelectedImage(null)}
+                disabled={processing}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.retakeButtonText}>← Retake / Choose Another</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.captureButtonsRow}>
+              <TouchableOpacity
+                style={[styles.captureButton, processing && styles.captureButtonDisabled]}
+                onPress={handleLaunchCamera}
+                disabled={processing}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.captureButtonIcon}>📷</Text>
+                <Text style={styles.captureButtonText}>Open Camera</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.galleryButton, processing && styles.buttonDisabled]}
+                onPress={handleLaunchGallery}
+                disabled={processing}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.galleryButtonIcon}>🖼️</Text>
+                <Text style={styles.galleryButtonText}>Choose from Gallery</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Error Alert Banner */}
@@ -172,38 +319,21 @@ export default function ScanBillScreen({ onNavigate }) {
           </View>
         )}
 
-        {/* Direct In-Store Sample Selector */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Counter Receipts</Text>
-          <Text style={styles.sectionSub}>Select a bill to process subscription settlement</Text>
+        {/* Genuine Physical Bill Verification Notice */}
+        <View style={styles.guidelinesCard}>
+          <Text style={styles.guidelinesTitle}>💡 How Counter Bill Scanning Works</Text>
+          <Text style={styles.guidelineBullet}>• Capture or upload the physical paper bill received at the PondFish store counter</Text>
+          <Text style={styles.guidelineBullet}>• PondFish AI will extract the Bill ID, purchased fish cuts, weights, and total</Text>
+          <Text style={styles.guidelineBullet}>• Your active subscription quota and credit are automatically calculated</Text>
+          <Text style={styles.guidelineBullet}>• You can review all details and correct the Bill ID before final checkout</Text>
         </View>
 
-        {SAMPLE_BILLS.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={styles.sampleCard}
-            onPress={() => handleProcessReceipt(item.rawText, item.title)}
-            disabled={processing}
-            activeOpacity={0.7}
-          >
-            <View style={styles.sampleIconBox}>
-              <Text style={{ fontSize: 20 }}>📄</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sampleTitle}>{item.title}</Text>
-              <Text style={styles.sampleDesc}>{item.desc}</Text>
-            </View>
-            <Text style={styles.sampleArrow}>→</Text>
-          </TouchableOpacity>
-        ))}
-
-        {/* Guidelines Card */}
-        <View style={styles.guidelinesCard}>
-          <Text style={styles.guidelinesTitle}>💡 Scanning Tips</Text>
-          <Text style={styles.guidelineBullet}>• Hold phone flat over the paper receipt</Text>
-          <Text style={styles.guidelineBullet}>• Avoid harsh shadows across the Bill ID</Text>
-          <Text style={styles.guidelineBullet}>• If Bill ID is smudged, you can enter it manually on the next screen</Text>
-          <Text style={styles.guidelineBullet}>• Active subscriptions automatically deduct weekly allowance & credit</Text>
+        {/* Quality Guidelines Card */}
+        <View style={[styles.guidelinesCard, { marginTop: 12 }]}>
+          <Text style={styles.guidelinesTitle}>📸 Image Quality Tips</Text>
+          <Text style={styles.guidelineBullet}>• Place receipt flat on a dark or contrasted surface</Text>
+          <Text style={styles.guidelineBullet}>• Ensure all text, especially the Bill ID and total, is clear and well-lit</Text>
+          <Text style={styles.guidelineBullet}>• Avoid heavy glare, shadows, or cropped edges</Text>
         </View>
       </ScrollView>
     </View>
@@ -332,26 +462,109 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
+  captureButtonsRow: {
+    flexDirection: 'row',
+    marginTop: 16,
+    gap: 10,
+  },
   captureButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.accent,
     borderRadius: 12,
     height: 48,
-    marginTop: 16,
   },
   captureButtonDisabled: {
     opacity: 0.6,
   },
   captureButtonIcon: {
     fontSize: 18,
-    marginRight: 8,
+    marginRight: 6,
   },
   captureButtonText: {
     color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  galleryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    height: 48,
+  },
+  galleryButtonIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  galleryButtonText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+  },
+  previewBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 122, 120, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  previewBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  previewActionsRow: {
+    marginTop: 16,
+  },
+  confirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    height: 48,
+    marginBottom: 10,
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  retakeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgMain,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    height: 44,
+  },
+  retakeButtonText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  actionIcon: {
+    fontSize: 16,
+    marginRight: 8,
   },
   errorBanner: {
     flexDirection: 'row',

@@ -15,6 +15,7 @@ import {
   StyleSheet,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
@@ -100,7 +101,7 @@ export default function FishDetailsScreen({
       } else if (err.code === 'FISH_UNAVAILABLE') {
         msg = 'This fish is currently out of stock.';
       }
-      alert(msg);
+      Alert.alert('Unable to Add', msg);
     } finally {
       setAddingToCart(false);
     }
@@ -119,7 +120,7 @@ export default function FishDetailsScreen({
     return (
       <View style={styles.container}>
         <View style={styles.appBar}>
-          <TouchableOpacity style={styles.backButton} onPress={() => onNavigate('MARKETPLACE')}>
+          <TouchableOpacity style={styles.backButton} onPress={() => onNavigate('HOME')}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.appBarTitle}>Fish Details</Text>
@@ -148,7 +149,7 @@ export default function FishDetailsScreen({
       <View style={styles.appBar}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => onNavigate('MARKETPLACE')}
+          onPress={() => onNavigate('HOME')}
           activeOpacity={0.7}
         >
           <Text style={styles.backButtonText}>←</Text>

@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
+import RazorpayCheckout from 'react-native-razorpay';
 
 export default function SubscriptionScreen({ onNavigate }) {
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,28 @@ export default function SubscriptionScreen({ onNavigate }) {
   const [purchasing, setPurchasing] = useState(false);
   const [purchasePreview, setPurchasePreview] = useState(null);
   const [preparingPurchase, setPreparingPurchase] = useState(false);
+  const [ledgerError, setLedgerError] = useState(null);
+
+  const fetchLedger = useCallback(async () => {
+    try {
+      setLedgerLoading(true);
+      setLedgerError(null);
+      const ledgerRes = await api.getSubscriptionLedger({ limit: 50 });
+      if (ledgerRes.success && Array.isArray(ledgerRes.data)) {
+        setLedgerEntries(ledgerRes.data);
+      } else if (Array.isArray(ledgerRes.data)) {
+        setLedgerEntries(ledgerRes.data);
+      } else {
+        setLedgerEntries([]);
+      }
+    } catch (err) {
+      console.warn('[LEDGER FETCH ERROR]', err.message);
+      setLedgerError(err.message || 'Could not load credit movements.');
+      setLedgerEntries([]);
+    } finally {
+      setLedgerLoading(false);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -49,31 +72,24 @@ export default function SubscriptionScreen({ onNavigate }) {
         api.getSubscriptionPlans(),
       ]);
 
-      setSubscriptionState(subRes.data);
-      setPlans(plansRes.data || []);
+      const subData = subRes.data || { hasSubscription: false, subscription: null };
+      const plansData = Array.isArray(plansRes.data) ? plansRes.data : [];
 
-      // If customer has had any subscription, fetch ledger
+      setSubscriptionState(subData);
+      setPlans(plansData);
+
+      // Fetch authentic customer credit ledger
       fetchLedger();
     } catch (err) {
-      console.error('[SUBSCRIPTION HUB ERROR]', err);
+      console.error('[SUBSCRIPTION HUB LOAD ERROR]', err);
       setError(err.message || 'Unable to load subscription details.');
+      setSubscriptionState(null);
+      setPlans([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
-
-  const fetchLedger = async () => {
-    try {
-      setLedgerLoading(true);
-      const ledgerRes = await api.getSubscriptionLedger({ limit: 50 });
-      setLedgerEntries(ledgerRes.data || []);
-    } catch (err) {
-      console.warn('[LEDGER FETCH ERROR]', err.message);
-    } finally {
-      setLedgerLoading(false);
-    }
-  };
+  }, [fetchLedger]);
 
   useEffect(() => {
     loadData();
@@ -138,14 +154,56 @@ export default function SubscriptionScreen({ onNavigate }) {
         return;
       }
 
-      // 2. In genuine mobile environment with Razorpay SDK:
-      // Real Razorpay Checkout options would be invoked here.
-      // If payment cannot proceed because of missing client keys or dismissal:
-      Alert.alert(
-        'Payment Notice',
-        'Payment was not completed. Your subscription has not been updated.',
-        [{ text: 'OK' }]
-      );
+      // 2. Open native Razorpay Checkout
+      const options = {
+        description: `Subscription: ${selectedPlan.title}`,
+        image: 'https://pondfish.in/favicon.ico',
+        currency: orderData.currency || 'INR',
+        key: orderData.keyId,
+        amount: orderData.amountPaise || Math.round((orderData.amount || 0) * 100),
+        name: 'PondFish Subscription',
+        order_id: orderData.orderId,
+        theme: { color: colors.accent || '#007A78' },
+      };
+
+      let razorpayResponse;
+      try {
+        razorpayResponse = await RazorpayCheckout.open(options);
+      } catch (payErr) {
+        const isCancelled = payErr?.code === 0 ||
+          (typeof payErr?.description === 'string' &&
+            (payErr.description.toLowerCase().includes('cancelled') ||
+             payErr.description.toLowerCase().includes('canceled')));
+
+        if (isCancelled) {
+          Alert.alert('Payment Cancelled', 'Subscription purchase was cancelled.');
+        } else {
+          Alert.alert('Payment Failed', payErr?.description || payErr?.message || 'Subscription payment processing failed. Please try again.');
+        }
+        setPurchasing(false);
+        return;
+      }
+
+      // 3. Verify HMAC signature on backend and activate subscription atomically
+      const verifyRes = await api.verifySubscriptionPayment({
+        planId: selectedPlan.id,
+        razorpayOrderId: razorpayResponse.razorpay_order_id || orderData.orderId,
+        razorpayPaymentId: razorpayResponse.razorpay_payment_id,
+        razorpaySignature: razorpayResponse.razorpay_signature,
+      });
+
+      if (verifyRes.success) {
+        setPurchaseModalVisible(false);
+        setSelectedPlan(null);
+        Alert.alert(
+          'Subscription Activated!',
+          `Your ${selectedPlan.title} subscription has been activated successfully!`,
+          [{ text: 'OK', onPress: () => loadData() }]
+        );
+        loadData();
+      } else {
+        throw new Error(verifyRes.error?.message || 'Subscription verification failed.');
+      }
     } catch (err) {
       if (err.code === 'PLAN_NOT_FOUND') {
         Alert.alert('Plan Error', 'Selected subscription plan not found.');
@@ -285,7 +343,7 @@ export default function SubscriptionScreen({ onNavigate }) {
                 {/* Monetary Credit Balance Box */}
                 <View style={styles.creditCardBox}>
                   <Text style={styles.creditCardLabel}>Store Credit Balance</Text>
-                  <Text style={styles.creditCardValue}>₹{parseFloat(sub.creditBalance).toFixed(2)}</Text>
+                  <Text style={styles.creditCardValue}>₹{parseFloat(sub?.creditBalance || 0).toFixed(2)}</Text>
                   <Text style={styles.creditCardHint}>
                     Automatically applied to online bookings & counter orders
                   </Text>
@@ -384,51 +442,60 @@ export default function SubscriptionScreen({ onNavigate }) {
                 Authoritative pricing controlled by PondFish backend. Select to review details.
               </Text>
 
-              {plans.map((p) => {
-                const isSelected = selectedPlan?.id === p.id;
-                return (
-                  <View key={p.id} style={styles.planCard}>
-                    <View style={styles.planHeaderRow}>
-                      <View>
-                        <Text style={styles.planTitleText}>{p.title}</Text>
-                        <Text style={styles.planValidityText}>{p.validityDays} Days Validity</Text>
+              {plans.length === 0 ? (
+                <View style={styles.emptyPlansCard}>
+                  <Text style={styles.emptyPlansEmoji}>📋</Text>
+                  <Text style={styles.emptyPlansTitle}>No Plans Available</Text>
+                  <Text style={styles.emptyPlansSubtitle}>
+                    Active membership subscription plans will appear here when configured by the store administrator.
+                  </Text>
+                </View>
+              ) : (
+                plans.map((p) => {
+                  return (
+                    <View key={p.id} style={styles.planCard}>
+                      <View style={styles.planHeaderRow}>
+                        <View>
+                          <Text style={styles.planTitleText}>{p.title}</Text>
+                          <Text style={styles.planValidityText}>{p.validityDays} Days Validity</Text>
+                        </View>
+                        <View style={styles.planPriceBox}>
+                          <Text style={styles.planPriceValue}>₹{p.price}</Text>
+                          <Text style={styles.planPriceSub}>One-time / {p.validityDays}d</Text>
+                        </View>
                       </View>
-                      <View style={styles.planPriceBox}>
-                        <Text style={styles.planPriceValue}>₹{p.price}</Text>
-                        <Text style={styles.planPriceSub}>One-time / {p.validityDays}d</Text>
-                      </View>
-                    </View>
 
-                    <View style={styles.planFeaturesList}>
-                      <View style={styles.planFeatureItem}>
-                        <Text style={styles.featureBullet}>✓</Text>
-                        <Text style={styles.featureLabel}>Store Credit:</Text>
-                        <Text style={styles.featureVal}>₹{p.creditAmount}</Text>
+                      <View style={styles.planFeaturesList}>
+                        <View style={styles.planFeatureItem}>
+                          <Text style={styles.featureBullet}>✓</Text>
+                          <Text style={styles.featureLabel}>Store Credit:</Text>
+                          <Text style={styles.featureVal}>₹{p.creditAmount}</Text>
+                        </View>
+                        <View style={styles.planFeatureItem}>
+                          <Text style={styles.featureBullet}>✓</Text>
+                          <Text style={styles.featureLabel}>Weekly Limit:</Text>
+                          <Text style={styles.featureVal}>{p.weeklyQtyLimitKg} kg / week</Text>
+                        </View>
+                        <View style={styles.planFeatureItem}>
+                          <Text style={styles.featureBullet}>✓</Text>
+                          <Text style={styles.featureLabel}>Additive Rollover:</Text>
+                          <Text style={styles.featureVal}>Included</Text>
+                        </View>
                       </View>
-                      <View style={styles.planFeatureItem}>
-                        <Text style={styles.featureBullet}>✓</Text>
-                        <Text style={styles.featureLabel}>Weekly Limit:</Text>
-                        <Text style={styles.featureVal}>{p.weeklyQtyLimitKg} kg / week</Text>
-                      </View>
-                      <View style={styles.planFeatureItem}>
-                        <Text style={styles.featureBullet}>✓</Text>
-                        <Text style={styles.featureLabel}>Additive Rollover:</Text>
-                        <Text style={styles.featureVal}>Included</Text>
-                      </View>
-                    </View>
 
-                    <TouchableOpacity
-                      style={styles.subscribeBtn}
-                      onPress={() => handleSelectPlan(p)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.subscribeBtnText}>
-                        {hasActiveSub ? `Recharge with ${p.title}` : `Select ${p.title} & Subscribe`}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
+                      <TouchableOpacity
+                        style={styles.subscribeBtn}
+                        onPress={() => handleSelectPlan(p)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.subscribeBtnText}>
+                          {hasActiveSub ? `Recharge with ${p.title}` : `Select ${p.title} & Subscribe`}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
             </View>
           </>
         ) : (
@@ -444,6 +511,18 @@ export default function SubscriptionScreen({ onNavigate }) {
                 <ActivityIndicator color={colors.accent} />
                 <Text style={styles.ledgerLoadingText}>Fetching credit history...</Text>
               </View>
+            ) : ledgerError ? (
+              <View style={styles.ledgerEmptyBox}>
+                <Text style={{ fontSize: 32 }}>⚠️</Text>
+                <Text style={styles.ledgerEmptyTitle}>Unable to Load Ledger</Text>
+                <Text style={styles.ledgerEmptySub}>{ledgerError}</Text>
+                <TouchableOpacity
+                  style={[styles.rechargeBtn, { marginTop: 12, paddingVertical: 10 }]}
+                  onPress={fetchLedger}
+                >
+                  <Text style={styles.rechargeBtnText}>Retry Loading Ledger</Text>
+                </TouchableOpacity>
+              </View>
             ) : ledgerEntries.length === 0 ? (
               <View style={styles.ledgerEmptyBox}>
                 <Text style={{ fontSize: 32 }}>📜</Text>
@@ -454,9 +533,13 @@ export default function SubscriptionScreen({ onNavigate }) {
               </View>
             ) : (
               ledgerEntries.map((entry) => {
-                const isCredit = entry.type === 'PURCHASE' || entry.type === 'CREDIT_REFUND';
+                const isCredit =
+                  entry.type === 'PURCHASE' ||
+                  entry.type === 'CREDIT_REFUND' ||
+                  entry.type === 'CREDIT_ADD' ||
+                  (Number(entry.amount) > 0 && entry.type !== 'ORDER_DEBIT');
                 const typeColor =
-                  entry.type === 'PURCHASE'
+                  entry.type === 'PURCHASE' || entry.type === 'CREDIT_ADD'
                     ? colors.freshGreen
                     : entry.type === 'CREDIT_REFUND'
                     ? colors.info
@@ -471,22 +554,26 @@ export default function SubscriptionScreen({ onNavigate }) {
                         </Text>
                       </View>
                       <Text style={[styles.ledgerAmountText, { color: isCredit ? colors.freshGreen : colors.textPrimary }]}>
-                        {isCredit ? `+₹${entry.amount.toFixed(2)}` : `-₹${entry.amount.toFixed(2)}`}
+                        {isCredit
+                          ? `+₹${parseFloat(entry?.amount || 0).toFixed(2)}`
+                          : `-₹${parseFloat(Math.abs(entry?.amount || 0)).toFixed(2)}`}
                       </Text>
                     </View>
 
                     <View style={styles.ledgerItemFooter}>
                       <Text style={styles.ledgerDateText}>
-                        {new Date(entry.createdAt).toLocaleString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {entry?.createdAt
+                          ? new Date(entry.createdAt).toLocaleString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : 'Recent'}
                       </Text>
                       <Text style={styles.ledgerBalanceText}>
-                        Resulting: ₹{entry.resultingBalance.toFixed(2)}
+                        Resulting: ₹{parseFloat(entry?.resultingBalance ?? entry?.resulting_balance ?? entry?.amount ?? 0).toFixed(2)}
                       </Text>
                     </View>
                   </View>
@@ -542,24 +629,24 @@ export default function SubscriptionScreen({ onNavigate }) {
                   <View style={styles.pricingBreakdown}>
                     <View style={styles.priceRow}>
                       <Text style={styles.priceRowLabel}>Base Plan Price</Text>
-                      <Text style={styles.priceRowValue}>₹{purchasePreview.basePrice.toFixed(2)}</Text>
+                      <Text style={styles.priceRowValue}>₹{parseFloat(purchasePreview?.basePrice || 0).toFixed(2)}</Text>
                     </View>
 
                     <View style={styles.priceRow}>
                       <Text style={styles.priceRowLabel}>Gateway Surcharge (2%)</Text>
-                      <Text style={styles.priceRowValue}>₹{purchasePreview.gatewayFee.toFixed(2)}</Text>
+                      <Text style={styles.priceRowValue}>₹{parseFloat(purchasePreview?.gatewayFee || 0).toFixed(2)}</Text>
                     </View>
 
                     <View style={styles.priceRow}>
                       <Text style={styles.priceRowLabel}>GST on Fee (18%)</Text>
-                      <Text style={styles.priceRowValue}>₹{purchasePreview.feeGst.toFixed(2)}</Text>
+                      <Text style={styles.priceRowValue}>₹{parseFloat(purchasePreview?.feeGst || 0).toFixed(2)}</Text>
                     </View>
 
                     <View style={styles.divider} />
 
                     <View style={styles.totalPriceRow}>
                       <Text style={styles.totalPriceLabel}>Total Payable</Text>
-                      <Text style={styles.totalPriceValue}>₹{purchasePreview.finalPayable.toFixed(2)}</Text>
+                      <Text style={styles.totalPriceValue}>₹{parseFloat(purchasePreview?.finalPayable || 0).toFixed(2)}</Text>
                     </View>
                   </View>
                 ) : null}
@@ -584,7 +671,7 @@ export default function SubscriptionScreen({ onNavigate }) {
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Text style={styles.payNowBtnText}>
-                      Proceed to Pay ₹{purchasePreview?.finalPayable?.toFixed(2) || selectedPlan.price}
+                      Proceed to Pay ₹{parseFloat(purchasePreview?.finalPayable ?? selectedPlan?.price ?? 0).toFixed(2)}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -931,6 +1018,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginBottom: 16,
+  },
+  emptyPlansCard: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 14,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyPlansEmoji: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  emptyPlansTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  emptyPlansSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   planCard: {
     backgroundColor: colors.bgCard,

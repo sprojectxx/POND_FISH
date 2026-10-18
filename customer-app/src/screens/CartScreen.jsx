@@ -2,7 +2,7 @@
  * Screen: CP-05 — Customer Cart
  * Traceability: PondFish Customer Mobile App UI Specification (Section 32-33)
  * Authoritative cart view with item listing, quantity stepper, item removal,
- * empty state, order summary calculation, and backend revalidation.
+ * empty state, order summary calculation, backend revalidation, and checkout eligibility enforcement.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -16,6 +16,7 @@ import {
   StatusBar,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
@@ -23,17 +24,24 @@ import EmptyStateView from '../components/EmptyStateView';
 import ErrorStateView from '../components/ErrorStateView';
 
 export default function CartScreen({ onNavigate, onCartUpdated }) {
-  const [cart, setCart] = useState({ items: [], summary: { totalItems: 0, totalQuantity: 0, totalAmount: 0 } });
+  const [cart, setCart] = useState({
+    items: [],
+    summary: { totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true },
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [error, setError] = useState(null);
 
+  // Authoritative server-side cart retrieval
   const fetchCart = useCallback(async () => {
     try {
       setError(null);
       const res = await api.getCart();
-      const cartData = res.data || { items: [], summary: { totalItems: 0, totalQuantity: 0, totalAmount: 0 } };
+      const cartData = res.data || {
+        items: [],
+        summary: { totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true },
+      };
       setCart(cartData);
       if (onCartUpdated) {
         onCartUpdated(cartData);
@@ -56,18 +64,40 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
     fetchCart();
   }, [fetchCart]);
 
-  async function handleUpdateQty(fishId, currentQty, delta) {
+  // Stepper mutation with range bounds and state rollback on failure
+  async function handleUpdateQty(item, delta) {
+    if (updatingItemId) return; // Prevent concurrent mutations
+
+    const currentQty = item.quantity;
     const nextQty = parseFloat((currentQty + delta).toFixed(1));
-    setUpdatingItemId(fishId);
+
+    if (nextQty > 100) {
+      Alert.alert('Quantity Limit', 'Maximum quantity per fish item is 100 kg.');
+      return;
+    }
+
+    // If decreasing to 0 or below, confirm removal
+    if (nextQty <= 0) {
+      Alert.alert(
+        'Remove Item',
+        `Remove ${item.name} from your cart?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => handleRemoveItem(item.fishId),
+          },
+        ]
+      );
+      return;
+    }
+
+    const previousCart = cart;
+    setUpdatingItemId(item.fishId);
 
     try {
-      let res;
-      if (nextQty <= 0) {
-        res = await api.removeFromCart(fishId);
-      } else {
-        res = await api.updateCartQuantity({ fishId, quantity: nextQty });
-      }
-
+      const res = await api.updateCartQuantity({ fishId: item.fishId, quantity: nextQty });
       const cartData = res.data || { items: [], summary: {} };
       setCart(cartData);
       if (onCartUpdated) {
@@ -75,48 +105,85 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
       }
     } catch (err) {
       console.error('[UPDATE CART ERROR]', err.message);
-      alert(err.message || 'Could not update item quantity.');
+      // Restore confirmed state
+      setCart(previousCart);
+      Alert.alert('Update Failed', err.message || 'Could not update item quantity.');
     } finally {
       setUpdatingItemId(null);
     }
   }
 
+  // Authoritative item removal with state rollback on failure
   async function handleRemoveItem(fishId) {
+    if (updatingItemId) return;
+
+    const previousCart = cart;
     setUpdatingItemId(fishId);
+
     try {
       const res = await api.removeFromCart(fishId);
-      const cartData = res.data || { items: [], summary: {} };
+      const cartData = res.data || {
+        items: [],
+        summary: { totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true },
+      };
       setCart(cartData);
       if (onCartUpdated) {
         onCartUpdated(cartData);
       }
     } catch (err) {
       console.error('[REMOVE CART ERROR]', err.message);
-      alert(err.message || 'Could not remove item.');
+      setCart(previousCart);
+      Alert.alert('Removal Failed', err.message || 'Could not remove item from cart.');
     } finally {
       setUpdatingItemId(null);
     }
   }
 
-  async function handleClearCart() {
-    setLoading(true);
-    try {
-      const res = await api.clearCart();
-      const cartData = res.data || { items: [], summary: { totalItems: 0, totalQuantity: 0, totalAmount: 0 } };
-      setCart(cartData);
-      if (onCartUpdated) {
-        onCartUpdated(cartData);
-      }
-    } catch (err) {
-      console.error('[CLEAR CART ERROR]', err.message);
-      alert(err.message || 'Could not clear cart.');
-    } finally {
-      setLoading(false);
-    }
+  // Clear all items with confirmation
+  function handleClearCart() {
+    if (updatingItemId || loading) return;
+
+    Alert.alert(
+      'Clear Cart',
+      'Are you sure you want to remove all items from your cart?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const res = await api.clearCart();
+              const cartData = res.data || {
+                items: [],
+                summary: { totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true },
+              };
+              setCart(cartData);
+              if (onCartUpdated) {
+                onCartUpdated(cartData);
+              }
+            } catch (err) {
+              console.error('[CLEAR CART ERROR]', err.message);
+              Alert.alert('Clear Cart Failed', err.message || 'Could not clear cart.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   }
+
+  // Check whether all items are eligible for online booking
+  const hasIneligibleItems = cart.items.some(
+    (item) => !item.physicalAvailable || !item.onlineBookable
+  );
+  const isCheckoutEligible = cart.items.length > 0 && !hasIneligibleItems && (cart.summary?.isAllBookable !== false);
 
   function renderCartItem({ item }) {
     const isBusy = updatingItemId === item.fishId;
+    const isMutatingAny = Boolean(updatingItemId);
     const hasWarning = Boolean(item.availabilityWarning || item.bookingWarning);
 
     return (
@@ -146,18 +213,31 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
             </View>
           </View>
 
-          {/* Remove Button */}
+          {/* Remove Button with confirmation prompt */}
           <TouchableOpacity
             style={styles.removeButton}
-            onPress={() => handleRemoveItem(item.fishId)}
-            disabled={isBusy}
+            onPress={() => {
+              Alert.alert(
+                'Remove Item',
+                `Remove ${item.name} from your cart?`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: () => handleRemoveItem(item.fishId),
+                  },
+                ]
+              );
+            }}
+            disabled={isMutatingAny}
             activeOpacity={0.7}
           >
             <Text style={styles.removeButtonText}>✕</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Warning Banner if item status changed */}
+        {/* Warning Banner if item status changed on backend */}
         {hasWarning && (
           <View style={styles.warningBanner}>
             <Text style={styles.warningBannerText}>
@@ -172,8 +252,8 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
           <View style={styles.stepperBox}>
             <TouchableOpacity
               style={styles.stepBtn}
-              onPress={() => handleUpdateQty(item.fishId, item.quantity, -0.5)}
-              disabled={isBusy}
+              onPress={() => handleUpdateQty(item, -0.5)}
+              disabled={isMutatingAny}
               activeOpacity={0.7}
             >
               <Text style={styles.stepBtnText}>−</Text>
@@ -189,8 +269,8 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
 
             <TouchableOpacity
               style={styles.stepBtn}
-              onPress={() => handleUpdateQty(item.fishId, item.quantity, 0.5)}
-              disabled={isBusy}
+              onPress={() => handleUpdateQty(item, 0.5)}
+              disabled={isMutatingAny}
               activeOpacity={0.7}
             >
               <Text style={styles.stepBtnText}>+</Text>
@@ -240,18 +320,45 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
           </Text>
         </View>
 
-        {/* Slice 4: Proceed to Checkout & Online Reservation */}
+        {/* Ineligible Items Alert Banner */}
+        {hasIneligibleItems && (
+          <View style={styles.ineligibleBanner}>
+            <Text style={styles.ineligibleBannerTitle}>⚠️ Ineligible Items for Online Reservation</Text>
+            <Text style={styles.ineligibleBannerText}>
+              One or more items in your cart are currently out of stock or available for in-store counter pickup only. Please remove ineligible items to proceed to checkout.
+            </Text>
+          </View>
+        )}
+
+        {/* Proceed to Checkout with Eligibility Guard */}
         <TouchableOpacity
-          style={styles.checkoutButton}
-          onPress={() => onNavigate('CHECKOUT')}
+          style={[
+            styles.checkoutButton,
+            !isCheckoutEligible && styles.checkoutButtonDisabled,
+          ]}
+          onPress={() => {
+            if (!isCheckoutEligible) {
+              Alert.alert(
+                'Ineligible Items',
+                'Please remove out-of-stock or counter-only items from your cart before proceeding to checkout.'
+              );
+              return;
+            }
+            onNavigate('CHECKOUT');
+          }}
+          disabled={Boolean(updatingItemId)}
           activeOpacity={0.8}
         >
-          <Text style={styles.checkoutButtonText}>Review & Proceed to Booking →</Text>
+          <Text style={styles.checkoutButtonText}>
+            {isCheckoutEligible
+              ? 'Review & Proceed to Booking →'
+              : 'Remove Ineligible Items to Checkout'}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.continueButton}
-          onPress={() => onNavigate('MARKETPLACE')}
+          onPress={() => onNavigate('HOME')}
           activeOpacity={0.7}
         >
           <Text style={styles.continueButtonText}>← Add More Fresh Catch</Text>
@@ -269,7 +376,7 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
         <View style={styles.appBarLeft}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => onNavigate('MARKETPLACE')}
+            onPress={() => onNavigate('HOME')}
             activeOpacity={0.7}
           >
             <Text style={styles.backButtonText}>←</Text>
@@ -283,7 +390,11 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
         </View>
 
         {cart.items.length > 0 && (
-          <TouchableOpacity style={styles.clearBtn} onPress={handleClearCart}>
+          <TouchableOpacity
+            style={styles.clearBtn}
+            onPress={handleClearCart}
+            disabled={Boolean(updatingItemId)}
+          >
             <Text style={styles.clearBtnText}>Clear All</Text>
           </TouchableOpacity>
         )}
@@ -302,8 +413,8 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
           emoji="🛒"
           title="Your cart is empty"
           message="Explore today’s lake harvest and reserve premium fish for store pickup."
-          actionLabel="Browse Fish Marketplace"
-          onAction={() => onNavigate('MARKETPLACE')}
+          actionLabel="Browse Today’s Catch"
+          onAction={() => onNavigate('HOME')}
         />
       ) : (
         <FlatList
@@ -577,6 +688,25 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 15,
   },
+  ineligibleBanner: {
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.3)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  ineligibleBannerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.freshRed,
+    marginBottom: 4,
+  },
+  ineligibleBannerText: {
+    fontSize: 11,
+    color: '#F87171',
+    lineHeight: 15,
+  },
   checkoutButton: {
     backgroundColor: colors.freshGreen,
     paddingVertical: 14,
@@ -584,6 +714,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
+  },
+  checkoutButtonDisabled: {
+    backgroundColor: '#475569',
   },
   checkoutButtonText: {
     color: '#FFFFFF',
