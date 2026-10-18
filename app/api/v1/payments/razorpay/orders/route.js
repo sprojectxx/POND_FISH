@@ -49,10 +49,16 @@ export async function POST(request) {
       authoritativeAmount = preview.payment.finalPayable;
       notes.billId = billId;
       notes.billNumber = preview.billNumber;
+      notes.type = 'BILL_PURCHASE';
     } else {
       // Online Cart Booking (Slice 4)
       const preview = await previewCheckout(session.customerId);
       authoritativeAmount = preview.summary.finalPayableAmount;
+      notes.type = 'BOOKING';
+      notes.itemCount = String(preview.items?.length || 0);
+      notes.totalCartAmount = String(preview.summary?.totalCartAmount || preview.summary?.subtotal || 0);
+      notes.subscriptionDiscount = String(preview.summary?.subscriptionCreditUsed || 0);
+      notes.finalPayableAmount = String(preview.summary?.finalPayableAmount || 0);
     }
 
     if (authoritativeAmount <= 0) {
