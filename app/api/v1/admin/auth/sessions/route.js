@@ -6,14 +6,14 @@
  */
 
 import { NextResponse } from 'next/server';
-const { authenticateAdmin } = require('../../../../../../lib/auth/admin-auth');
+const { authenticateAdminAsync } = require('../../../../../../lib/auth/admin-auth');
 const rbacEngine = require('../../../../../../lib/engines/rbac');
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const admin = authenticateAdmin(request);
+    const admin = await authenticateAdminAsync(request);
     const sessions = await rbacEngine.getActiveSessions(admin.id, admin.sessionId);
 
     return NextResponse.json({
@@ -33,6 +33,16 @@ export async function GET(request) {
       );
     }
 
+    if (error.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: error.message || 'Administrative privileges required.' },
+        },
+        { status: 403 }
+      );
+    }
+
     console.error('[API ERROR] GET /api/v1/admin/auth/sessions:', error);
     return NextResponse.json(
       { success: false, error: { code: 'SESSIONS_FETCH_FAILED', message: error.message } },
@@ -43,7 +53,7 @@ export async function GET(request) {
 
 export async function DELETE(request) {
   try {
-    const admin = authenticateAdmin(request);
+    const admin = await authenticateAdminAsync(request);
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
@@ -63,6 +73,16 @@ export async function DELETE(request) {
           error: { code: error.code, message: error.message || 'Admin authentication required.' },
         },
         { status: 401 }
+      );
+    }
+
+    if (error.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: error.message || 'Administrative privileges required.' },
+        },
+        { status: 403 }
       );
     }
 

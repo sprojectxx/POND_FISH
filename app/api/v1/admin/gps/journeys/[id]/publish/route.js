@@ -6,14 +6,14 @@
  */
 
 import { NextResponse } from 'next/server';
-const { authenticateAdmin } = require('../../../../../../../../lib/auth/admin-auth');
+const { authenticateAdminAsync } = require('../../../../../../../../lib/auth/admin-auth');
 const gpsTrackingEngine = require('../../../../../../../../lib/engines/gps-tracking');
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request, { params }) {
   try {
-    const admin = authenticateAdmin(request);
+    const admin = await authenticateAdminAsync(request);
 
     const { id } = params;
     const body = await request.json().catch(() => ({}));
@@ -30,10 +30,17 @@ export async function POST(request, { params }) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    if (error.code === 'UNAUTHORIZED') {
+    if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED') {
       return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Admin authentication required.' } },
+        { success: false, error: { code: error.code, message: error.message || 'Admin authentication required.' } },
         { status: 401 }
+      );
+    }
+
+    if (error.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: error.message || 'Administrative privileges required.' } },
+        { status: 403 }
       );
     }
 

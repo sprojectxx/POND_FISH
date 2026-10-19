@@ -33,10 +33,47 @@ export function middleware(request) {
       return NextResponse.next();
     }
 
-    // Check for internal secrets or background scheduler tokens
-    const hasInternalHeader = Boolean(request.headers.get('x-internal-secret') || request.headers.get('x-admin-key'));
+    // Specific background scheduler & telemetry endpoints that support server-side secret validation
+    const isSchedulerEndpoint = pathname === '/api/v1/admin/notifications/process-scheduled';
+    const isTelemetryEndpoint = /^\/api\/v1\/admin\/gps\/journeys\/[^/]+\/positions$/.test(pathname);
 
-    if (!adminToken && !hasInternalHeader) {
+    if (isSchedulerEndpoint) {
+      const hasCronAuth = Boolean(request.headers.get('x-internal-secret') || request.headers.get('authorization'));
+      if (!adminToken && !hasCronAuth) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Authentication required for scheduled broadcast processor.',
+            },
+          },
+          { status: 401 }
+        );
+      }
+      return NextResponse.next();
+    }
+
+    if (isTelemetryEndpoint) {
+      const hasTelemetryKey = Boolean(request.headers.get('x-admin-key'));
+      if (!adminToken && !hasTelemetryKey) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Admin session or telemetry API key required.',
+            },
+          },
+          { status: 401 }
+        );
+      }
+      return NextResponse.next();
+    }
+
+    // All standard admin routes strictly require an admin session token
+    // Arbitrary x-internal-secret or x-admin-key headers are NEVER allowed to bypass
+    if (!adminToken) {
       return NextResponse.json(
         {
           success: false,

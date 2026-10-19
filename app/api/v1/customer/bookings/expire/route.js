@@ -12,17 +12,27 @@ const { verifyWorkerSessionToken } = require('../../../../../../lib/engines/work
 const { expireBooking, processOverdueBookings } = require('../../../../../../lib/engines/booking-expiry');
 const bookingRepository = require('../../../../../../lib/db/repositories/bookingRepository');
 
+const { timingSafeEqualStrings } = require('../../../../../../lib/auth/admin-auth');
+
 export const dynamic = 'force-dynamic';
 
-const SYSTEM_INTERNAL_SECRET =
-  process.env.INTERNAL_SYSTEM_SECRET ||
-  process.env.CRON_SECRET ||
-  'pondfish-internal-system-secret-2026';
+function getSystemInternalSecret() {
+  const secret = process.env.INTERNAL_SYSTEM_SECRET || process.env.CRON_SECRET;
+  if (!secret || typeof secret !== 'string' || secret.trim().length < 16) {
+    if (process.env.NODE_ENV === 'production') {
+      return null;
+    }
+    return 'pondfish-internal-system-secret-2026';
+  }
+  return secret.trim();
+}
 
 function authenticateRequest(request) {
+  const systemSecret = getSystemInternalSecret();
+
   // 1. Trusted internal header for background jobs / crons
   const internalHeader = request.headers.get('x-internal-secret') || '';
-  if (internalHeader && internalHeader === SYSTEM_INTERNAL_SECRET) {
+  if (systemSecret && internalHeader && timingSafeEqualStrings(internalHeader, systemSecret)) {
     return { role: 'SYSTEM' };
   }
 
@@ -35,7 +45,7 @@ function authenticateRequest(request) {
   const token = authHeader.substring(7).trim();
 
   // 2. Direct system bearer token
-  if (token === SYSTEM_INTERNAL_SECRET) {
+  if (systemSecret && timingSafeEqualStrings(token, systemSecret)) {
     return { role: 'SYSTEM' };
   }
 

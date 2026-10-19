@@ -6,14 +6,14 @@
  */
 
 import { NextResponse } from 'next/server';
-const { authenticateAdmin } = require('../../../../../../lib/auth/admin-auth');
+const { authenticateAdminAsync } = require('../../../../../../lib/auth/admin-auth');
 const gpsTrackingEngine = require('../../../../../../lib/engines/gps-tracking');
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    authenticateAdmin(request);
+    await authenticateAdminAsync(request);
 
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get('limit') || '50';
@@ -29,10 +29,17 @@ export async function GET(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    if (error.code === 'UNAUTHORIZED') {
+    if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED') {
       return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Admin authentication required.' } },
+        { success: false, error: { code: error.code, message: error.message || 'Admin authentication required.' } },
         { status: 401 }
+      );
+    }
+
+    if (error.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: error.message || 'Administrative privileges required.' } },
+        { status: 403 }
       );
     }
 
@@ -46,7 +53,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    authenticateAdmin(request);
+    await authenticateAdminAsync(request);
 
     const body = await request.json().catch(() => ({}));
     const { truckNumber, driverName, origin, destination, fishManifest } = body;
@@ -69,10 +76,17 @@ export async function POST(request) {
       { status: 201 }
     );
   } catch (error) {
-    if (error.code === 'UNAUTHORIZED') {
+    if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED') {
       return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Admin authentication required.' } },
+        { success: false, error: { code: error.code, message: error.message || 'Admin authentication required.' } },
         { status: 401 }
+      );
+    }
+
+    if (error.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: error.message || 'Administrative privileges required.' } },
+        { status: 403 }
       );
     }
 

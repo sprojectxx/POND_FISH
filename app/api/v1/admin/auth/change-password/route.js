@@ -5,14 +5,14 @@
  */
 
 import { NextResponse } from 'next/server';
-const { authenticateAdmin } = require('../../../../../../lib/auth/admin-auth');
+const { authenticateAdminAsync } = require('../../../../../../lib/auth/admin-auth');
 const rbacEngine = require('../../../../../../lib/engines/rbac');
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
-    const admin = authenticateAdmin(request);
+    const admin = await authenticateAdminAsync(request);
     const body = await request.json().catch(() => ({}));
     const { currentPassword, newPassword, confirmPassword } = body;
 
@@ -45,6 +45,19 @@ export async function POST(request) {
           },
         },
         { status: 401 }
+      );
+    }
+
+    if (error.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: error.message || 'Administrative privileges required.',
+          },
+        },
+        { status: 403 }
       );
     }
 
