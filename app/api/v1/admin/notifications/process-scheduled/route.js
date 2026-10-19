@@ -7,20 +7,29 @@
  */
 
 import { NextResponse } from 'next/server';
-const { authenticateAdminAsync } = require('../../../../../../lib/auth/admin-auth');
+const { authenticateAdminAsync, timingSafeEqualStrings } = require('../../../../../../lib/auth/admin-auth');
 const notificationsEngine = require('../../../../../../lib/engines/notifications');
 
 export const dynamic = 'force-dynamic';
 
-const SYSTEM_CRON_SECRET =
-  process.env.INTERNAL_SYSTEM_SECRET ||
-  process.env.CRON_SECRET ||
-  'pondfish-internal-secret-2026';
+function getSystemCronSecret() {
+  const secret = process.env.INTERNAL_SYSTEM_SECRET || process.env.CRON_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      return null; // Fail closed in production if no secret is configured
+    }
+    return 'pondfish-internal-secret-2026';
+  }
+  return secret;
+}
 
 function authenticateSchedulerRequest(request) {
+  const systemSecret = getSystemCronSecret();
+  if (!systemSecret) return null;
+
   // 1. Check internal system cron header
   const internalHeader = request.headers.get('x-internal-secret') || '';
-  if (internalHeader && internalHeader === SYSTEM_CRON_SECRET) {
+  if (internalHeader && timingSafeEqualStrings(internalHeader, systemSecret)) {
     return { isCron: true, actorId: 'system-cron' };
   }
 
@@ -28,7 +37,7 @@ function authenticateSchedulerRequest(request) {
   const authHeader = request.headers.get('authorization') || '';
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7).trim();
-    if (token === SYSTEM_CRON_SECRET) {
+    if (timingSafeEqualStrings(token, systemSecret)) {
       return { isCron: true, actorId: 'system-cron' };
     }
   }

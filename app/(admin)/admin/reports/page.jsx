@@ -8,8 +8,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 
-const ADMIN_SECRET = 'pondfish-admin-key-2026';
-
 const REPORT_TABS = [
   { id: 'revenue', label: '📊 Revenue Report' },
   { id: 'sales', label: '🛒 Sales & Transactions' },
@@ -41,9 +39,7 @@ export default function AdminReportsPage() {
         if (toVal) url += `&to=${encodeURIComponent(toVal)}`;
       }
 
-      const res = await fetch(url, {
-        headers: { 'x-admin-key': ADMIN_SECRET },
-      });
+      const res = await fetch(url);
 
       const json = await res.json();
       if (!res.ok || !json.success) {
@@ -90,9 +86,7 @@ export default function AdminReportsPage() {
         if (customTo) url += `&to=${encodeURIComponent(customTo)}`;
       }
 
-      const res = await fetch(url, {
-        headers: { 'x-admin-key': ADMIN_SECRET },
-      });
+      const res = await fetch(url);
 
       if (!res.ok) {
         throw new Error('Export request failed.');

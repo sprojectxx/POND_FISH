@@ -92,7 +92,19 @@ export default function AdminLoginPage() {
         localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
 
         const params = new URLSearchParams(window.location.search);
-        const destination = params.get('redirect') || '/admin';
+        let destination = params.get('redirect') || '/admin';
+
+        // Validate redirect destination: prevent open redirects, protocol injection, and login loops
+        if (
+          !destination.startsWith('/admin') ||
+          destination.startsWith('/admin/login') ||
+          destination.includes('//') ||
+          destination.includes('\\') ||
+          destination.includes(':')
+        ) {
+          destination = '/admin';
+        }
+
         window.location.href = destination;
       }
     } catch (err) {

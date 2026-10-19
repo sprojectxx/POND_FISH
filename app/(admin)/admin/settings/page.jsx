@@ -9,8 +9,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 
-const ADMIN_SECRET = 'pondfish-admin-key-2026';
-
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -56,9 +54,7 @@ export default function AdminSettingsPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/v1/admin/settings', {
-        headers: { 'x-admin-key': ADMIN_SECRET },
-      });
+      const res = await fetch('/api/v1/admin/settings');
       const json = await res.json();
       if (!res.ok || !json.success) {
         throw new Error(json.error?.message || 'Failed to fetch settings');
@@ -93,7 +89,6 @@ export default function AdminSettingsPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': ADMIN_SECRET,
         },
         body: JSON.stringify({
           key,

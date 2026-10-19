@@ -8,8 +8,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 
-const ADMIN_SECRET = 'pondfish-admin-key-2026';
-
 export default function AdminExceptionsPage() {
   const [exceptions, setExceptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,9 +35,7 @@ export default function AdminExceptionsPage() {
       if (category) params.append('category', category);
       if (severity) params.append('severity', severity);
 
-      const res = await fetch(`/api/v1/admin/exceptions?${params.toString()}`, {
-        headers: { 'x-admin-key': ADMIN_SECRET },
-      });
+      const res = await fetch(`/api/v1/admin/exceptions?${params.toString()}`);
 
       const json = await res.json();
       if (!res.ok || !json.success) {
@@ -69,7 +65,6 @@ export default function AdminExceptionsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': ADMIN_SECRET,
         },
         body: JSON.stringify({
           actionType: ex.allowedAction,

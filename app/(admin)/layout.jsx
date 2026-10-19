@@ -8,11 +8,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
-  const isLoginPage = pathname === '/admin/login';
+  const isLoginPage = pathname === '/admin/login' || pathname?.startsWith('/admin/login');
 
   const [adminUser, setAdminUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);
@@ -23,6 +24,8 @@ export default function AdminLayout({ children }) {
       return;
     }
 
+    let isMounted = true;
+
     async function verifyAuth() {
       try {
         const res = await fetch('/api/v1/admin/auth/me', {
@@ -32,29 +35,39 @@ export default function AdminLayout({ children }) {
         });
 
         if (res.status === 401) {
-          localStorage.removeItem('pondfish_admin_user');
-          window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('pondfish_admin_user');
+            window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
+          }
           return;
         }
 
         const data = await res.json();
-        if (data.success && data.admin) {
+        if (isMounted && data.success && data.admin) {
           setAdminUser(data.admin);
-          localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
+          }
         }
       } catch (err) {
-        // Fallback to cached user if network glitch
-        const cached = localStorage.getItem('pondfish_admin_user');
-        if (cached) {
-          try { setAdminUser(JSON.parse(cached)); } catch {}
+        // Fail closed: transient network errors must not grant authentication based on cached metadata
+        console.error('[AdminLayout] Session verification error:', err);
+        if (isMounted) {
+          setAdminUser(null);
         }
       } finally {
-        setCheckingAuth(false);
+        if (isMounted) {
+          setCheckingAuth(false);
+        }
       }
     }
 
     verifyAuth();
-  }, [pathname, isLoginPage]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isLoginPage]);
 
   const handleLogout = async () => {
     try {
@@ -112,7 +125,7 @@ export default function AdminLayout({ children }) {
           <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', margin: '8px 8px 4px' }}>
             Operations
           </div>
-          <a
+          <Link
             href="/admin"
             style={{
               color: pathname === '/admin' ? '#38BDF8' : '#F8FAFC',
@@ -124,8 +137,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             📊 Executive Dashboard
-          </a>
-          <a
+          </Link>
+          <Link
             id="nav-admin-bookings"
             href="/admin/bookings"
             style={{
@@ -138,8 +151,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             📦 Bookings
-          </a>
-          <a
+          </Link>
+          <Link
             id="nav-admin-transactions"
             href="/admin/transactions"
             style={{
@@ -152,8 +165,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             💳 Transactions
-          </a>
-          <a
+          </Link>
+          <Link
             id="nav-admin-notifications"
             href="/admin/notifications"
             style={{
@@ -166,8 +179,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             🔔 Notifications
-          </a>
-          <a
+          </Link>
+          <Link
             href="/admin/journeys"
             style={{
               color: pathname?.startsWith('/admin/journeys') ? '#38BDF8' : '#94A3B8',
@@ -178,8 +191,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             🚛 GPS Truck Journey
-          </a>
-          <a
+          </Link>
+          <Link
             href="/admin/settings"
             style={{
               color: pathname === '/admin/settings' ? '#38BDF8' : '#94A3B8',
@@ -190,8 +203,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             ⚙️ Business Settings
-          </a>
-          <a
+          </Link>
+          <Link
             href="/admin/reports"
             style={{
               color: pathname === '/admin/reports' || pathname === '/admin/exports' ? '#38BDF8' : '#94A3B8',
@@ -202,12 +215,12 @@ export default function AdminLayout({ children }) {
             }}
           >
             📈 Reports & Exports
-          </a>
+          </Link>
 
           <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
             Catalog & Sales
           </div>
-          <a
+          <Link
             id="nav-admin-fish"
             href="/admin/fish"
             style={{
@@ -219,8 +232,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             🐟 Fish Management
-          </a>
-          <a
+          </Link>
+          <Link
             id="nav-admin-categories"
             href="/admin/categories"
             style={{
@@ -232,8 +245,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             📁 Categories
-          </a>
-          <a
+          </Link>
+          <Link
             id="nav-admin-discounts"
             href="/admin/discounts"
             style={{
@@ -245,12 +258,12 @@ export default function AdminLayout({ children }) {
             }}
           >
             🏷️ Discounts
-          </a>
+          </Link>
 
           <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
             Subscriptions
           </div>
-          <a
+          <Link
             id="nav-admin-subscription-plans"
             href="/admin/subscriptions/plans"
             style={{
@@ -262,8 +275,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             💳 Subscription Plans
-          </a>
-          <a
+          </Link>
+          <Link
             id="nav-admin-customer-subscriptions"
             href="/admin/subscriptions"
             style={{
@@ -275,12 +288,12 @@ export default function AdminLayout({ children }) {
             }}
           >
             👑 Customer Subscriptions
-          </a>
+          </Link>
 
           <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
             People & Teams
           </div>
-          <a
+          <Link
             id="nav-admin-customers"
             href="/admin/customers"
             style={{
@@ -292,8 +305,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             👥 Customers
-          </a>
-          <a
+          </Link>
+          <Link
             id="nav-admin-workers"
             href="/admin/workers"
             style={{
@@ -305,12 +318,12 @@ export default function AdminLayout({ children }) {
             }}
           >
             👷 Workers
-          </a>
+          </Link>
 
           <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
             Governance
           </div>
-          <a
+          <Link
             href="/admin/audit"
             style={{
               color: pathname === '/admin/audit' || pathname === '/admin/audit-logs' ? '#38BDF8' : '#94A3B8',
@@ -321,8 +334,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             📋 Audit Trail
-          </a>
-          <a
+          </Link>
+          <Link
             href="/admin/exceptions"
             style={{
               color: pathname === '/admin/exceptions' ? '#38BDF8' : '#94A3B8',
@@ -333,8 +346,8 @@ export default function AdminLayout({ children }) {
             }}
           >
             ⚠️ Exceptions Center
-          </a>
-          <a
+          </Link>
+          <Link
             id="nav-admin-security"
             href="/admin/security"
             style={{
@@ -347,12 +360,12 @@ export default function AdminLayout({ children }) {
             }}
           >
             🛡️ Admin Security
-          </a>
+          </Link>
 
           <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
             Account
           </div>
-          <a
+          <Link
             id="nav-admin-profile"
             href="/admin/profile"
             style={{
@@ -365,7 +378,7 @@ export default function AdminLayout({ children }) {
             }}
           >
             👤 Profile & Identity
-          </a>
+          </Link>
           <button
             id="nav-admin-logout"
             onClick={handleLogout}

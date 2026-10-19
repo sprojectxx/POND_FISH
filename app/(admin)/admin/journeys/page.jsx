@@ -9,8 +9,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-const ADMIN_SECRET = 'pondfish-admin-key-2026';
-
 export default function AdminJourneysPage() {
   const [journeys, setJourneys] = useState([]);
   const [selectedJourney, setSelectedJourney] = useState(null);
@@ -55,9 +53,7 @@ export default function AdminJourneysPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/v1/admin/gps/journeys', {
-        headers: { 'x-admin-key': ADMIN_SECRET },
-      });
+      const res = await fetch('/api/v1/admin/gps/journeys');
       const data = await res.json();
       if (data.success) {
         setJourneys(data.data || []);
@@ -77,9 +73,7 @@ export default function AdminJourneysPage() {
   // Fetch single journey detail
   const fetchJourneyDetail = async (id) => {
     try {
-      const res = await fetch(`/api/v1/admin/gps/journeys/${id}`, {
-        headers: { 'x-admin-key': ADMIN_SECRET },
-      });
+      const res = await fetch(`/api/v1/admin/gps/journeys/${id}`);
       const data = await res.json();
       if (data.success) {
         setSelectedJourney(data.data);
@@ -156,7 +150,6 @@ export default function AdminJourneysPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': ADMIN_SECRET,
         },
         body: JSON.stringify(payload),
       });
@@ -184,7 +177,6 @@ export default function AdminJourneysPage() {
     try {
       const res = await fetch(`/api/v1/admin/gps/journeys/${id}/start`, {
         method: 'POST',
-        headers: { 'x-admin-key': ADMIN_SECRET },
       });
       const data = await res.json();
       if (data.success) {
@@ -215,7 +207,6 @@ export default function AdminJourneysPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': ADMIN_SECRET,
         },
         body: JSON.stringify({ published: nextPublished }),
       });
@@ -241,7 +232,6 @@ export default function AdminJourneysPage() {
     try {
       const res = await fetch(`/api/v1/admin/gps/journeys/${id}/stop`, {
         method: 'POST',
-        headers: { 'x-admin-key': ADMIN_SECRET },
       });
       const data = await res.json();
       if (data.success) {
@@ -265,7 +255,6 @@ export default function AdminJourneysPage() {
     try {
       const res = await fetch(`/api/v1/admin/gps/journeys/${id}/close-tracking`, {
         method: 'POST',
-        headers: { 'x-admin-key': ADMIN_SECRET },
       });
       const data = await res.json();
       if (data.success) {
@@ -292,7 +281,6 @@ export default function AdminJourneysPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': ADMIN_SECRET,
         },
         body: JSON.stringify({
           latitude: parseFloat(ingestForm.latitude),

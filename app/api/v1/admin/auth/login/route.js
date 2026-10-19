@@ -14,7 +14,9 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const { email, password } = body;
 
-    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    const rawIp = forwardedFor ? forwardedFor.split(',')[0].trim() : (request.headers.get('x-real-ip') || '127.0.0.1');
+    const ip = rawIp || '127.0.0.1';
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
     const result = await rbacEngine.loginAdmin({
@@ -26,7 +28,6 @@ export async function POST(request) {
 
     const response = NextResponse.json({
       success: true,
-      token: result.token,
       sessionId: result.sessionId,
       admin: result.admin,
       timestamp: new Date().toISOString(),

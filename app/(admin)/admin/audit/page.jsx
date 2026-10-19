@@ -8,8 +8,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 
-const ADMIN_SECRET = 'pondfish-admin-key-2026';
-
 export default function AdminAuditPage() {
   const [logs, setLogs] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
@@ -40,9 +38,7 @@ export default function AdminAuditPage() {
       if (from) params.append('from', from);
       if (to) params.append('to', to);
 
-      const res = await fetch(`/api/v1/admin/audit?${params.toString()}`, {
-        headers: { 'x-admin-key': ADMIN_SECRET },
-      });
+      const res = await fetch(`/api/v1/admin/audit?${params.toString()}`);
 
       const json = await res.json();
       if (!res.ok || !json.success) {

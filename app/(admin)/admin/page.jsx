@@ -9,8 +9,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 
-const ADMIN_SECRET = 'pondfish-admin-key-2026';
-
 export default function AdminDashboardPage() {
   const [metrics, setMetrics] = useState(null);
   const [period, setPeriod] = useState('today');
@@ -30,9 +28,7 @@ export default function AdminDashboardPage() {
         if (toVal) url += `&to=${encodeURIComponent(toVal)}`;
       }
 
-      const res = await fetch(url, {
-        headers: { 'x-admin-key': ADMIN_SECRET },
-      });
+      const res = await fetch(url);
 
       const json = await res.json();
       if (!res.ok || !json.success) {
