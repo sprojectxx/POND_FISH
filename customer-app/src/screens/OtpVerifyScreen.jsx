@@ -254,13 +254,9 @@ export default function OtpVerifyScreen({ routeParams = {}, onNavigate }) {
 
         {/* 6. Main Verification Card */}
         <View style={styles.cardContainer}>
-          {/* Card Header: SMS SECURITY PIN & Auto-detected */}
+          {/* Card Header: 6-DIGIT SMS CODE */}
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardHeaderLabel}>SMS SECURITY PIN</Text>
-            <View style={styles.autoDetectRow}>
-              <Text style={styles.shieldIcon}>🛡</Text>
-              <Text style={styles.autoDetectText}>Auto-detected</Text>
-            </View>
+            <Text style={styles.cardHeaderLabel}>6-DIGIT SMS CODE</Text>
           </View>
 
           {/* Hidden text input for handling physical/virtual keyboard */}
@@ -313,17 +309,6 @@ export default function OtpVerifyScreen({ routeParams = {}, onNavigate }) {
               );
             })}
           </TouchableOpacity>
-
-          {/* Auto-reading SMS Banner */}
-          <View style={styles.carrierReadingRow}>
-            <View style={styles.readingLeft}>
-              <View style={styles.carrierDot} />
-              <Text style={styles.carrierText}>
-                Auto-reading SMS code from carrier...
-              </Text>
-            </View>
-            <Text style={styles.chatBubbleIcon}>💬</Text>
-          </View>
 
           {/* Verify & Continue CTA Button */}
           <TouchableOpacity
