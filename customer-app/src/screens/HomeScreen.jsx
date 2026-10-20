@@ -187,6 +187,14 @@ export default function HomeScreen({
     });
   }, [fishList, selectedCategoryId, availabilityFilter, searchQuery]);
 
+  function getCategoryBadgeStyle(categoryName = '') {
+    const cat = (categoryName || '').toLowerCase();
+    if (cat.includes('marine')) return { backgroundColor: '#0284C7' };
+    if (cat.includes('shell') || cat.includes('prawn')) return { backgroundColor: '#D97706' };
+    if (cat.includes('pond') || cat.includes('live')) return { backgroundColor: '#059669' };
+    return { backgroundColor: '#0A1C33' };
+  }
+
   function renderCategoryPills() {
     return (
       <ScrollView
@@ -425,10 +433,10 @@ export default function HomeScreen({
                   ? `₹${cartSummary.totalAmount}`
                   : cartCount > 0
                   ? `${cartCount} items`
-                  : '₹500'}
+                  : '₹0'}
               </Text>
               <Text style={styles.cartItemCountText}>
-                {cartCount > 0 ? `${cartCount} item${cartCount === 1 ? '' : 's'}` : '1 item'}
+                {cartCount > 0 ? `${cartCount} item${cartCount === 1 ? '' : 's'}` : 'Cart'}
               </Text>
             </View>
             {cartCount > 0 && (
@@ -822,128 +830,108 @@ export default function HomeScreen({
         ) : filteredFishes.length === 0 ? (
           renderEmptyState()
         ) : (
-          <View style={styles.catalogueList}>
+          <View style={styles.catalogueGrid}>
             {filteredFishes.map((item) => {
-              const isBookable = Boolean(item.onlineBookable);
               const isAvailable = Boolean(item.physicalAvailable);
               const effectivePrice = item.pricing ? item.pricing.effectivePrice : item.unitPrice;
               const hasDiscount = Boolean(item.pricing && item.pricing.hasDiscount);
               const isAdding = addingFishId === item.id;
+              const isFav = Boolean(favorites[item.id]);
 
               return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.fishCard}
-                  onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
-                  activeOpacity={0.88}
-                >
-                  {/* Card Header: Category & Freshness */}
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.categoryLabel}>{item.categoryName || 'Daily Catch'}</Text>
-                    <FreshnessBadge freshness={item.freshness} />
+                <View key={item.id} style={styles.gridFishCard}>
+                  {/* Card Header: Category & Heart */}
+                  <View style={styles.gridCardHeader}>
+                    <View style={[styles.gridCatBadge, getCategoryBadgeStyle(item.categoryName)]}>
+                      <Text style={styles.gridCatBadgeText}>{item.categoryName || 'Freshwater'}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => toggleFavorite(item.id)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.heartIcon, isFav && styles.heartActive]}>
+                        {isFav ? '♥' : '♡'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
-                  {/* Image Box with Fallback and Discount Badge */}
-                  <View style={styles.imageBox}>
+                  {/* Product Image */}
+                  <TouchableOpacity
+                    onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
+                    style={styles.gridImageBox}
+                    activeOpacity={0.88}
+                  >
                     {item.imageUrl ? (
                       <Image
                         source={{ uri: item.imageUrl }}
-                        style={styles.fishImage}
+                        style={styles.gridFishImage}
                         resizeMode="cover"
                       />
                     ) : (
-                      <View style={styles.imageFallback}>
-                        <Text style={{ fontSize: 40 }}>🐟</Text>
+                      <View style={styles.imageFallbackSmall}>
+                        <Text style={{ fontSize: 24 }}>🐟</Text>
                       </View>
                     )}
+                  </TouchableOpacity>
+
+                  {/* Carousel Dots */}
+                  <View style={styles.carouselDotsRow}>
+                    <View style={[styles.cDot, styles.cDotActive]} />
+                    <View style={styles.cDot} />
+                    <View style={styles.cDot} />
+                  </View>
+
+                  {/* Weight & ADD Button Row */}
+                  <View style={styles.gridMetaRow}>
+                    <Text style={styles.gridWeightText}>500 g</Text>
+                    <TouchableOpacity
+                      style={styles.gridAddBtn}
+                      onPress={() => handleAddToCart(item)}
+                      disabled={isAdding || !isAvailable}
+                      activeOpacity={0.8}
+                    >
+                      {isAdding ? (
+                        <ActivityIndicator size="small" color="#16A34A" />
+                      ) : (
+                        <Text style={styles.gridAddBtnText}>+ ADD</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Pricing Row */}
+                  <View style={styles.gridPricingRow}>
+                    <Text style={styles.gridPriceVal}>₹{effectivePrice}</Text>
                     {hasDiscount && (
-                      <View style={styles.discountBadge}>
-                        <Text style={styles.discountBadgeText}>
-                          {item.pricing?.discount?.percent
-                            ? `${item.pricing.discount.percent}% OFF`
-                            : item.pricing?.discount?.flatAmount
-                            ? `₹${item.pricing.discount.flatAmount} OFF`
-                            : 'SPECIAL'}
-                        </Text>
-                      </View>
+                      <Text style={styles.gridCrossedPrice}>₹{item.unitPrice}</Text>
                     )}
                   </View>
 
-                  {/* Card Body */}
-                  <View style={styles.cardBody}>
-                    <Text style={styles.fishName} numberOfLines={2}>
+                  {/* Fish Title */}
+                  <TouchableOpacity
+                    onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
+                  >
+                    <Text style={styles.gridFishName} numberOfLines={2}>
                       {item.name}
                     </Text>
+                  </TouchableOpacity>
 
-                    {Boolean(item.description) && (
-                      <Text style={styles.fishDesc} numberOfLines={2}>
-                        {item.description}
-                      </Text>
-                    )}
-
-                    {/* Status Badges Row */}
-                    <View style={styles.statusBadgesRow}>
-                      {isAvailable ? (
-                        <View style={styles.statusPillAvailable}>
-                          <View style={styles.greenDot} />
-                          <Text style={styles.statusPillAvailableText}>In Store</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.statusPillUnavailable}>
-                          <Text style={styles.statusPillUnavailableText}>Out of Stock</Text>
-                        </View>
-                      )}
-
-                      {isBookable ? (
-                        <View style={styles.bookingPillBookable}>
-                          <Text style={styles.bookingPillBookableText}>Online Bookable</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.bookingPillInStore}>
-                          <Text style={styles.bookingPillInStoreText}>Counter Only</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Pricing & CTA Row */}
-                    <View style={styles.priceRow}>
-                      <View>
-                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                          <Text style={styles.priceValue}>₹{effectivePrice}</Text>
-                          <Text style={styles.priceUnit}>/ kg</Text>
-                          {hasDiscount && (
-                            <Text style={styles.basePriceCrossed}>₹{item.unitPrice}</Text>
-                          )}
-                        </View>
-                        <Text style={styles.priceTaxNote}>Inclusive of all taxes</Text>
-                      </View>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.detailsButton,
-                          isBookable ? styles.detailsButtonBookable : styles.detailsButtonInStore,
-                        ]}
-                        onPress={() => {
-                          if (isBookable) {
-                            handleAddToCart(item);
-                          } else {
-                            onNavigate('FISH_DETAILS', { fishId: item.id, fish: item });
-                          }
-                        }}
-                        disabled={isAdding}
-                        activeOpacity={0.8}
-                      >
-                        {isAdding ? (
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                          <Text style={styles.detailsButtonText}>
-                            {isBookable ? '+ ADD' : 'View Details'}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                  {/* Rating */}
+                  <View style={styles.gridRatingRow}>
+                    <Text style={styles.gridRatingStar}>★ 4.8</Text>
+                    <Text style={styles.gridRatingCount}>({item.ratingCount || '1,420'})</Text>
                   </View>
-                </TouchableOpacity>
+
+                  {/* Delivery & Stock status */}
+                  <View style={styles.gridDeliveryRow}>
+                    <Text style={styles.gridDeliveryText}>⚡ 8 mins • </Text>
+                    <Text style={isAvailable ? styles.inStockText : styles.lowStockText}>
+                      {isAvailable ? 'In stock' : 'Out of stock'}
+                    </Text>
+                  </View>
+
+                  {/* Category Footer Link */}
+                  <Text style={styles.gridCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
+                </View>
               );
             })}
 
@@ -1630,6 +1618,135 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#FFFFFF',
     fontWeight: '800',
+  },
+  catalogueGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 20,
+  },
+  gridFishCard: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+    marginBottom: 10,
+    shadowColor: '#0A1C33',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  gridCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  gridCatBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  gridCatBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  gridImageBox: {
+    height: 90,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  gridFishImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gridMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  gridWeightText: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  gridAddBtn: {
+    borderWidth: 1.5,
+    borderColor: '#16A34A',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  gridAddBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#16A34A',
+  },
+  gridPricingRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginBottom: 2,
+  },
+  gridPriceVal: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  gridCrossedPrice: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  gridFishName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0A1C33',
+    lineHeight: 16,
+    marginBottom: 4,
+    minHeight: 32,
+  },
+  gridRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 3,
+  },
+  gridRatingStar: {
+    fontSize: 10,
+    color: '#D97706',
+    fontWeight: '700',
+  },
+  gridRatingCount: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  gridDeliveryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  gridDeliveryText: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  gridCategoryLink: {
+    fontSize: 10,
+    color: '#0284C7',
+    fontWeight: '600',
+    marginTop: 2,
   },
   catalogueList: {
     gap: 12,

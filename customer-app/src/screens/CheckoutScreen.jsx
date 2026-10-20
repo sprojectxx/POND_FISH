@@ -197,6 +197,15 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
     ? (parseFloat(summary.finalPayableAmount || 0) + 39).toFixed(2)
     : parseFloat(summary.finalPayableAmount || 0).toFixed(2);
 
+  const coveredItems = items.filter((i) => (i.subscriptionCoveredKg || 0) > 0);
+  const totalCoveredKg = summary.subscriptionCoveredKg ?? coveredItems.reduce((acc, i) => acc + (i.subscriptionCoveredKg || 0), 0);
+  const subCreditUsed = parseFloat(summary.subscriptionCreditUsed || 0);
+  const extraKg = summary.extraQuantityKg ?? items.reduce((acc, i) => acc + (i.extraQuantityKg || 0), 0);
+  const extraPayable = parseFloat(summary.basePayableAmount || 0);
+
+  const quotaSavings = coveredItems.reduce((acc, i) => acc + ((i.subscriptionCoveredKg || 0) * (i.effectivePrice || i.unitPrice || 0)), 0) || subCreditUsed;
+  const totalSavings = quotaSavings + subCreditUsed;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFE" />
@@ -250,12 +259,14 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
         </View>
 
         {/* Banner 2: Savings Celebration */}
-        <View style={styles.savingsBanner}>
-          <Text style={styles.savingsCheckmark}>✔</Text>
-          <Text style={styles.savingsText}>
-            🎉 You saved ₹{summary.subscriptionCreditUsed ? parseFloat(summary.subscriptionCreditUsed).toFixed(2) : '280.00'} with your Gold Subscription on this order
-          </Text>
-        </View>
+        {(totalSavings > 0 || subscription.active) && (
+          <View style={styles.savingsBanner}>
+            <Text style={styles.savingsCheckmark}>✔</Text>
+            <Text style={styles.savingsText}>
+              🎉 You saved ₹{totalSavings > 0 ? totalSavings.toFixed(2) : '0.00'} with your {subscription.planTitle || 'Gold'} Subscription on this order
+            </Text>
+          </View>
+        )}
 
         {/* Section: Cart Catch & Cuts */}
         <View style={styles.sectionTitleRow}>
@@ -399,32 +410,58 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
             </View>
 
             {/* Ledger lines */}
-            <View style={styles.ledgerLineRow}>
-              <Text style={styles.ledgerLineLabel}>
-                ✓ Subscribed Fish (Rohu 1kg): 0.6 kg covered
-              </Text>
-              <Text style={styles.ledgerLineSavings}>Saved ₹168.00</Text>
-            </View>
+            {coveredItems.length > 0 ? (
+              coveredItems.map((cItem, cIdx) => (
+                <View key={`cov-${cItem.fishId || cIdx}`} style={styles.ledgerLineRow}>
+                  <Text style={styles.ledgerLineLabel}>
+                    ✓ Subscribed Fish ({cItem.name}): {cItem.subscriptionCoveredKg} kg covered
+                  </Text>
+                  <Text style={styles.ledgerLineSavings}>
+                    Saved ₹{((cItem.subscriptionCoveredKg || 0) * (cItem.effectivePrice || cItem.unitPrice || 0)).toFixed(2)}
+                  </Text>
+                </View>
+              ))
+            ) : totalCoveredKg > 0 ? (
+              <View style={styles.ledgerLineRow}>
+                <Text style={styles.ledgerLineLabel}>
+                  ✓ Subscribed Fish: {totalCoveredKg} kg covered
+                </Text>
+                <Text style={styles.ledgerLineSavings}>
+                  Saved ₹{quotaSavings > 0 ? quotaSavings.toFixed(2) : '0.00'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.ledgerLineRow}>
+                <Text style={styles.ledgerLineLabel}>
+                  ✓ Plan Active: Weekly quota ready to apply
+                </Text>
+                <Text style={styles.ledgerLineSavings}>Active</Text>
+              </View>
+            )}
 
-            <View style={styles.ledgerLineRow}>
-              <Text style={styles.ledgerLineLabel}>
-                ⚖ Excess weight over quota (0.4 kg @ ₹280/kg)
-              </Text>
-              <Text style={styles.ledgerLineVal}>₹112.00</Text>
-            </View>
+            {extraKg > 0 ? (
+              <View style={styles.ledgerLineRow}>
+                <Text style={styles.ledgerLineLabel}>
+                  ⚖ Excess weight over quota ({extraKg} kg)
+                </Text>
+                <Text style={styles.ledgerLineVal}>₹{extraPayable.toFixed(2)}</Text>
+              </View>
+            ) : null}
 
-            <View style={styles.ledgerLineRow}>
-              <Text style={styles.ledgerLineLabel}>
-                💳 Subscription Credit balance applied
-              </Text>
-              <Text style={styles.ledgerLineDeduct}>-₹112.00</Text>
-            </View>
+            {subCreditUsed > 0 && (
+              <View style={styles.ledgerLineRow}>
+                <Text style={styles.ledgerLineLabel}>
+                  💳 Subscription Credit balance applied
+                </Text>
+                <Text style={styles.ledgerLineDeduct}>-₹{subCreditUsed.toFixed(2)}</Text>
+              </View>
+            )}
 
             {/* Net Wallet Balance highlight */}
             <View style={styles.netBalanceBox}>
               <Text style={styles.netBalanceLabel}>Net Subscription Wallet Balance:</Text>
               <Text style={styles.netBalanceVal}>
-                ₹{subscription.remainingCreditBalance ? parseFloat(subscription.remainingCreditBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '2,338.00'}
+                ₹{subscription.remainingCreditBalance != null ? parseFloat(subscription.remainingCreditBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : (subscription.creditBalance != null ? parseFloat(subscription.creditBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00')}
               </Text>
             </View>
           </View>
@@ -436,22 +473,26 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
 
           <View style={styles.billRow}>
             <Text style={styles.billRowLabel}>Items Total (Gross Value)</Text>
-            <Text style={styles.billRowVal}>₹{summary.subtotal || 660.00}</Text>
+            <Text style={styles.billRowVal}>₹{summary.subtotal != null ? parseFloat(summary.subtotal).toFixed(2) : '0.00'}</Text>
           </View>
 
           {subscription.active && (
             <>
-              <View style={styles.billRow}>
-                <Text style={styles.billRowLabel}>✓ Subscription Quota Benefit</Text>
-                <Text style={[styles.billRowVal, { color: '#0284C7' }]}>-₹168.00</Text>
-              </View>
+              {quotaSavings > 0 && (
+                <View style={styles.billRow}>
+                  <Text style={styles.billRowLabel}>✓ Subscription Quota Benefit</Text>
+                  <Text style={[styles.billRowVal, { color: '#0284C7' }]}>-₹{quotaSavings.toFixed(2)}</Text>
+                </View>
+              )}
 
-              <View style={styles.billRow}>
-                <Text style={styles.billRowLabel}>💳 Subscription Credit Deducted</Text>
-                <Text style={[styles.billRowVal, { color: '#0284C7' }]}>
-                  -₹{summary.subscriptionCreditUsed || 112.00}
-                </Text>
-              </View>
+              {subCreditUsed > 0 && (
+                <View style={styles.billRow}>
+                  <Text style={styles.billRowLabel}>💳 Subscription Credit Deducted</Text>
+                  <Text style={[styles.billRowVal, { color: '#0284C7' }]}>
+                    -₹{subCreditUsed.toFixed(2)}
+                  </Text>
+                </View>
+              )}
             </>
           )}
 
@@ -472,11 +513,11 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
 
           <View style={styles.billRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={styles.billRowLabel}>Razorpay Gateway Fee (2% + 18% GST)</Text>
+              <Text style={styles.billRowLabel}>Razorpay Gateway Fee ({summary.gatewayFeeRatePercent ?? 2}% + 18% GST)</Text>
               <Text style={{ fontSize: 11, color: '#64748B' }}>ⓘ</Text>
             </View>
             <Text style={styles.billRowVal}>
-              ₹{summary.gatewayFee ? (parseFloat(summary.gatewayFee) + parseFloat(summary.feeGst || 0)).toFixed(2) : '8.96'}
+              ₹{(parseFloat(summary.totalFee != null ? summary.totalFee : (parseFloat(summary.gatewayFee || 0) + parseFloat(summary.feeGst || 0))) || 0).toFixed(2)}
             </Text>
           </View>
 

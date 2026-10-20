@@ -216,11 +216,11 @@ export default function FishDetailsScreen({
 
           {/* Floating Bottom Trust Pills */}
           <View style={styles.imageBottomPills}>
-            <View style={styles.trustPill}>
-              <Text style={styles.trustPillText}>🛡 100% CHEMICAL-FREE</Text>
+            <View style={styles.trustPillNavy}>
+              <Text style={styles.trustPillNavyText}>✓ 100% CHEMICAL-FREE</Text>
             </View>
-            <View style={styles.trustPill}>
-              <Text style={styles.trustPillText}>💧 RO WASHED</Text>
+            <View style={styles.trustPillWhite}>
+              <Text style={styles.trustPillWhiteText}>💧 RO WASHED</Text>
             </View>
           </View>
         </View>
@@ -639,14 +639,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  trustPill: {
-    backgroundColor: 'rgba(10, 28, 51, 0.85)',
+  trustPillNavy: {
+    backgroundColor: '#0A1C33',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  trustPillText: {
+  trustPillNavyText: {
     color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  trustPillWhite: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  trustPillWhiteText: {
+    color: '#0A1C33',
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.4,
