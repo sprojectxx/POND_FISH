@@ -114,8 +114,26 @@ export default function AdminLayout({ children }) {
     <div style={{ minHeight: '100vh', display: 'flex', background: '#0B1120', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Sidebar Navigation */}
       <aside style={{ width: '260px', background: '#1E293B', borderRight: '1px solid #334155', padding: '24px 16px', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '28px' }}>
-          <span style={{ fontSize: '20px' }}>🐟</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
+            background: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            flexShrink: 0,
+            padding: '2px',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)'
+          }}>
+            <img
+              src="/logo.png"
+              alt="PondFish"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          </div>
           <span style={{ fontSize: '17px', fontWeight: '700', color: '#38BDF8', letterSpacing: '-0.02em' }}>
             PONDFISH ADMIN
           </span>

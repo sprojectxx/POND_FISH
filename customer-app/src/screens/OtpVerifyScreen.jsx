@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { api } from '../services/api';
 import { saveAuthTokens } from '../services/auth-storage';
@@ -200,7 +201,14 @@ export default function OtpVerifyScreen({ routeParams = {}, onNavigate }) {
           >
             <Text style={styles.topBackArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.brandTitle}>PondFish</Text>
+          <View style={styles.topBarBrand}>
+            <Image
+              source={require('../assets/logo.png')}
+              style={styles.topBarLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.brandTitle}>PondFish</Text>
+          </View>
         </View>
 
         {/* 2. Sub-Header: ← Change Mobile Number */}
@@ -408,6 +416,19 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: '#0A1C33',
     fontWeight: '700',
+  },
+  topBarBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  topBarLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 7,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   brandTitle: {
     fontSize: 21,

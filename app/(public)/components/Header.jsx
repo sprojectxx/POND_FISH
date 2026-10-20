@@ -28,18 +28,23 @@ export default function Header() {
         {/* Brand Logo & Tagline */}
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+            width: '42px',
+            height: '42px',
+            borderRadius: '10px',
+            background: '#FFFFFF',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#FFFFFF',
-            fontWeight: '900',
-            fontSize: '20px'
+            overflow: 'hidden',
+            padding: '2px',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
+            flexShrink: 0
           }}>
-            🐟
+            <img
+              src="/logo.png"
+              alt="PondFish Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
           </div>
           <div>
             <span style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px', color: '#F8FAFC' }}>

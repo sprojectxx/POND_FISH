@@ -138,16 +138,20 @@ export default function AdminLoginPage() {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '48px',
-            height: '48px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
-            color: '#FFFFFF',
-            fontSize: '24px',
-            marginBottom: '12px',
-            boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.4)',
+            width: '64px',
+            height: '64px',
+            borderRadius: '16px',
+            background: '#FFFFFF',
+            marginBottom: '14px',
+            boxShadow: '0 8px 16px -2px rgba(0, 0, 0, 0.4)',
+            overflow: 'hidden',
+            padding: '4px'
           }}>
-            🐟
+            <img
+              src="/logo.png"
+              alt="PondFish Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
           </div>
           <h1 style={{
             fontSize: '22px',

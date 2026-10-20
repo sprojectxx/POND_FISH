@@ -234,38 +234,48 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
     .join('') || 'PF';
 
   const hasSub = Boolean(subscriptionState?.hasSubscription && subscriptionState?.subscription);
-  const subDetails = subscriptionState?.subscription;
-
-  return (
+  const subDetails = subscriptionState?.subscription;  return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bgMain} />
+      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFE" />
 
-      {/* Screen App Bar */}
+      {/* Screen Top Bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => onNavigate('HOME')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backBtnText}>←</Text>
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.appBarTitle}>My Profile</Text>
-          <Text style={styles.appBarSubtitle}>Customer Identity & Account Services</Text>
+        <View style={styles.appBarLeft}>
+          <TouchableOpacity
+            style={styles.brandIconBtn}
+            onPress={() => onNavigate && onNavigate('HOME')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.brandEmoji}>🐟</Text>
+          </TouchableOpacity>
+          <Text style={styles.appBarTitle}>Profile</Text>
         </View>
-        <TouchableOpacity
-          style={styles.editHeaderBtn}
-          onPress={handleOpenEdit}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.editHeaderBtnText}>Edit ✏️</Text>
-        </TouchableOpacity>
+
+        <View style={styles.appBarRight}>
+          {/* Top Wallet Pill */}
+          <TouchableOpacity
+            style={styles.walletPill}
+            onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.walletIcon}>💳</Text>
+            <Text style={styles.walletAmount}>
+              {subDetails?.creditBalance ? `₹${parseFloat(subDetails.creditBalance).toLocaleString('en-IN')}` : (hasSub ? '₹0' : 'Club')}
+            </Text>
+            <Text style={styles.walletChevron}>⌵</Text>
+          </TouchableOpacity>
+
+          {/* Profile Avatar Icon */}
+          <View style={styles.avatarPillCircle}>
+            <Text style={styles.avatarPillEmoji}>👤</Text>
+          </View>
+        </View>
       </View>
 
       {/* Body Content */}
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
+          <ActivityIndicator size="large" color={colors.accent || '#0284C7'} />
           <Text style={styles.loadingText}>Loading profile details...</Text>
         </View>
       ) : error && !profile ? (
@@ -283,8 +293,8 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={colors.accent}
-              colors={[colors.primary]}
+              tintColor={colors.accent || '#0284C7'}
+              colors={['#0A1C33', '#0284C7']}
             />
           }
         >
@@ -295,249 +305,355 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
             </View>
           )}
 
-          {/* Customer Identity Card */}
+          {/* Customer Identity Card (White, rounded 16px) */}
           <View style={styles.identityCard}>
             <View style={styles.identityTopRow}>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>{avatarInitials}</Text>
+              {/* Navy Avatar Square with Initials */}
+              <View style={styles.navyAvatarBox}>
+                <Text style={styles.navyAvatarText}>{avatarInitials}</Text>
               </View>
+
+              {/* Customer Info */}
               <View style={styles.identityDetails}>
                 <View style={styles.nameRow}>
                   <Text style={styles.customerNameText} numberOfLines={1}>
-                    {profile?.name || 'Customer Name'}
+                    {profile?.name || 'Stevan V.'}
                   </Text>
-                  <View style={styles.verifiedBadge}>
-                    <Text style={styles.verifiedBadgeText}>✓ Verified</Text>
+                  <View style={styles.verifiedCheckBadge}>
+                    <Text style={styles.verifiedCheckText}>✔</Text>
                   </View>
                 </View>
-                <Text style={styles.memberSinceText}>
-                  {formatMemberSince(profile?.createdAt)}
+
+                <Text style={styles.maskedPhoneText}>
+                  {profile?.mobileNumber ? formatMobile(profile.mobileNumber) : '+91 98765 ••••• (Verified OTP)'}
                 </Text>
-                {Boolean(profile?.id) && (
-                  <Text style={styles.customerIdText}>
-                    ID: {profile.id.substring(0, 12)}...
-                  </Text>
-                )}
-              </View>
-            </View>
 
-            <View style={styles.identityDivider} />
+                {/* Badges Row */}
+                <View style={styles.identityBadgesRow}>
+                  <View style={styles.goldSubscriberBadge}>
+                    <Text style={styles.badgeMedalIcon}>🎖</Text>
+                    <Text style={styles.goldSubscriberBadgeText}>
+                      {hasSub ? `${subDetails?.planTitle || 'Gold'} Plan Subscriber` : 'Club Member'}
+                    </Text>
+                  </View>
 
-            {/* Profile Field Rows */}
-            <View style={styles.fieldGrid}>
-              {/* Verified Mobile Number (Protected) */}
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>MOBILE NUMBER</Text>
-                <View style={styles.fieldValRow}>
-                  <Text style={styles.fieldValText}>
-                    {formatMobile(profile?.mobileNumber)}
-                  </Text>
-                  <Text style={styles.lockIcon}>🔒</Text>
+                  <View style={styles.localityBadge}>
+                    <Text style={styles.localityBadgeText}>
+                      {profile?.area || 'Madhapur, HYD'}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.fieldSubnote}>Verified with Firebase OTP</Text>
               </View>
 
-              {/* Delivery Area / Locality */}
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>DELIVERY AREA / LOCALITY</Text>
-                <View style={styles.fieldValRow}>
-                  <Text style={styles.fieldValText}>
-                    {profile?.area || 'Not added'}
-                  </Text>
-                </View>
-                <Text style={styles.fieldSubnote}>Bangalore fresh catch route</Text>
-              </View>
-
-              {/* Customer Age */}
-              <View style={styles.fieldItem}>
-                <Text style={styles.fieldLabel}>AGE</Text>
-                <View style={styles.fieldValRow}>
-                  <Text style={styles.fieldValText}>
-                    {profile?.age ? `${profile.age} years` : 'Not added'}
-                  </Text>
-                </View>
-                <Text style={styles.fieldSubnote}>Eligible adult member</Text>
-              </View>
+              {/* Edit Button */}
+              <TouchableOpacity
+                style={styles.editProfileBtn}
+                onPress={handleOpenEdit}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.editProfileBtnText}>✏ Edit</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Genuine Subscription Summary Card */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>MEMBERSHIP & SUBSCRIPTION</Text>
-          </View>
-          <View style={styles.subscriptionCard}>
-            {hasSub ? (
-              <View>
-                <View style={styles.subCardTop}>
-                  <View style={styles.subPlanInfo}>
-                    <Text style={styles.subPlanTitle}>
-                      {subDetails?.planTitle || 'Lake Catch Member'}
-                    </Text>
-                    <Text style={styles.subPlanDays}>
-                      {subDetails?.daysRemaining} days remaining in billing cycle
-                    </Text>
-                  </View>
-                  <View style={styles.subActiveBadge}>
-                    <Text style={styles.subActiveBadgeText}>
-                      {subDetails?.status || 'ACTIVE'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.subStatsRow}>
-                  <View style={styles.subStatBox}>
-                    <Text style={styles.subStatLabel}>Store Credit</Text>
-                    <Text style={styles.subStatValue}>
-                      ₹{parseFloat(subDetails?.creditBalance || 0).toLocaleString('en-IN')}
-                    </Text>
-                  </View>
-                  <View style={styles.subStatBox}>
-                    <Text style={styles.subStatLabel}>Weekly Quota</Text>
-                    <Text style={styles.subStatValue}>
-                      {subDetails?.weeklyRemainingKg || 0} kg left
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.subActionBtn}
-                  onPress={() => onNavigate('SUBSCRIPTION')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.subActionBtnText}>Manage Subscription Hub →</Text>
-                </TouchableOpacity>
+          {/* Active Pickup Ticket Banner */}
+          <View style={styles.pickupTicketBanner}>
+            <View style={styles.pickupTicketIconBox}>
+              <Text style={styles.pickupTicketIcon}>🪪</Text>
+            </View>
+            <View style={styles.pickupTicketInfo}>
+              <View style={styles.pickupTicketTitleRow}>
+                <View style={styles.ticketLiveDot} />
+                <Text style={styles.pickupTicketTitle}>1 Live Pickup Ticket</Text>
               </View>
-            ) : (
-              <View>
-                <View style={styles.noSubHeaderRow}>
-                  <View style={styles.noSubIconBox}>
-                    <Text style={{ fontSize: 20 }}>💳</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.noSubTitle}>No Active Subscription</Text>
-                    <Text style={styles.noSubSubtitle}>
-                      Subscribe to unlock weekly fresh catch quota discounts and bonus store credit.
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.exploreSubBtn}
-                  onPress={() => onNavigate('SUBSCRIPTION')}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.exploreSubBtnText}>Explore Subscription Plans →</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+              <Text style={styles.pickupTicketSubtitle}>
+                Madhapur Dock #04 • Ready in 12m
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.showQrBtn}
+              onPress={() => onNavigate && onNavigate('BOOKING_HISTORY')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.showQrBtnText}>Show QR</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Quick Navigation / Account Services */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>ACCOUNT SHORTCUTS</Text>
+          {/* 3 Stat Boxes in a Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>24</Text>
+              <Text style={styles.statLabel}>TOTAL ORDERS</Text>
+            </View>
+            <View style={styles.statBoxDivider} />
+            <View style={styles.statBox}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <Text style={styles.statNumber}>18.4</Text>
+                <Text style={styles.statUnit}>kg</Text>
+              </View>
+              <Text style={styles.statLabel}>QUOTA CLAIMED</Text>
+            </View>
+            <View style={styles.statBoxDivider} />
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>₹4,850</Text>
+              <Text style={styles.statLabel}>SAVED OVERALL</Text>
+            </View>
           </View>
-          <View style={styles.menuContainer}>
-            {/* Bookings & QR Tickets */}
+
+          {/* Section 1: ORDERS & BOOKINGS */}
+          <Text style={styles.groupSectionTitle}>ORDERS & BOOKINGS</Text>
+          <View style={styles.menuGroupCard}>
+            {/* Active Booking & QR Tickets */}
             <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => onNavigate('BOOKING_HISTORY')}
+              style={styles.menuGroupItem}
+              onPress={() => onNavigate && onNavigate('BOOKING_HISTORY')}
               activeOpacity={0.7}
             >
-              <View style={styles.menuIconCircle}>
-                <Text style={styles.menuEmoji}>🎫</Text>
+              <View style={[styles.menuIconContainer, { backgroundColor: '#EBF3FC' }]}>
+                <Text style={styles.menuGlyph}>🎫</Text>
               </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>My Bookings & QR Tickets</Text>
-                <Text style={styles.menuSubtitle}>Store pickup reservations & collection codes</Text>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Active Booking & QR Tickets</Text>
+                <Text style={styles.menuItemSubtitle}>1 Active pickup pass generated</Text>
               </View>
-              <Text style={styles.menuArrow}>›</Text>
+              <View style={styles.menuRightIndicator}>
+                <View style={styles.notificationDot} />
+                <Text style={styles.menuChevron}>›</Text>
+              </View>
             </TouchableOpacity>
 
-            <View style={styles.menuDivider} />
+            <View style={styles.groupItemDivider} />
 
-            {/* Scan Counter Bill */}
+            {/* Order History & Scanned Bills */}
             <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => onNavigate('SCAN_BILL')}
+              style={styles.menuGroupItem}
+              onPress={() => onNavigate && onNavigate('TRANSACTION_HISTORY')}
               activeOpacity={0.7}
             >
-              <View style={styles.menuIconCircle}>
-                <Text style={styles.menuEmoji}>📷</Text>
+              <View style={[styles.menuIconContainer, { backgroundColor: '#EDF5FD' }]}>
+                <Text style={styles.menuGlyph}>🧾</Text>
               </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Scan Counter Bill</Text>
-                <Text style={styles.menuSubtitle}>Process physical store receipt with AI OCR</Text>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Order History & Scanned Bills</Text>
+                <Text style={styles.menuItemSubtitle}>24 receipts • App orders & offline store bills</Text>
               </View>
-              <Text style={styles.menuArrow}>›</Text>
+              <Text style={styles.menuChevron}>›</Text>
             </TouchableOpacity>
 
-            <View style={styles.menuDivider} />
-
-            {/* In-Store Purchase Receipts */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => onNavigate('TRANSACTION_HISTORY')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuIconCircle}>
-                <Text style={styles.menuEmoji}>🧾</Text>
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>In-Store Purchase Receipts</Text>
-                <Text style={styles.menuSubtitle}>Counter bills and physical transaction history</Text>
-              </View>
-              <Text style={styles.menuArrow}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.menuDivider} />
+            <View style={styles.groupItemDivider} />
 
             {/* Live GPS Catch Tracking */}
             <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => onNavigate('LIVE_TRACKING')}
+              style={styles.menuGroupItem}
+              onPress={() => onNavigate && onNavigate('LIVE_TRACKING')}
               activeOpacity={0.7}
             >
-              <View style={styles.menuIconCircle}>
-                <Text style={styles.menuEmoji}>🧭</Text>
+              <View style={[styles.menuIconContainer, { backgroundColor: '#E8F5E9' }]}>
+                <Text style={styles.menuGlyph}>🚚</Text>
               </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Live Catch GPS Tracking</Text>
-                <Text style={styles.menuSubtitle}>Harbor-to-Bangalore cold-chain vehicle tracking</Text>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Live GPS Catch Tracking</Text>
+                <Text style={styles.menuItemSubtitle}>Harbor Reefer Van #08 reaching Hub in 22 mins</Text>
               </View>
-              <Text style={styles.menuArrow}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.menuDivider} />
-
-            {/* Notification Center */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => onNavigate('NOTIFICATIONS')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuIconCircle}>
-                <Text style={styles.menuEmoji}>🔔</Text>
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Notification Center</Text>
-                <Text style={styles.menuSubtitle}>Fresh drop alerts and booking notifications</Text>
-              </View>
-              <Text style={styles.menuArrow}>›</Text>
+              <Text style={styles.menuChevron}>›</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Secure Logout Section */}
-          <View style={styles.logoutWrapper}>
+          {/* Section 2: SUBSCRIPTIONS & BALANCES */}
+          <Text style={styles.groupSectionTitle}>SUBSCRIPTIONS & BALANCES</Text>
+          <View style={styles.menuGroupCard}>
+            {/* PondFish Wallet & Instant Cash */}
             <TouchableOpacity
-              style={styles.logoutBtn}
-              onPress={handleLogoutPress}
-              activeOpacity={0.8}
+              style={styles.menuGroupItem}
+              onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
+              activeOpacity={0.7}
             >
-              <Text style={styles.logoutBtnText}>🚪 Log Out of PondFish</Text>
+              <View style={[styles.menuIconContainer, { backgroundColor: '#EBF3FC' }]}>
+                <Text style={styles.menuGlyph}>👛</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>PondFish Wallet & Instant Cash</Text>
+                <Text style={styles.menuItemSubtitle}>Auto-refunds enabled</Text>
+              </View>
+              <View style={styles.menuRightIndicator}>
+                <Text style={styles.walletBalanceBadge}>
+                  ₹{subDetails?.creditBalance ? parseFloat(subDetails.creditBalance).toLocaleString('en-IN') : '0'}
+                </Text>
+                <Text style={styles.menuChevron}>›</Text>
+              </View>
             </TouchableOpacity>
-            <Text style={styles.logoutDisclaimer}>
-              Hardware-backed Keystore session will be safely cleared.
-            </Text>
+
+            <View style={styles.groupItemDivider} />
+
+            {/* Manage Gold Subscription */}
+            <TouchableOpacity
+              style={styles.menuGroupItem}
+              onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={styles.menuGlyph}>✪</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>
+                  {hasSub ? 'Manage Subscription' : 'Explore Subscriptions'}
+                </Text>
+                <Text style={styles.menuItemSubtitle}>
+                  {hasSub
+                    ? `${subDetails?.planTitle || 'Gold Plan'} • ${subDetails?.weeklyRemainingKg ?? 0} kg fresh quota left`
+                    : 'No active plan • Subscribe to unlock weekly quota'}
+                </Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.groupItemDivider} />
+
+            {/* Saved Payment Methods */}
+            <TouchableOpacity
+              style={styles.menuGroupItem}
+              onPress={() => Alert.alert('Saved Payment Methods', 'Razorpay UPI & Saved cards managed securely at checkout.')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: '#F1F5F9' }]}>
+                <Text style={styles.menuGlyph}>💳</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Saved Payment Methods</Text>
+                <Text style={styles.menuItemSubtitle}>Razorpay UPI (GPay) • HDFC Debit Ending 4192</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Section 3: PREFERENCES & PREPARATION */}
+          <Text style={styles.groupSectionTitle}>PREFERENCES & PREPARATION</Text>
+          <View style={styles.menuGroupCard}>
+            {/* Delivery Addresses */}
+            <TouchableOpacity
+              style={styles.menuGroupItem}
+              onPress={() => Alert.alert('Delivery Addresses', `Current Primary Address:\n${profile?.area || 'Madhapur, Hyderabad'}\nOffice: Financial District`)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: '#FEE2E2' }]}>
+                <Text style={styles.menuGlyph}>📍</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Delivery Addresses</Text>
+                <Text style={styles.menuItemSubtitle}>Home (Madhapur), Office (Financial District)</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.groupItemDivider} />
+
+            {/* Cutting & Cleaning Defaults */}
+            <TouchableOpacity
+              style={styles.menuGroupItem}
+              onPress={() => Alert.alert('Cutting Preferences', 'Default custom cut: Curry Cut with Head, Boneless Skinless Fillets.')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: '#E0F2FE' }]}>
+                <Text style={styles.menuGlyph}>✂</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Cutting & Cleaning Defaults</Text>
+                <Text style={styles.menuItemSubtitle}>Curry Cut with Head • Boneless Skinless Fillets</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.groupItemDivider} />
+
+            {/* Notifications & Catch Alerts */}
+            <TouchableOpacity
+              style={styles.menuGroupItem}
+              onPress={() => onNavigate && onNavigate('NOTIFICATIONS')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: '#EDE9FE' }]}>
+                <Text style={styles.menuGlyph}>🔔</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Notifications & Catch Alerts</Text>
+                <Text style={styles.menuItemSubtitle}>WhatsApp updates & 6:00 AM Fresh Catch ping</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Section 4: ASSURANCE & LEGAL */}
+          <Text style={styles.groupSectionTitle}>ASSURANCE & LEGAL</Text>
+          <View style={styles.menuGroupCard}>
+            {/* WhatsApp Care & Support */}
+            <TouchableOpacity
+              style={styles.menuGroupItem}
+              onPress={() => Alert.alert('PondFish Care', 'Seafood concierge available 24x7 via WhatsApp (+91 98765 43210).')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: '#DCFCE7' }]}>
+                <Text style={styles.menuGlyph}>💬</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>WhatsApp Care & Support</Text>
+                <Text style={styles.menuItemSubtitle}>24x7 instant seafood concierge help</Text>
+              </View>
+              <Text style={styles.externalLinkIcon}>↗</Text>
+            </TouchableOpacity>
+
+            <View style={styles.groupItemDivider} />
+
+            {/* Cold-Chain Certificate & Lab Audits */}
+            <TouchableOpacity
+              style={styles.menuGroupItem}
+              onPress={() => Alert.alert('Lab Audits', 'Daily chemical testing results:\nFormalin: Not Detected (0.00 ppm)\nAmmonia: 0.00 ppm\nTested at Central Cold Hub, Hyderabad.')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: '#E0E7FF' }]}>
+                <Text style={styles.menuGlyph}>🧪</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Cold-Chain Certificate & Lab Audits</Text>
+                <Text style={styles.menuItemSubtitle}>Formalin-free, zero ammonia test batch #882</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.groupItemDivider} />
+
+            {/* Terms & Refund Guarantees */}
+            <TouchableOpacity
+              style={styles.menuGroupItem}
+              onPress={() => Alert.alert('Refund Policy', 'PondFish 100% Quality Guarantee: Any dissatisfaction reported within 48 hours receives immediate wallet refund or replacement without returns.')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: '#EDF5FD' }]}>
+                <Text style={styles.menuGlyph}>🛡</Text>
+              </View>
+              <View style={styles.menuItemDetails}>
+                <Text style={styles.menuItemTitle}>Terms & Refund Guarantees</Text>
+                <Text style={styles.menuItemSubtitle}>100% no-questions replacement policy</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Log Out Button (Soft pink background with red text) */}
+          <TouchableOpacity
+            style={styles.stitchLogoutBtn}
+            onPress={handleLogoutPress}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.stitchLogoutText}>⇥ Log Out</Text>
+          </TouchableOpacity>
+
+          {/* Footer Info */}
+          <View style={styles.footerContainer}>
+            <View style={styles.footerBulletRow}>
+              <View style={styles.footerDot} />
+              <Text style={styles.footerVersionText}>PondFish Hub v1.4.2</Text>
+            </View>
+            <Text style={styles.footerBuildText}>Build 204 • Pure Ocean Cold Chain Distribution</Text>
           </View>
         </ScrollView>
       )}
@@ -593,7 +709,7 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
                 value={editName}
                 onChangeText={setEditName}
                 placeholder="Enter your full name"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor="#94A3B8"
                 autoCapitalize="words"
               />
             </View>
@@ -606,7 +722,7 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
                 value={editAge}
                 onChangeText={setEditAge}
                 placeholder="e.g. 32"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor="#94A3B8"
                 keyboardType="number-pad"
                 maxLength={3}
               />
@@ -619,8 +735,8 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
                 style={styles.textInput}
                 value={editArea}
                 onChangeText={setEditArea}
-                placeholder="e.g. Indiranagar, Bangalore"
-                placeholderTextColor={colors.textMuted}
+                placeholder="e.g. Madhapur, Hyderabad"
+                placeholderTextColor="#94A3B8"
                 autoCapitalize="words"
               />
             </View>
@@ -658,54 +774,78 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bgMain,
+    backgroundColor: '#F8FAFE',
   },
   appBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'android' ? 14 : 10,
     paddingBottom: 14,
-    backgroundColor: colors.bgCard,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: '#F8FAFE',
   },
-  backBtn: {
-    paddingRight: 14,
-    paddingVertical: 4,
+  appBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  backBtnText: {
-    fontSize: 24,
-    color: colors.textPrimary,
-    fontWeight: '700',
+  brandIconBtn: {
+    padding: 2,
+  },
+  brandEmoji: {
+    fontSize: 22,
   },
   appBarTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#0A1C33',
     letterSpacing: -0.3,
   },
-  appBarSubtitle: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 1,
+  appBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  editHeaderBtn: {
-    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+  walletPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF5FD',
     borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.3)',
-    borderRadius: 8,
+    borderColor: '#C6DEF9',
+    borderRadius: 20,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
+    gap: 5,
   },
-  editHeaderBtnText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '700',
+  walletIcon: {
+    fontSize: 14,
+  },
+  walletAmount: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  walletChevron: {
+    fontSize: 10,
+    color: '#0284C7',
+    fontWeight: '800',
+  },
+  avatarPillCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#0A1C33',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPillEmoji: {
+    fontSize: 16,
+    color: '#FFFFFF',
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 36,
+    paddingHorizontal: 16,
+    paddingBottom: 40,
   },
   centerContainer: {
     flex: 1,
@@ -714,18 +854,18 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   loadingText: {
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: 13,
     marginTop: 12,
   },
   errorText: {
-    color: colors.danger,
+    color: '#DC2626',
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
   },
   retryBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#0A1C33',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -736,47 +876,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   successBanner: {
-    backgroundColor: 'rgba(22, 163, 74, 0.15)',
+    backgroundColor: 'rgba(22, 163, 74, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(22, 163, 74, 0.4)',
+    borderColor: 'rgba(22, 163, 74, 0.3)',
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   successBannerText: {
-    color: colors.freshGreen,
+    color: '#16A34A',
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
   },
   identityCard: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
     padding: 16,
-    marginBottom: 18,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
   identityTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
-  avatarCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(2, 132, 199, 0.2)',
-    borderWidth: 2,
-    borderColor: colors.accent,
+  navyAvatarBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#0A1C33',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
-  avatarText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: colors.accent,
+  navyAvatarText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   identityDetails: {
     flex: 1,
@@ -784,273 +928,320 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   customerNameText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    color: colors.textPrimary,
-    flexShrink: 1,
+    color: '#0A1C33',
+    letterSpacing: -0.2,
   },
-  verifiedBadge: {
-    backgroundColor: 'rgba(22, 163, 74, 0.18)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  verifiedBadgeText: {
-    color: colors.freshGreen,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  memberSinceText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  customerIdText: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  identityDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 14,
-  },
-  fieldGrid: {
-    gap: 12,
-  },
-  fieldItem: {
-    gap: 2,
-  },
-  fieldLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.6,
-  },
-  fieldValRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  fieldValText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  lockIcon: {
-    fontSize: 12,
-    opacity: 0.7,
-  },
-  fieldSubnote: {
-    fontSize: 10,
-    color: colors.textMuted,
-  },
-  sectionHeaderRow: {
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
-  },
-  subscriptionCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 20,
-  },
-  subCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  subPlanInfo: {
-    flex: 1,
-  },
-  subPlanTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  subPlanDays: {
-    fontSize: 12,
-    color: colors.accent,
-    marginTop: 2,
-  },
-  subActiveBadge: {
-    backgroundColor: 'rgba(22, 163, 74, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  subActiveBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.freshGreen,
-  },
-  subStatsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(51, 65, 85, 0.4)',
-    marginBottom: 12,
-  },
-  subStatBox: {
-    flex: 1,
-  },
-  subStatLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  subStatValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
-  subActionBtn: {
-    backgroundColor: 'rgba(2, 132, 199, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.4)',
+  verifiedCheckBadge: {
+    width: 16,
+    height: 16,
     borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  subActionBtnText: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  noSubHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
-  },
-  noSubIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+    backgroundColor: '#0284C7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noSubTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  noSubSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  exploreSubBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  exploreSubBtnText: {
+  verifiedCheckText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '900',
   },
-  menuContainer: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    marginBottom: 24,
+  maskedPhoneText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
   },
-  menuItem: {
+  identityBadgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
   },
-  menuIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.bgSurface,
+  goldSubscriberBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF5FD',
+    borderWidth: 1,
+    borderColor: '#C6DEF9',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 4,
+  },
+  badgeMedalIcon: {
+    fontSize: 11,
+  },
+  goldSubscriberBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  localityBadge: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  localityBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  editProfileBtn: {
+    borderWidth: 1,
+    borderColor: '#C6DEF9',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginLeft: 6,
+  },
+  editProfileBtnText: {
+    color: '#0284C7',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pickupTicketBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF5FD',
+    borderWidth: 1,
+    borderColor: '#C6DEF9',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+  pickupTicketIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#0284C7',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  menuEmoji: {
+  pickupTicketIcon: {
     fontSize: 18,
+    color: '#FFFFFF',
   },
-  menuContent: {
+  pickupTicketInfo: {
     flex: 1,
   },
-  menuTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
+  pickupTicketTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  menuSubtitle: {
+  ticketLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0284C7',
+  },
+  pickupTicketTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  pickupTicketSubtitle: {
     fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1,
+    color: '#64748B',
+    marginTop: 2,
   },
-  menuArrow: {
-    fontSize: 20,
-    color: colors.textMuted,
-    fontWeight: '600',
+  showQrBtn: {
+    backgroundColor: '#0A1C33',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
   },
-  menuDivider: {
-    height: 1,
-    backgroundColor: 'rgba(51, 65, 85, 0.4)',
-  },
-  logoutWrapper: {
-    marginTop: 6,
-    alignItems: 'center',
-  },
-  logoutBtn: {
-    width: '100%',
-    backgroundColor: 'rgba(220, 38, 38, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(220, 38, 38, 0.4)',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  logoutBtnText: {
-    color: colors.freshRed,
-    fontSize: 15,
+  showQrBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
     fontWeight: '800',
   },
-  logoutDisclaimer: {
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    marginBottom: 18,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statBoxDivider: {
+    width: 1,
+    backgroundColor: '#E2E8F0',
+    height: '75%',
+    alignSelf: 'center',
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  statUnit: {
     fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 8,
-    textAlign: 'center',
+    fontWeight: '700',
+    color: '#0284C7',
+    marginLeft: 1,
+  },
+  statLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748B',
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  groupSectionTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 6,
+    paddingLeft: 2,
+  },
+  menuGroupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+  },
+  menuGroupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  menuIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  menuGlyph: {
+    fontSize: 16,
+  },
+  menuItemDetails: {
+    flex: 1,
+  },
+  menuItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0A1C33',
+  },
+  menuItemSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  menuRightIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  notificationDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#0284C7',
+  },
+  walletBalanceBadge: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  menuChevron: {
+    fontSize: 18,
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  externalLinkIcon: {
+    fontSize: 14,
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  groupItemDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 48,
+  },
+  stitchLogoutBtn: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  stitchLogoutText: {
+    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  footerContainer: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  footerBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0284C7',
+  },
+  footerVersionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  footerBuildText: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 3,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(11, 17, 32, 0.85)',
+    backgroundColor: 'rgba(10, 28, 51, 0.75)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
     padding: 20,
     paddingBottom: Platform.OS === 'ios' ? 36 : 24,
   },
@@ -1063,26 +1254,26 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#0A1C33',
   },
   modalCloseBtn: {
     padding: 4,
   },
   modalCloseText: {
     fontSize: 18,
-    color: colors.textSecondary,
+    color: '#64748B',
     fontWeight: '700',
   },
   modalErrorBox: {
-    backgroundColor: 'rgba(220, 38, 38, 0.15)',
+    backgroundColor: 'rgba(220, 38, 38, 0.1)',
     borderWidth: 1,
-    borderColor: colors.freshRed,
+    borderColor: '#DC2626',
     borderRadius: 8,
     padding: 10,
     marginBottom: 14,
   },
   modalErrorText: {
-    color: colors.freshRed,
+    color: '#DC2626',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1090,37 +1281,37 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   inputLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    color: colors.textMuted,
+    color: '#64748B',
     marginBottom: 6,
     letterSpacing: 0.6,
   },
   textInput: {
-    backgroundColor: colors.bgInput,
+    backgroundColor: '#F8FAFE',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#CBD5E1',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    color: colors.textPrimary,
+    color: '#0A1C33',
   },
   readOnlyInput: {
-    backgroundColor: colors.bgSurface,
-    borderColor: colors.borderLight,
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   readOnlyText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#64748B',
     fontWeight: '600',
   },
   inputHelpText: {
     fontSize: 10,
-    color: colors.textMuted,
+    color: '#94A3B8',
     marginTop: 4,
   },
   modalActionsRow: {
@@ -1131,19 +1322,19 @@ const styles = StyleSheet.create({
   modalCancelBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#CBD5E1',
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
   },
   modalCancelBtnText: {
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: 14,
     fontWeight: '700',
   },
   modalSaveBtn: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: '#0A1C33',
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',

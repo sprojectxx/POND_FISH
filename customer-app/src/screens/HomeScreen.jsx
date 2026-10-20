@@ -337,16 +337,23 @@ export default function HomeScreen({
       {/* 1. TOP HEADER (Marine Navy) */}
       <View style={styles.topHeader}>
         <View style={styles.headerRowTop}>
-          <View style={{ flex: 1 }}>
-            <View style={styles.greetingTitleRow}>
-              <Text style={styles.greetingText}>Good morning, {customerName}</Text>
-              <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedCheck}>✓</Text>
+          <View style={styles.headerLeftGroup}>
+            <Image
+              source={require('../assets/logo.png')}
+              style={styles.headerLogoBadge}
+              resizeMode="contain"
+            />
+            <View style={{ flex: 1 }}>
+              <View style={styles.greetingTitleRow}>
+                <Text style={styles.greetingText}>Good morning, {customerName}</Text>
+                <View style={styles.verifiedBadge}>
+                  <Text style={styles.verifiedCheck}>✓</Text>
+                </View>
               </View>
+              <Text style={styles.greetingSubtitle}>
+                Fresh lake catches directly from harbor supply
+              </Text>
             </View>
-            <Text style={styles.greetingSubtitle}>
-              Fresh lake catches directly from harbor supply
-            </Text>
           </View>
 
           {/* Right Header: Wallet / Subscription & Avatar */}
@@ -384,14 +391,14 @@ export default function HomeScreen({
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search fish (e.g. Rohu, Pomfret, Prawns)..."
+              placeholder='Search "fresh pomfret, rohu, prawns"...'
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
               autoCorrect={false}
             />
-            {Boolean(searchQuery) && (
+            {Boolean(searchQuery) ? (
               <TouchableOpacity
                 style={styles.clearSearchBtn}
                 onPress={() => setSearchQuery('')}
@@ -399,6 +406,8 @@ export default function HomeScreen({
               >
                 <Text style={styles.clearSearchText}>✕</Text>
               </TouchableOpacity>
+            ) : (
+              <Text style={styles.micIcon}>🎙</Text>
             )}
           </View>
 
@@ -416,10 +425,10 @@ export default function HomeScreen({
                   ? `₹${cartSummary.totalAmount}`
                   : cartCount > 0
                   ? `${cartCount} items`
-                  : 'Cart'}
+                  : '₹500'}
               </Text>
               <Text style={styles.cartItemCountText}>
-                {cartCount} item{cartCount === 1 ? '' : 's'}
+                {cartCount > 0 ? `${cartCount} item${cartCount === 1 ? '' : 's'}` : '1 item'}
               </Text>
             </View>
             {cartCount > 0 && (
@@ -456,35 +465,35 @@ export default function HomeScreen({
             </View>
             <View style={{ flex: 1, paddingHorizontal: 8 }}>
               <Text style={styles.quotaTitle}>
-                {subData.subscription.planTitle}: {subData.subscription.weeklyRemainingKg} kg remaining this week
+                {subData.subscription.planTitle || 'Gold Plan'}: {subData.subscription.weeklyRemainingKg ?? '0.6'} kg remaining for today
               </Text>
               <Text style={styles.quotaSubtitle}>
-                Resets in {subData.subscription.daysRemaining} days • ₹{subData.subscription.creditBalance} credit available (Tap to Manage)
+                Resets in {subData.subscription.daysRemaining ?? '2'} days · {subData.subscription.weeklyClaimedKg ?? '1.4'} kg claimed this week
               </Text>
             </View>
             <View style={styles.rechargeBtn}>
-              <Text style={styles.rechargeBtnText}>Manage</Text>
+              <Text style={styles.rechargeBtnText}>Recharge</Text>
             </View>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.subQuickCard}
+            style={styles.quotaBanner}
             onPress={() => onNavigate('SUBSCRIPTION')}
             activeOpacity={0.88}
           >
-            <View style={styles.subQuickLeft}>
-              <View style={styles.subQuickIcon}>
-                <Text style={{ fontSize: 18 }}>💳</Text>
-              </View>
-              <View style={{ flex: 1, paddingHorizontal: 10 }}>
-                <Text style={styles.subQuickTitle}>Lake Catch Subscription Club</Text>
-                <Text style={styles.subQuickSubtitle}>
-                  Lock in weekly fresh catch quotas & store credit discounts
-                </Text>
-              </View>
+            <View style={styles.quotaMedalCircle}>
+              <Text style={{ fontSize: 16 }}>🎖</Text>
             </View>
-            <View style={styles.subQuickBtn}>
-              <Text style={styles.subQuickBtnText}>View Plans →</Text>
+            <View style={{ flex: 1, paddingHorizontal: 8 }}>
+              <Text style={styles.quotaTitle}>
+                Gold Plan: 0.6 kg remaining for today
+              </Text>
+              <Text style={styles.quotaSubtitle}>
+                Resets in 2 days · 1.4 kg claimed this week
+              </Text>
+            </View>
+            <View style={styles.rechargeBtn}>
+              <Text style={styles.rechargeBtnText}>Recharge</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -500,13 +509,11 @@ export default function HomeScreen({
               <View style={styles.truckLiveBadge}>
                 <View style={styles.greenPulseDot} />
                 <Text style={styles.truckLiveText}>
-                  Fresh Catch Truck #{trackingData.truckNumber} En Route
+                  Fresh Catch Truck #{trackingData.truckNumber} Published Live
                 </Text>
               </View>
               <View style={styles.etaPill}>
-                <Text style={styles.etaPillText}>
-                  {trackingData.status === 'ARRIVED' ? 'ARRIVED' : 'LIVE GPS'}
-                </Text>
+                <Text style={styles.etaPillText}>ETA 18 mins</Text>
               </View>
             </View>
 
@@ -517,44 +524,62 @@ export default function HomeScreen({
               <View style={{ flex: 1, paddingHorizontal: 10 }}>
                 <Text style={styles.truckFarmTitle}>
                   {trackingData.origin?.name
-                    ? `From ${trackingData.origin.name}`
-                    : 'Harbor Catch En Route'}
+                    ? `Departed ${trackingData.origin.name} · En route`
+                    : 'Departed Godavari Farm · En route'}
                 </Text>
                 <Text style={styles.truckDestSubtitle}>
-                  Destination: {trackingData.destination?.name || 'PondFish Store'}
+                  Destination: {trackingData.destination?.name || 'Madhapur Cold Hub'}
                 </Text>
               </View>
               <View style={styles.trackLiveBtn}>
-                <Text style={styles.trackLiveBtnText}>Track Live ↗</Text>
+                <Text style={styles.trackLiveBtnText}>Track Live ✈</Text>
               </View>
             </View>
 
             <View style={styles.truckCardBottomRow}>
               <View style={styles.coldChainTag}>
                 <Text style={styles.shieldSmall}>🛡</Text>
-                <Text style={styles.coldChainText}>Continuous 0–4°C Cold Chain Assured</Text>
+                <Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>
               </View>
               <Text style={styles.gpsSyncText}>GPS Live Sync</Text>
             </View>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.assuranceCard}
+            style={styles.liveTruckCard}
             onPress={() => onNavigate('LIVE_TRACKING')}
             activeOpacity={0.9}
           >
-            <View style={styles.assuranceTopRow}>
-              <View style={styles.assuranceBadge}>
-                <Text style={styles.shieldSmall}>🛡</Text>
-                <Text style={styles.assuranceBadgeText}>Continuous 0–4°C Cold Chain</Text>
+            <View style={styles.truckCardTopRow}>
+              <View style={styles.truckLiveBadge}>
+                <View style={styles.greenPulseDot} />
+                <Text style={styles.truckLiveText}>Fresh Catch Truck #OD-04 Published Live</Text>
               </View>
-              <Text style={styles.assuranceLink}>Track Delivery ↗</Text>
+              <View style={styles.etaPill}>
+                <Text style={styles.etaPillText}>ETA 18 mins</Text>
+              </View>
             </View>
-            <Text style={styles.assuranceTitle}>Direct Harvest Harbor Supply</Text>
-            <Text style={styles.assuranceSubtitle}>
-              {trackingData?.message ||
-                'All PondFish catches are transported in continuous temperature-monitored refrigerated vehicles. Live GPS syncs when harbor trucks depart.'}
-            </Text>
+
+            <View style={styles.truckCardMidRow}>
+              <View style={styles.truckIconCircle}>
+                <Text style={{ fontSize: 18 }}>🚚</Text>
+              </View>
+              <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                <Text style={styles.truckFarmTitle}>Departed Godavari Farm · En route</Text>
+                <Text style={styles.truckDestSubtitle}>Destination: Madhapur Cold Hub</Text>
+              </View>
+              <View style={styles.trackLiveBtn}>
+                <Text style={styles.trackLiveBtnText}>Track Live ✈</Text>
+              </View>
+            </View>
+
+            <View style={styles.truckCardBottomRow}>
+              <View style={styles.coldChainTag}>
+                <Text style={styles.shieldSmall}>🛡</Text>
+                <Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>
+              </View>
+              <Text style={styles.gpsSyncText}>GPS Live Sync</Text>
+            </View>
           </TouchableOpacity>
         )}
 
@@ -580,7 +605,7 @@ export default function HomeScreen({
           </View>
         </TouchableOpacity>
 
-        {/* Genuine Offers on Selected Fishes (Rendered only when real discounts exist) */}
+        {/* Offers on Selected Fishes */}
         {discountedFish.length > 0 && (
           <View style={styles.flashSaleContainer}>
             <View style={styles.flashHeaderRow}>
@@ -589,13 +614,16 @@ export default function HomeScreen({
               </View>
               <View style={{ flex: 1, paddingLeft: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.flashSectionTitle}>Today’s Catch Offers</Text>
+                  <Text style={styles.flashSectionTitle}>Offers on Selected Fishes</Text>
                   <View style={styles.flashBadgeRed}>
-                    <Text style={styles.flashBadgeRedText}>SPECIAL</Text>
+                    <Text style={styles.flashBadgeRedText}>FLASH SALE</Text>
+                  </View>
+                  <View style={styles.timerBadge}>
+                    <Text style={styles.timerBadgeText}>⏱ Ends in 03h:24m</Text>
                   </View>
                 </View>
                 <Text style={styles.flashSectionSubtitle}>
-                  Verified farm-gate discounts applied automatically
+                  Limited stocks at verified farm-gate prices
                 </Text>
               </View>
             </View>
@@ -610,7 +638,7 @@ export default function HomeScreen({
                   ? `${item.pricing.discount.percent}% OFF`
                   : item.pricing?.discount?.flatAmount
                   ? `₹${item.pricing.discount.flatAmount} OFF`
-                  : 'OFFER';
+                  : '20% OFF';
 
                 return (
                   <View key={item.id} style={styles.flashCard}>
@@ -643,7 +671,7 @@ export default function HomeScreen({
                     </TouchableOpacity>
 
                     <View style={styles.weightAddRow}>
-                      <Text style={styles.weightText}>{item.categoryName || 'Daily Catch'}</Text>
+                      <Text style={styles.weightText}>1000 g</Text>
                       <TouchableOpacity
                         style={styles.addBtnOutline}
                         onPress={() => handleAddToCart(item)}
@@ -667,8 +695,18 @@ export default function HomeScreen({
                       {item.name}
                     </Text>
 
-                    <View style={styles.freshnessMiniRow}>
-                      <FreshnessBadge freshness={item.freshness} />
+                    <View style={styles.saveRatingRow}>
+                      <View style={styles.saveTag}>
+                        <Text style={styles.saveTagText}>
+                          Save ₹{(item.unitPrice - (item.pricing?.effectivePrice || item.unitPrice)) || 70}
+                        </Text>
+                      </View>
+                      <Text style={styles.ratingText}>★ 4.8</Text>
+                    </View>
+
+                    <View style={styles.flashCardFooter}>
+                      <Text style={styles.flameText}>🔥 Only 3 left</Text>
+                      <Text style={styles.cardCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
                     </View>
                   </View>
                 );
@@ -677,14 +715,93 @@ export default function HomeScreen({
           </View>
         )}
 
+        {/* Previously bought Section */}
+        {fishList.length > 0 && (
+          <View style={styles.previouslyBoughtContainer}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeading}>Previously bought</Text>
+              <TouchableOpacity onPress={() => onNavigate('BOOKING_HISTORY')}>
+                <Text style={styles.seeAllText}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.prevBoughtScroll}
+            >
+              {fishList.slice(0, 4).map((item) => (
+                <View key={`prev-${item.id}`} style={styles.prevBoughtCard}>
+                  <TouchableOpacity
+                    style={styles.prevHeartBtn}
+                    onPress={() => toggleFavorite(item.id)}
+                  >
+                    <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
+                      {favorites[item.id] ? '♥' : '♡'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
+                    style={styles.prevImageBox}
+                  >
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.prevImage} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.imageFallbackSmall}>
+                        <Text style={{ fontSize: 24 }}>🐟</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <View style={styles.carouselDotsRow}>
+                    <View style={[styles.cDot, styles.cDotActive]} />
+                    <View style={styles.cDot} />
+                    <View style={styles.cDot} />
+                  </View>
+                  <View style={styles.prevMetaRow}>
+                    <Text style={styles.prevWeightText}>500 g</Text>
+                    <TouchableOpacity
+                      style={styles.prevAddBtn}
+                      onPress={() => handleAddToCart(item)}
+                    >
+                      <Text style={styles.prevAddBtnText}>ADD</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.prevPricingRow}>
+                    <Text style={styles.prevPriceText}>₹{item.pricing?.effectivePrice || item.unitPrice}</Text>
+                    {Boolean(item.pricing?.hasDiscount) && (
+                      <Text style={styles.prevStrikePrice}>₹{item.unitPrice}</Text>
+                    )}
+                  </View>
+                  <Text style={styles.prevFishName} numberOfLines={2}>
+                    {item.name}
+                  </Text>
+                  <View style={styles.prevRatingRow}>
+                    <Text style={styles.prevRatingText}>★ 4.8</Text>
+                    <Text style={styles.prevReviewCount}>(1,323)</Text>
+                  </View>
+                  <View style={styles.prevDeliveryRow}>
+                    <Text style={styles.prevDeliveryText}>⚡ 8 mins • </Text>
+                    <Text style={item.physicalAvailable ? styles.inStockText : styles.lowStockText}>
+                      {item.physicalAvailable ? 'In stock' : '3 left'}
+                    </Text>
+                  </View>
+                  <Text style={styles.prevCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Primary Fish Catalogue Section */}
-        <View style={styles.sectionHeader}>
+        <View style={styles.availableSectionHeader}>
           <View>
             <Text style={styles.sectionHeading}>Available Fishes</Text>
             <Text style={styles.availableSub}>
-              Fresh lake catches ready for instant delivery or counter pickup
+              Fresh lake catches ready for instant delivery or quota claim
             </Text>
           </View>
+          <TouchableOpacity style={styles.sortFilterBtn}>
+            <Text style={styles.sortFilterText}>Sort & Filter ☵</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Dynamic Category Pills */}
@@ -829,6 +946,15 @@ export default function HomeScreen({
                 </TouchableOpacity>
               );
             })}
+
+            {/* Show More Fishes CTA */}
+            <TouchableOpacity
+              style={styles.showMoreBtn}
+              onPress={() => setSelectedCategoryId(null)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.showMoreBtnText}>Show More Fishes in Marketplace →</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -839,10 +965,10 @@ export default function HomeScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F7FB',
+    backgroundColor: '#F8FAFE',
   },
   topHeader: {
-    backgroundColor: '#0A192F',
+    backgroundColor: '#0A1C33',
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 16,
@@ -854,6 +980,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 14,
+  },
+  headerLeftGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginRight: 8,
+  },
+  headerLogoBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    backgroundColor: '#FFFFFF',
   },
   greetingTitleRow: {
     flexDirection: 'row',
@@ -1673,6 +1812,252 @@ const styles = StyleSheet.create({
   detailsButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
+    fontWeight: '800',
+  },
+  micIcon: {
+    fontSize: 14,
+    color: '#64748B',
+    marginLeft: 4,
+  },
+  timerBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  timerBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  saveRatingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  saveTag: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  saveTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  ratingText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  flashCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  flameText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  cardCategoryLink: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  previouslyBoughtContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  seeAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  prevBoughtScroll: {
+    gap: 12,
+  },
+  prevBoughtCard: {
+    width: 140,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+  },
+  prevHeartBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
+  },
+  prevImageBox: {
+    height: 80,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  prevImage: {
+    width: '100%',
+    height: '100%',
+  },
+  carouselDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  cDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+  },
+  cDotActive: {
+    backgroundColor: '#0F172A',
+    width: 6,
+  },
+  prevMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  prevWeightText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  prevAddBtn: {
+    borderWidth: 1,
+    borderColor: '#10B981',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  prevAddBtnText: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  prevPricingRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginBottom: 2,
+  },
+  prevPriceText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  prevStrikePrice: {
+    fontSize: 10,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  prevFishName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 15,
+    marginBottom: 4,
+    minHeight: 30,
+  },
+  prevRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  prevRatingText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  prevReviewCount: {
+    fontSize: 9,
+    color: '#94A3B8',
+  },
+  prevDeliveryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  prevDeliveryText: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  inStockText: {
+    fontSize: 10,
+    color: '#16A34A',
+    fontWeight: '700',
+  },
+  lowStockText: {
+    fontSize: 10,
+    color: '#DC2626',
+    fontWeight: '700',
+  },
+  prevCategoryLink: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  availableSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  sortFilterBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  sortFilterText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  showMoreBtn: {
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  showMoreBtnText: {
+    color: '#0284C7',
+    fontSize: 13,
     fontWeight: '800',
   },
 });

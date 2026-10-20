@@ -140,10 +140,12 @@ export default function FishDetailsScreen({
   const isAvailable = Boolean(fish.physicalAvailable);
   const isBookable = Boolean(fish.onlineBookable);
   const subtotal = parseFloat((quantity * effectivePrice).toFixed(2));
+  const [selectedPackWeight, setSelectedPackWeight] = useState(1000);
+  const [isFavorited, setIsFavorited] = useState(false);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bgMain} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Top App Bar */}
       <View style={styles.appBar}>
@@ -154,14 +156,34 @@ export default function FishDetailsScreen({
         >
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.appBarTitle} numberOfLines={1}>
-          {fish.name}
-        </Text>
-        <CartBadgeButton count={cartCount} onPress={() => onNavigate('CART')} />
+        <View style={styles.appBarCenter}>
+          <Image
+            source={require('../assets/logo.png')}
+            style={styles.brandLogoImg}
+            resizeMode="contain"
+          />
+          <Text style={styles.brandLogoText}>PondFish</Text>
+          <Text style={styles.brandDivider}>|</Text>
+          <Text style={styles.appBarTitle} numberOfLines={1}>
+            {fish.name}
+          </Text>
+        </View>
+        <View style={styles.appBarRight}>
+          <TouchableOpacity style={styles.iconCircleBtn} activeOpacity={0.7}>
+            <Text style={{ fontSize: 13, color: '#475569' }}>?</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconCircleBtn}
+            onPress={() => onNavigate('PROFILE')}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 13, color: '#475569' }}>👤</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Hero Fish Image */}
+        {/* Hero Fish Image with Overlaid Badges */}
         <View style={styles.imageContainer}>
           {fish.imageUrl ? (
             <Image source={{ uri: fish.imageUrl }} style={styles.heroImage} resizeMode="cover" />
@@ -171,13 +193,43 @@ export default function FishDetailsScreen({
             </View>
           )}
 
-          {hasDiscount && (
-            <View style={styles.discountBadge}>
-              <Text style={styles.discountBadgeText}>
-                {fish.pricing.discount?.percent ? `${fish.pricing.discount.percent}% OFF` : 'SPECIAL OFFER'}
+          {/* Floating Top-Left 8 MINS Badge */}
+          <View style={styles.minsBadge}>
+            <Text style={styles.minsBadgeText}>⚡ 8 MINS</Text>
+          </View>
+
+          {/* Floating Top-Right Share and Heart Buttons */}
+          <View style={styles.imageActionButtons}>
+            <TouchableOpacity style={styles.imageActionBtn} activeOpacity={0.8}>
+              <Text style={{ fontSize: 14 }}>↗</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.imageActionBtn}
+              onPress={() => setIsFavorited((prev) => !prev)}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 15, color: isFavorited ? '#EF4444' : '#475569' }}>
+                {isFavorited ? '♥' : '♡'}
               </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Floating Bottom Trust Pills */}
+          <View style={styles.imageBottomPills}>
+            <View style={styles.trustPill}>
+              <Text style={styles.trustPillText}>🛡 100% CHEMICAL-FREE</Text>
             </View>
-          )}
+            <View style={styles.trustPill}>
+              <Text style={styles.trustPillText}>💧 RO WASHED</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Carousel Dots */}
+        <View style={styles.carouselDots}>
+          <View style={[styles.dot, styles.dotActive]} />
+          <View style={styles.dot} />
+          <View style={styles.dot} />
         </View>
 
         {/* Success Alert Banner */}
@@ -190,167 +242,254 @@ export default function FishDetailsScreen({
           </View>
         )}
 
-        {/* Identity & Pricing Header */}
+        {/* Identity & Pricing Section */}
         <View style={styles.sectionCard}>
           <View style={styles.metaRow}>
-            <Text style={styles.categoryBadge}>{fish.categoryName || 'Daily Catch'}</Text>
-            <FreshnessBadge freshness={fish.freshness} />
-          </View>
-
-          <Text style={styles.titleText}>{fish.name}</Text>
-
-          {/* Pricing Box */}
-          <View style={styles.pricingContainer}>
-            <View>
-              <Text style={styles.priceLabel}>Applicable Counter Price</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                <Text style={styles.priceValue}>₹{effectivePrice}</Text>
-                <Text style={styles.priceUnit}>/ kg</Text>
-                {hasDiscount && <Text style={styles.crossedPrice}>₹{fish.unitPrice}</Text>}
-              </View>
+            <View style={styles.topSellerBadge}>
+              <Text style={styles.topSellerText}>⚙ TOP SELLER</Text>
             </View>
-            {hasDiscount && (
-              <View style={styles.savingsPill}>
-                <Text style={styles.savingsText}>Save ₹{(fish.unitPrice - effectivePrice).toFixed(0)}/kg</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Availability & Online Booking Status Cards */}
-        <View style={styles.statusGrid}>
-          {/* Physical Availability Card */}
-          <View style={[styles.statusBox, isAvailable ? styles.boxGreen : styles.boxRed]}>
-            <Text style={styles.statusBoxIcon}>{isAvailable ? '🏪' : '🚫'}</Text>
-            <Text style={styles.statusBoxTitle}>Store Availability</Text>
-            <Text style={[styles.statusBoxSub, isAvailable ? styles.textGreen : styles.textRed]}>
-              {isAvailable ? 'In Stock at Counter' : 'Currently Out of Stock'}
-            </Text>
+            <View style={styles.ratingBadge}>
+              <Text style={styles.ratingStar}>★ 4.8</Text>
+              <Text style={styles.ratingCount}>(1,323)</Text>
+            </View>
           </View>
 
-          {/* Online Booking Eligibility Card */}
-          <View style={[styles.statusBox, isBookable ? styles.boxBlue : styles.boxAmber]}>
-            <Text style={styles.statusBoxIcon}>{isBookable ? '⚡' : '🔒'}</Text>
-            <Text style={styles.statusBoxTitle}>Online Booking</Text>
-            <Text style={[styles.statusBoxSub, isBookable ? styles.textBlue : styles.textAmber]}>
-              {isBookable ? 'Eligible for Cart & Booking' : 'Counter Purchase Only'}
-            </Text>
-          </View>
-        </View>
-
-        {/* In-Store Only Notice if not online bookable */}
-        {!isBookable && (
-          <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>ℹ️ In-Store Purchase Only</Text>
-            <Text style={styles.noticeText}>
-              Online booking is currently unavailable for this catch due to cold-chain packing
-              requirements. You can purchase this fish directly at our Bangalore Flagship Counter.
-            </Text>
-          </View>
-        )}
-
-        {/* Description & Cold Chain Assurance */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionHeader}>Description & Freshness</Text>
-          <Text style={styles.bodyText}>
-            {fish.description ||
-              'Freshly harvested and transported under certified 0-4°C insulated chill containers.'}
+          <Text style={styles.titleText}>{fish.name} - Curry Cut (Large Steaks)</Text>
+          <Text style={styles.specsText}>Net: 1000 g • Gross: 1250 g • 8-10 Pieces</Text>
+          <Text style={styles.featureBullet}>
+            ✓ Descaled, gutted & RO water cleansed • Zero waste
           </Text>
 
-          <View style={styles.guaranteeRow}>
-            <View style={styles.guaranteeItem}>
-              <Text style={styles.guaranteeIcon}>❄️</Text>
-              <Text style={styles.guaranteeTitle}>0–4°C Ice Chilled</Text>
-              <Text style={styles.guaranteeSub}>Continuous cold-chain</Text>
-            </View>
-            <View style={styles.guaranteeItem}>
-              <Text style={styles.guaranteeIcon}>🔪</Text>
-              <Text style={styles.guaranteeTitle}>Custom Clean & Cut</Text>
-              <Text style={styles.guaranteeSub}>Done at pickup counter</Text>
-            </View>
-            <View style={styles.guaranteeItem}>
-              <Text style={styles.guaranteeIcon}>🛡️</Text>
-              <Text style={styles.guaranteeTitle}>100% Lake Harvest</Text>
-              <Text style={styles.guaranteeSub}>Chemical-free guarantee</Text>
+          {/* Pricing Box */}
+          <View style={styles.priceRowLarge}>
+            <Text style={styles.priceValueLarge}>₹{effectivePrice}</Text>
+            {hasDiscount && <Text style={styles.crossedPriceLarge}>₹{fish.unitPrice}</Text>}
+            <View style={styles.discountPillGreen}>
+              <Text style={styles.discountPillGreenText}>
+                {fish.pricing?.discount?.percent ? `${fish.pricing.discount.percent}% OFF` : '20% OFF'}
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* Quantity Selection Card (Enabled only if bookable & available) */}
-        {isBookable && isAvailable && (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionHeader}>Select Quantity</Text>
-            <Text style={styles.quantityNote}>All bookings are weighed in kilograms (kg).</Text>
-
-            <View style={styles.qtyRow}>
-              <TouchableOpacity
-                style={styles.qtyBtn}
-                onPress={() => handleAdjustQty(-0.5)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.qtyBtnText}>−</Text>
-              </TouchableOpacity>
-
-              <View style={styles.qtyDisplay}>
-                <Text style={styles.qtyDisplayText}>{quantity.toFixed(1)}</Text>
-                <Text style={styles.qtyDisplayUnit}>kg</Text>
+        {/* Subscription Quota Card (Deep Navy) */}
+        <View style={styles.quotaNavyCard}>
+          <View style={styles.quotaNavyTop}>
+            <View style={styles.quotaNavyLeft}>
+              <View style={styles.goldMedalBox}>
+                <Text style={{ fontSize: 16 }}>🎖</Text>
               </View>
-
-              <TouchableOpacity
-                style={styles.qtyBtn}
-                onPress={() => handleAdjustQty(0.5)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.qtyBtnText}>+</Text>
-              </TouchableOpacity>
+              <Text style={styles.quotaNavyBrand}>PONDFISH GOLD</Text>
+              <View style={styles.activePlanBadge}>
+                <Text style={styles.activePlanText}>ACTIVE PLAN</Text>
+              </View>
             </View>
-
-            {/* Quick Select Chips */}
-            <View style={styles.quickChipsRow}>
-              {[1.0, 1.5, 2.0, 3.0, 5.0].map((val) => (
-                <TouchableOpacity
-                  key={val}
-                  style={[styles.quickChip, quantity === val && styles.quickChipActive]}
-                  onPress={() => handleSetQuickQty(val)}
-                >
-                  <Text style={[styles.quickChipText, quantity === val && styles.quickChipTextActive]}>
-                    {val} kg
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Subtotal Calculation Box */}
-            <View style={styles.subtotalBox}>
-              <Text style={styles.subtotalLabel}>Estimated Subtotal ({quantity} kg)</Text>
-              <Text style={styles.subtotalValue}>₹{subtotal}</Text>
-            </View>
+            <Text style={styles.quotaNavyRemaining}>0.6 kg left</Text>
           </View>
-        )}
+
+          <Text style={styles.quotaClaimText}>
+            Claim 500g under today's weekly quota for <Text style={{ color: '#FBBF24', fontWeight: '800' }}>₹0 extra !</Text>
+          </Text>
+
+          <View style={styles.quotaNavyBottom}>
+            <TouchableOpacity
+              style={styles.applyQuotaBtn}
+              onPress={() => onNavigate('SUBSCRIPTION')}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.applyQuotaBtnText}>Apply Quota Allowance →</Text>
+            </TouchableOpacity>
+            <Text style={styles.weeklyLimitText}>Weekly fresh limit</Text>
+          </View>
+        </View>
+
+        {/* Pack Weight Selector */}
+        <View style={styles.sectionCard}>
+          <View style={styles.packHeaderRow}>
+            <Text style={styles.sectionHeaderTitle}>Pack Weight</Text>
+            <Text style={styles.netWeightHint}>Net Clean Weight</Text>
+          </View>
+
+          <View style={styles.packOptionsRow}>
+            {/* 500g */}
+            <TouchableOpacity
+              style={[
+                styles.packBox,
+                selectedPackWeight === 500 && styles.packBoxSelected,
+              ]}
+              onPress={() => {
+                setSelectedPackWeight(500);
+                setQuantity(0.5);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.packWeightNum}>500 g</Text>
+              <Text style={styles.packSteaksHint}>3-4 Steaks</Text>
+              <Text style={styles.packPriceText}>₹{Math.round(effectivePrice * 0.5) || 150}</Text>
+            </TouchableOpacity>
+
+            {/* 1000g Popular */}
+            <TouchableOpacity
+              style={[
+                styles.packBox,
+                selectedPackWeight === 1000 && styles.packBoxSelected,
+              ]}
+              onPress={() => {
+                setSelectedPackWeight(1000);
+                setQuantity(1.0);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.popularBadge}>
+                <Text style={styles.popularBadgeText}>POPULAR</Text>
+              </View>
+              <Text style={styles.packWeightNum}>1000 g</Text>
+              <Text style={styles.packSteaksHint}>8-10 Steaks</Text>
+              <Text style={styles.packPriceText}>₹{effectivePrice || 280}</Text>
+            </TouchableOpacity>
+
+            {/* 1500g */}
+            <TouchableOpacity
+              style={[
+                styles.packBox,
+                selectedPackWeight === 1500 && styles.packBoxSelected,
+              ]}
+              onPress={() => {
+                setSelectedPackWeight(1500);
+                setQuantity(1.5);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.packWeightNum}>1500 g</Text>
+              <Text style={styles.packSteaksHint}>14-16 Steaks</Text>
+              <Text style={styles.packPriceText}>₹{Math.round(effectivePrice * 1.5) || 410}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Frequently Bought Together */}
+        <View style={styles.sectionCard}>
+          <View style={styles.packHeaderRow}>
+            <Text style={styles.sectionHeaderTitle}>Frequently Bought Together</Text>
+            <TouchableOpacity onPress={() => onNavigate('HOME')}>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 4 }}>
+            {/* Card 1 */}
+            <View style={styles.freqCard}>
+              <View style={styles.freqTag}>
+                <Text style={styles.freqTagText}>FRESH</Text>
+              </View>
+              <View style={styles.freqImageBox}>
+                <Text style={{ fontSize: 30 }}>🦐</Text>
+              </View>
+              <Text style={styles.freqTitle}>Fresh Tiger Prawns</Text>
+              <Text style={styles.freqSubtitle}>250g • Cleaned</Text>
+              <View style={styles.freqBottomRow}>
+                <Text style={styles.freqPrice}>₹210</Text>
+                <TouchableOpacity style={styles.freqAddBtn}>
+                  <Text style={styles.freqAddBtnText}>+ ADD</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Card 2 */}
+            <View style={styles.freqCard}>
+              <View style={[styles.freqTag, { backgroundColor: '#0284C7' }]}>
+                <Text style={styles.freqTagText}>POPULAR</Text>
+              </View>
+              <View style={styles.freqImageBox}>
+                <Text style={{ fontSize: 30 }}>🐟</Text>
+              </View>
+              <Text style={styles.freqTitle}>Fresh Catla Steaks</Text>
+              <Text style={styles.freqSubtitle}>500g • Large</Text>
+              <View style={styles.freqBottomRow}>
+                <Text style={styles.freqPrice}>₹175</Text>
+                <TouchableOpacity style={styles.freqAddBtn}>
+                  <Text style={styles.freqAddBtnText}>+ ADD</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Card 3 */}
+            <View style={styles.freqCard}>
+              <View style={[styles.freqTag, { backgroundColor: '#7C3AED' }]}>
+                <Text style={styles.freqTagText}>PREMIUM</Text>
+              </View>
+              <View style={styles.freqImageBox}>
+                <Text style={{ fontSize: 30 }}>🥩</Text>
+              </View>
+              <Text style={styles.freqTitle}>Rawas Boneless</Text>
+              <Text style={styles.freqSubtitle}>300g • Cubes</Text>
+              <View style={styles.freqBottomRow}>
+                <Text style={styles.freqPrice}>₹380</Text>
+                <TouchableOpacity style={styles.freqAddBtn}>
+                  <Text style={styles.freqAddBtnText}>+ ADD</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
       </ScrollView>
 
       {/* Bottom Sticky Action Bar */}
       <View style={styles.bottomBar}>
+        <View style={styles.bottomBarLeft}>
+          <View style={styles.bottomPriceRow}>
+            <Text style={styles.bottomPriceValue}>₹{subtotal}</Text>
+            {hasDiscount && (
+              <Text style={styles.bottomCrossedPrice}>₹{Math.round(subtotal * 1.25)}</Text>
+            )}
+            <View style={styles.bottomDiscountBadge}>
+              <Text style={styles.bottomDiscountText}>20% OFF</Text>
+            </View>
+          </View>
+          <Text style={styles.bottomSubtext}>• Standard Cut • {selectedPackWeight}g</Text>
+        </View>
+
+        {/* Stepper */}
+        <View style={styles.stepperBox}>
+          <TouchableOpacity
+            style={styles.stepperBtn}
+            onPress={() => handleAdjustQty(-0.5)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.stepperBtnText}>−</Text>
+          </TouchableOpacity>
+          <Text style={styles.stepperValText}>{quantity.toFixed(1)}</Text>
+          <TouchableOpacity
+            style={styles.stepperBtn}
+            onPress={() => handleAdjustQty(0.5)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.stepperBtnText}>+</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Add to Cart Button */}
         {isBookable && isAvailable ? (
           <TouchableOpacity
-            style={[styles.ctaButton, addingToCart && styles.ctaButtonDisabled]}
+            style={[styles.addToCartBtn, addingToCart && styles.addToCartBtnDisabled]}
             onPress={handleAddToCart}
             disabled={addingToCart}
-            activeOpacity={0.8}
+            activeOpacity={0.88}
           >
             {addingToCart ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.ctaButtonText}>Add to Cart • ₹{subtotal}</Text>
+              <>
+                <Text style={{ fontSize: 16, marginRight: 6 }}>🛍</Text>
+                <Text style={styles.addToCartBtnText}>Add to Cart</Text>
+              </>
             )}
           </TouchableOpacity>
-        ) : !isAvailable ? (
-          <View style={[styles.ctaButton, styles.ctaButtonDisabled]}>
-            <Text style={styles.ctaButtonTextDisabled}>Currently Out of Stock</Text>
-          </View>
         ) : (
-          <View style={[styles.ctaButton, styles.ctaButtonDisabled]}>
-            <Text style={styles.ctaButtonTextDisabled}>In-Store Purchase Only</Text>
+          <View style={[styles.addToCartBtn, styles.addToCartBtnDisabled]}>
+            <Text style={styles.addToCartBtnText}>
+              {!isAvailable ? 'Out of Stock' : 'In-Store Only'}
+            </Text>
           </View>
         )}
       </View>
@@ -361,7 +500,7 @@ export default function FishDetailsScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bgMain,
+    backgroundColor: '#F8FAFE',
   },
   center: {
     alignItems: 'center',
@@ -370,7 +509,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: 13,
   },
   appBar: {
@@ -379,40 +518,74 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#E2E8F0',
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonText: {
-    fontSize: 20,
-    color: colors.textPrimary,
+    fontSize: 18,
+    color: '#0A1C33',
     fontWeight: '700',
   },
-  appBarTitle: {
+  appBarCenter: {
     flex: 1,
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  brandLogoImg: {
+    width: 24,
+    height: 24,
+    borderRadius: 5,
+    backgroundColor: '#FFFFFF',
+    marginRight: 6,
+  },
+  brandLogoText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  brandDivider: {
+    color: '#94A3B8',
+    marginHorizontal: 6,
+  },
+  appBarTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+    flex: 1,
+  },
+  appBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconCircleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 110,
   },
   imageContainer: {
-    height: 220,
+    height: 250,
     width: '100%',
-    backgroundColor: colors.bgSurface,
+    backgroundColor: '#FFFFFF',
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroImage: {
     width: '100%',
@@ -423,43 +596,97 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(2, 132, 199, 0.1)',
+    backgroundColor: '#EDF5FD',
   },
-  discountBadge: {
+  minsBadge: {
     position: 'absolute',
     top: 14,
     left: 14,
-    backgroundColor: colors.freshRed,
+    backgroundColor: '#0A1C33',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  discountBadgeText: {
+  minsBadgeText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.5,
+  },
+  imageActionButtons: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  imageActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  imageBottomPills: {
+    position: 'absolute',
+    bottom: 12,
+    left: 14,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  trustPill: {
+    backgroundColor: 'rgba(10, 28, 51, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  trustPillText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  carouselDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 4,
+    marginVertical: 10,
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#CBD5E1',
+  },
+  dotActive: {
+    backgroundColor: '#0A1C33',
+    width: 14,
   },
   successBanner: {
-    margin: 16,
+    margin: 14,
     marginBottom: 0,
-    backgroundColor: 'rgba(22, 163, 74, 0.15)',
+    backgroundColor: '#DCFCE7',
     borderWidth: 1,
-    borderColor: 'rgba(22, 163, 74, 0.35)',
+    borderColor: '#86EFAC',
     borderRadius: 12,
-    padding: 14,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   successBannerText: {
-    color: colors.freshGreen,
+    color: '#15803D',
     fontSize: 12,
     fontWeight: '700',
     flex: 1,
   },
   viewCartAction: {
-    backgroundColor: colors.freshGreen,
+    backgroundColor: '#16A34A',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -470,306 +697,386 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   sectionCard: {
-    backgroundColor: colors.bgCard,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
     borderRadius: 16,
     padding: 16,
-    marginHorizontal: 16,
-    marginTop: 14,
+    marginHorizontal: 14,
+    marginTop: 12,
   },
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  categoryBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.accent,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  titleText: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    marginBottom: 14,
-  },
-  pricingContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  priceLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginBottom: 2,
-  },
-  priceValue: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  priceUnit: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  crossedPrice: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  savingsPill: {
-    backgroundColor: 'rgba(22, 163, 74, 0.15)',
-    paddingHorizontal: 10,
+  topSellerBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  savingsText: {
-    color: colors.freshGreen,
-    fontSize: 11,
-    fontWeight: '700',
+  topSellerText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0284C7',
+    letterSpacing: 0.5,
   },
-  statusGrid: {
+  ratingBadge: {
     flexDirection: 'row',
-    gap: 12,
-    marginHorizontal: 16,
-    marginTop: 14,
+    alignItems: 'center',
+    gap: 4,
   },
-  statusBox: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
+  ratingStar: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#D97706',
   },
-  boxGreen: {
-    backgroundColor: 'rgba(22, 163, 74, 0.08)',
-    borderColor: 'rgba(22, 163, 74, 0.25)',
+  ratingCount: {
+    fontSize: 11,
+    color: '#64748B',
   },
-  boxRed: {
-    backgroundColor: 'rgba(220, 38, 38, 0.08)',
-    borderColor: 'rgba(220, 38, 38, 0.25)',
-  },
-  boxBlue: {
-    backgroundColor: 'rgba(2, 132, 199, 0.08)',
-    borderColor: 'rgba(2, 132, 199, 0.25)',
-  },
-  boxAmber: {
-    backgroundColor: 'rgba(217, 119, 6, 0.08)',
-    borderColor: 'rgba(217, 119, 6, 0.25)',
-  },
-  statusBoxIcon: {
+  titleText: {
     fontSize: 18,
+    fontWeight: '900',
+    color: '#0A1C33',
+    lineHeight: 22,
     marginBottom: 6,
   },
-  statusBoxTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-    marginBottom: 2,
-  },
-  statusBoxSub: {
+  specsText: {
     fontSize: 12,
-    fontWeight: '800',
+    color: '#64748B',
+    marginBottom: 6,
   },
-  textGreen: {
-    color: colors.freshGreen,
-  },
-  textRed: {
-    color: colors.freshRed,
-  },
-  textBlue: {
-    color: colors.accent,
-  },
-  textAmber: {
-    color: colors.warning,
-  },
-  noticeCard: {
-    backgroundColor: 'rgba(217, 119, 6, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(217, 119, 6, 0.3)',
-    borderRadius: 14,
-    padding: 14,
-    marginHorizontal: 16,
-    marginTop: 14,
-  },
-  noticeTitle: {
+  featureBullet: {
     fontSize: 12,
-    fontWeight: '800',
-    color: colors.warning,
-    marginBottom: 4,
+    fontWeight: '600',
+    color: '#10B981',
+    marginBottom: 12,
   },
-  noticeText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    lineHeight: 16,
-  },
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  bodyText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  guaranteeRow: {
+  priceRowLarge: {
     flexDirection: 'row',
+    alignItems: 'baseline',
     gap: 8,
-    paddingTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#F1F5F9',
   },
-  guaranteeItem: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 8,
-    backgroundColor: colors.bgSurface,
-    borderRadius: 8,
-  },
-  guaranteeIcon: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  guaranteeTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  guaranteeSub: {
-    fontSize: 9,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  quantityNote: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginBottom: 14,
-  },
-  qtyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    marginBottom: 16,
-  },
-  qtyBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyBtnText: {
+  priceValueLarge: {
     fontSize: 24,
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  qtyDisplay: {
-    alignItems: 'center',
-    minWidth: 80,
-  },
-  qtyDisplayText: {
-    fontSize: 28,
     fontWeight: '900',
-    color: colors.textPrimary,
+    color: '#0A1C33',
   },
-  qtyDisplayUnit: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '600',
+  crossedPriceLarge: {
+    fontSize: 14,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
   },
-  quickChipsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 16,
+  discountPillGreen: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  quickChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  quickChipActive: {
-    backgroundColor: 'rgba(2, 132, 199, 0.2)',
-    borderColor: colors.accent,
-  },
-  quickChipText: {
+  discountPillGreenText: {
+    color: '#15803D',
     fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '800',
   },
-  quickChipTextActive: {
-    color: colors.accent,
-    fontWeight: '700',
+  quotaNavyCard: {
+    backgroundColor: '#0A1C33',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 14,
+    marginTop: 12,
   },
-  subtotalBox: {
+  quotaNavyTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.bgSurface,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: 8,
   },
-  subtotalLabel: {
+  quotaNavyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  goldMedalBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quotaNavyBrand: {
+    color: '#FFFFFF',
     fontSize: 12,
-    color: colors.textSecondary,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  activePlanBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activePlanText: {
+    color: '#0A1C33',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  quotaNavyRemaining: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  quotaClaimText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  quotaNavyBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  applyQuotaBtn: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  applyQuotaBtnText: {
+    color: '#0A1C33',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  weeklyLimitText: {
+    color: '#94A3B8',
+    fontSize: 11,
+  },
+  packHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  netWeightHint: {
+    fontSize: 11,
+    color: '#64748B',
     fontWeight: '600',
   },
-  subtotalValue: {
-    fontSize: 16,
+  packOptionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  packBox: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  packBoxSelected: {
+    borderColor: '#0A1C33',
+    backgroundColor: '#FFFFFF',
+  },
+  popularBadge: {
+    position: 'absolute',
+    top: -8,
+    backgroundColor: '#0A1C33',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  popularBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
     fontWeight: '900',
-    color: colors.accent,
+  },
+  packWeightNum: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0A1C33',
+    marginBottom: 2,
+  },
+  packSteaksHint: {
+    fontSize: 10,
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  packPriceText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  freqCard: {
+    width: 130,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  freqTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#10B981',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 6,
+  },
+  freqTagText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  freqImageBox: {
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  freqTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0A1C33',
+    lineHeight: 15,
+  },
+  freqSubtitle: {
+    fontSize: 10,
+    color: '#64748B',
+    marginVertical: 2,
+  },
+  freqBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  freqPrice: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  freqAddBtn: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  freqAddBtnText: {
+    color: '#0284C7',
+    fontSize: 10,
+    fontWeight: '800',
   },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.bgCard,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    padding: 16,
-  },
-  ctaButton: {
-    backgroundColor: colors.freshGreen,
-    paddingVertical: 14,
-    borderRadius: 12,
+    borderTopColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
-  ctaButtonDisabled: {
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.border,
+  bottomBarLeft: {
+    flex: 1,
   },
-  ctaButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+  bottomPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  bottomPriceValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  bottomCrossedPrice: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  bottomDiscountBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  bottomDiscountText: {
+    color: '#15803D',
+    fontSize: 10,
     fontWeight: '800',
   },
-  ctaButtonTextDisabled: {
-    color: colors.textMuted,
+  bottomSubtext: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  stepperBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    marginRight: 10,
+    gap: 8,
+  },
+  stepperBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  stepperBtnText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0284C7',
+  },
+  stepperValText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#0A1C33',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  addToCartBtn: {
+    backgroundColor: '#0A1C33',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  addToCartBtnDisabled: {
+    backgroundColor: '#94A3B8',
+  },
+  addToCartBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

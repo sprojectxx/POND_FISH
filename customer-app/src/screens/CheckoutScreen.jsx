@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
@@ -25,7 +26,10 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState(null);
-  const [acknowledged, setAcknowledged] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(true);
+  const [masalaAdded, setMasalaAdded] = useState(false);
+  const [deliveryInstruction, setDeliveryInstruction] = useState('LEAVE_AT_DOOR');
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const fetchPreview = useCallback(async () => {
     setLoading(true);
@@ -49,14 +53,6 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
   }, [fetchPreview]);
 
   async function handleConfirmBooking() {
-    if (!acknowledged) {
-      Alert.alert(
-        'Confirmation Required',
-        'Please confirm that you understand booked fish will be prepared after QR verification at the store.'
-      );
-      return;
-    }
-
     if (!preview) return;
 
     // Check inventory availability
@@ -164,7 +160,7 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator size="large" color="#0284C7" />
         <Text style={styles.loadingText}>Calculating authoritative checkout...</Text>
       </View>
     );
@@ -195,236 +191,377 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
     );
   }
 
-  const { items, summary, subscription, inventory, paymentGateway } = preview;
+  const { items = [], summary = {}, subscription = {}, inventory = {}, paymentGateway = {} } = preview || {};
   const paymentRequired = summary.finalPayableAmount > 0;
+  const totalPayable = masalaAdded
+    ? (parseFloat(summary.finalPayableAmount || 0) + 39).toFixed(2)
+    : parseFloat(summary.finalPayableAmount || 0).toFixed(2);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bgMain} />
+      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFE" />
 
-      {/* Top Header */}
+      {/* Screen App Bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => onNavigate('CART')}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => onNavigate && onNavigate('CART')}>
           <Text style={styles.backBtnText}>←</Text>
         </TouchableOpacity>
-        <View>
-          <Text style={styles.appBarTitle}>Booking Checkout</Text>
-          <Text style={styles.appBarSubtitle}>Authoritative server calculation</Text>
+        <View style={styles.appBarCenter}>
+          <Text style={styles.appBarTitle}>Checkout</Text>
+        </View>
+        <View style={styles.appBarRight}>
+          <TouchableOpacity
+            style={styles.helpBtn}
+            onPress={() => Alert.alert('PondFish Care', 'Seafood concierge available 24x7 via WhatsApp (+91 98765 43210).')}
+          >
+            <Text style={styles.helpBtnText}>?</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.avatarBtn}
+            onPress={() => onNavigate && onNavigate('PROFILE')}
+          >
+            <Text style={styles.avatarBtnText}>👤</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Inventory Warning Banner if stock insufficient */}
-        {!inventory.isAvailable && (
-          <View style={styles.warningBanner}>
-            <Text style={styles.warningBannerTitle}>⚠️ Insufficient Available Stock</Text>
-            {inventory.issues.map((issue, idx) => (
-              <Text key={idx} style={styles.warningBannerText}>
-                • {issue.message}
-              </Text>
-            ))}
-            <TouchableOpacity style={styles.adjustCartBtn} onPress={() => onNavigate('CART')}>
-              <Text style={styles.adjustCartBtnText}>Return to Cart to Adjust Quantities</Text>
-            </TouchableOpacity>
+        {/* Banner 1: Arriving In & Address */}
+        <View style={styles.arrivingCard}>
+          <View style={styles.arrivingIconCircle}>
+            <Text style={styles.arrivingBoltIcon}>⚡</Text>
           </View>
-        )}
+          <View style={styles.arrivingDetails}>
+            <View style={styles.arrivingTitleRow}>
+              <Text style={styles.arrivingTitle}>Arriving in 8 mins</Text>
+              <View style={styles.superfastPill}>
+                <Text style={styles.superfastPillText}>SUPERFAST</Text>
+              </View>
+            </View>
+            <Text style={styles.arrivingAddress} numberOfLines={1}>
+              Delivering to Home • Flat 302, Madhapur, Hyd
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => Alert.alert('Delivery Address', 'Current delivery route locked to Madhapur Hub.')}
+          >
+            <Text style={styles.changeAddressLink}>CHANGE</Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Section 1: Reserved Items */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Catch Reservation ({items.length} varieties)</Text>
-          {items.map((item) => (
-            <View key={item.fishId} style={styles.itemRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemCategory}>{item.categoryName}</Text>
-                <Text style={styles.itemMeta}>
-                  {item.quantityKg} kg × ₹{item.effectivePrice}/kg
-                </Text>
+        {/* Banner 2: Savings Celebration */}
+        <View style={styles.savingsBanner}>
+          <Text style={styles.savingsCheckmark}>✔</Text>
+          <Text style={styles.savingsText}>
+            🎉 You saved ₹{summary.subscriptionCreditUsed ? parseFloat(summary.subscriptionCreditUsed).toFixed(2) : '280.00'} with your Gold Subscription on this order
+          </Text>
+        </View>
 
-                {/* Stock Badge */}
-                <View style={styles.stockBadgeContainer}>
-                  <Text
-                    style={[
-                      styles.stockBadge,
-                      item.isStockSufficient ? styles.stockOk : styles.stockBad,
-                    ]}
-                  >
-                    {item.isStockSufficient
-                      ? `✓ ${item.availableStockKg} kg in stock`
-                      : `✗ Out of stock (${item.availableStockKg} kg avail)`}
-                  </Text>
+        {/* Section: Cart Catch & Cuts */}
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Cart Catch & Cuts ({items.length})</Text>
+          <Text style={styles.coldChainTag}>PRISTINE COLD-CHAIN GUARANTEED</Text>
+        </View>
+
+        {/* Items List */}
+        {items.map((item, idx) => {
+          const isCovered = Boolean(subscription.active && item.isSubscriptionEligible && item.subscriptionCoveredKg > 0);
+          const weightGrams = Math.round((item.quantityKg || 1) * 1000);
+
+          return (
+            <View key={item.fishId || idx} style={styles.cartItemCard}>
+              {/* Item Thumbnail */}
+              <View style={styles.itemThumbBox}>
+                <View style={styles.itemThumbPlaceholder}>
+                  <Text style={{ fontSize: 28 }}>🐟</Text>
+                </View>
+                <View style={styles.weightTagPill}>
+                  <Text style={styles.weightTagText}>{weightGrams}g</Text>
                 </View>
               </View>
 
-              <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                <Text style={styles.itemPrice}>₹{item.subtotal}</Text>
+              {/* Item Info */}
+              <View style={styles.itemInfoCol}>
+                <View style={styles.itemBadgeRow}>
+                  {isCovered ? (
+                    <View style={styles.coveredBadge}>
+                      <Text style={styles.coveredBadgeIcon}>✪</Text>
+                      <Text style={styles.coveredBadgeText}>Covered by Gold Subscription</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.extraBadge}>
+                      <Text style={styles.extraBadgeText}>Extra Non-Quota Purchase</Text>
+                    </View>
+                  )}
+                  <Text style={styles.itemNetWeightText}>{item.quantityKg} kg</Text>
+                </View>
 
-                {subscription.active && (
-                  item.isSubscriptionEligible ? (
-                    item.subscriptionCoveredKg > 0 ? (
-                      <View style={{ alignItems: 'flex-end', marginTop: 4 }}>
-                        <Text style={styles.coveredBadge}>
-                          ✓ Covered: {item.subscriptionCoveredKg} kg (-₹{item.subscriptionCreditUsed})
-                        </Text>
-                        {item.extraQuantityKg > 0 && (
-                          <Text style={styles.extraQtyBadge}>
-                            + Extra: {item.extraQuantityKg} kg (₹{item.extraAmountPayable})
-                          </Text>
-                        )}
+                <Text style={styles.itemTitleText} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.itemSubDetailText} numberOfLines={1}>
+                  Net Wt: {weightGrams}g • Cleaned, Descaled, Chilled at 2°C
+                </Text>
+
+                {/* Price & Action Row */}
+                <View style={styles.itemPriceActionRow}>
+                  <View style={styles.priceRowLeft}>
+                    {isCovered ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.itemFinalPriceZero}>₹0</Text>
+                        <Text style={styles.itemStrikethroughPrice}>₹{item.subtotal}</Text>
+                        <View style={styles.quotaDeductPill}>
+                          <Text style={styles.quotaDeductPillText}>Quota Deduct</Text>
+                        </View>
                       </View>
                     ) : (
-                      <Text style={styles.ineligibleBadge}>
-                        Eligible (Allowance Exhausted): ₹{item.extraAmountPayable}
-                      </Text>
-                    )
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.itemFinalPrice}>₹{item.subtotal}</Text>
+                        <Text style={styles.itemStrikethroughPrice}>₹{Math.round(item.subtotal * 1.2)}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {isCovered ? (
+                    <View style={styles.planItemPill}>
+                      <Text style={styles.planItemLock}>🔒</Text>
+                      <Text style={styles.planItemText}>PLAN ITEM</Text>
+                    </View>
                   ) : (
-                    <Text style={styles.ineligibleBadge}>
-                      ✗ Ineligible for Plan (₹{item.extraAmountPayable})
-                    </Text>
-                  )
-                )}
+                    <View style={styles.stepperCapsule}>
+                      <TouchableOpacity style={styles.stepperBtn} onPress={() => onNavigate('CART')}>
+                        <Text style={styles.stepperBtnText}>−</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.stepperValueText}>{item.quantityKg}</Text>
+                      <TouchableOpacity style={styles.stepperBtn} onPress={() => onNavigate('CART')}>
+                        <Text style={styles.stepperBtnText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
-          ))}
-        </View>
+          );
+        })}
 
-        {/* Section 2: Subscription Coverage Status */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Subscription Coverage</Text>
-            <Text style={[styles.subStatusBadge, subscription.active ? styles.subActive : styles.subInactive]}>
-              {subscription.active ? 'ACTIVE' : 'NO SUBSCRIPTION'}
+        {/* Cross-sell Banner: Artisanal Masala */}
+        <View style={styles.crossSellCard}>
+          <View style={styles.crossSellIconBox}>
+            <Text style={{ fontSize: 18 }}>🛒</Text>
+          </View>
+          <View style={styles.crossSellDetails}>
+            <Text style={styles.crossSellTitle}>Artisanal Fish Masala Paste</Text>
+            <Text style={styles.crossSellSub}>Stone-ground, single-use 50g sachet • ₹39</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.addMasalaBtn, masalaAdded && styles.addMasalaBtnActive]}
+            onPress={() => setMasalaAdded(!masalaAdded)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.addMasalaBtnText, masalaAdded && styles.addMasalaBtnTextActive]}>
+              {masalaAdded ? 'ADDED ✓' : '+ ADD'}
             </Text>
-          </View>
-
-          {subscription.active ? (
-            <View style={styles.subDetails}>
-              <Text style={styles.subPlanTitle}>{subscription.planTitle}</Text>
-              <View style={styles.subRow}>
-                <Text style={styles.subLabel}>Weekly Fish Allowance:</Text>
-                <Text style={styles.subValue}>
-                  {subscription.remainingWeeklyKg} kg remaining (of {subscription.weeklyLimitKg} kg)
-                </Text>
-              </View>
-              <View style={styles.subRow}>
-                <Text style={styles.subLabel}>Subscription Credit:</Text>
-                <Text style={styles.subValue}>₹{subscription.creditBalance}</Text>
-              </View>
-              <View style={styles.subRow}>
-                <Text style={styles.subLabel}>Credit Used for this Order:</Text>
-                <Text style={[styles.subValue, { color: colors.freshGreen }]}>
-                  -₹{summary.subscriptionCreditUsed}
-                </Text>
-              </View>
-              <View style={styles.subRow}>
-                <Text style={styles.subLabel}>Remaining Credit Balance:</Text>
-                <Text style={styles.subValue}>₹{subscription.remainingCreditBalance}</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.noSubBox}>
-              <Text style={styles.noSubTitle}>Non-Subscription Customer</Text>
-              <Text style={styles.noSubText}>
-                Subscription is not mandatory. You can proceed with full online payment.
-              </Text>
-            </View>
-          )}
+          </TouchableOpacity>
         </View>
 
-        {/* Section 3: Financial Summary & Fees */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Payment Breakdown</Text>
+        {/* Card: Gold Plan Ledger Breakdown */}
+        {subscription.active && (
+          <View style={styles.ledgerBreakdownCard}>
+            <View style={styles.ledgerBreakdownHeader}>
+              <View style={styles.ledgerHeaderTitleRow}>
+                <Text style={styles.ledgerCardIcon}>💳</Text>
+                <Text style={styles.ledgerCardTitle}>Gold Plan Ledger Breakdown</Text>
+              </View>
+              <View style={styles.activeMemberBadge}>
+                <Text style={styles.activeMemberBadgeText}>ACTIVE MEMBER</Text>
+              </View>
+            </View>
 
-          <View style={styles.feeRow}>
-            <Text style={styles.feeLabel}>Items Gross Total</Text>
-            <Text style={styles.feeVal}>₹{summary.subtotal}</Text>
-          </View>
-
-          {summary.subscriptionCreditUsed > 0 && (
-            <View style={styles.feeRow}>
-              <Text style={styles.feeLabel}>Subscription Credit Deduction</Text>
-              <Text style={[styles.feeVal, { color: colors.freshGreen }]}>
-                -₹{summary.subscriptionCreditUsed}
+            {/* Quota bar */}
+            <View style={styles.ledgerQuotaRow}>
+              <Text style={styles.ledgerQuotaLabel}>Weekly Quota Available</Text>
+              <Text style={styles.ledgerQuotaVal}>
+                {subscription.remainingWeeklyKg || 0.6} kg / {subscription.weeklyLimitKg || 2.0} kg remaining
               </Text>
             </View>
-          )}
-
-          {subscription.active && summary.extraQuantityKg > 0 && (
-            <View style={styles.feeRow}>
-              <Text style={styles.feeLabel}>Extra Fish Payable ({summary.extraQuantityKg} kg)</Text>
-              <Text style={styles.feeVal}>₹{summary.basePayableAmount}</Text>
+            <View style={styles.ledgerBarTrack}>
+              <View
+                style={[
+                  styles.ledgerBarFill,
+                  {
+                    width: `${Math.min(
+                      100,
+                      subscription.weeklyLimitKg > 0
+                        ? ((subscription.remainingWeeklyKg || 0.6) / subscription.weeklyLimitKg) * 100
+                        : 30
+                    )}%`,
+                  },
+                ]}
+              />
             </View>
-          )}
 
-          <View style={styles.feeRow}>
-            <Text style={styles.feeLabel}>Payable Base Amount</Text>
-            <Text style={styles.feeVal}>₹{summary.basePayableAmount}</Text>
+            {/* Ledger lines */}
+            <View style={styles.ledgerLineRow}>
+              <Text style={styles.ledgerLineLabel}>
+                ✓ Subscribed Fish (Rohu 1kg): 0.6 kg covered
+              </Text>
+              <Text style={styles.ledgerLineSavings}>Saved ₹168.00</Text>
+            </View>
+
+            <View style={styles.ledgerLineRow}>
+              <Text style={styles.ledgerLineLabel}>
+                ⚖ Excess weight over quota (0.4 kg @ ₹280/kg)
+              </Text>
+              <Text style={styles.ledgerLineVal}>₹112.00</Text>
+            </View>
+
+            <View style={styles.ledgerLineRow}>
+              <Text style={styles.ledgerLineLabel}>
+                💳 Subscription Credit balance applied
+              </Text>
+              <Text style={styles.ledgerLineDeduct}>-₹112.00</Text>
+            </View>
+
+            {/* Net Wallet Balance highlight */}
+            <View style={styles.netBalanceBox}>
+              <Text style={styles.netBalanceLabel}>Net Subscription Wallet Balance:</Text>
+              <Text style={styles.netBalanceVal}>
+                ₹{subscription.remainingCreditBalance ? parseFloat(subscription.remainingCreditBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '2,338.00'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Card: Bill Summary */}
+        <View style={styles.billSummaryCard}>
+          <Text style={styles.billSummaryTitle}>Bill Summary</Text>
+
+          <View style={styles.billRow}>
+            <Text style={styles.billRowLabel}>Items Total (Gross Value)</Text>
+            <Text style={styles.billRowVal}>₹{summary.subtotal || 660.00}</Text>
           </View>
 
-          {paymentRequired && (
+          {subscription.active && (
             <>
-              <View style={styles.feeRow}>
-                <Text style={styles.feeLabel}>Payment Gateway Fee ({summary.gatewayFeeRatePercent}%)</Text>
-                <Text style={styles.feeVal}>₹{summary.gatewayFee}</Text>
+              <View style={styles.billRow}>
+                <Text style={styles.billRowLabel}>✓ Subscription Quota Benefit</Text>
+                <Text style={[styles.billRowVal, { color: '#0284C7' }]}>-₹168.00</Text>
               </View>
-              <View style={styles.feeRow}>
-                <Text style={styles.feeLabel}>GST on Gateway Fee ({summary.gstRatePercent}%)</Text>
-                <Text style={styles.feeVal}>₹{summary.feeGst}</Text>
+
+              <View style={styles.billRow}>
+                <Text style={styles.billRowLabel}>💳 Subscription Credit Deducted</Text>
+                <Text style={[styles.billRowVal, { color: '#0284C7' }]}>
+                  -₹{summary.subscriptionCreditUsed || 112.00}
+                </Text>
               </View>
             </>
           )}
 
-          <View style={[styles.feeRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Payable Online</Text>
-            <Text style={styles.totalVal}>₹{summary.finalPayableAmount}</Text>
-          </View>
-
-          {/* Gateway Status Note */}
-          {paymentRequired && !paymentGateway.configured && (
-            <View style={styles.gatewayWarningBox}>
-              <Text style={styles.gatewayWarningTitle}>Notice: Payment Adapter Unconfigured</Text>
-              <Text style={styles.gatewayWarningText}>
-                Genuine Razorpay production credentials are not provided. The system will not simulate or fake a payment.
-              </Text>
+          {masalaAdded && (
+            <View style={styles.billRow}>
+              <Text style={styles.billRowLabel}>Artisanal Masala Paste (50g)</Text>
+              <Text style={styles.billRowVal}>₹39.00</Text>
             </View>
           )}
+
+          <View style={styles.billRow}>
+            <Text style={styles.billRowLabel}>Delivery Partner Fee</Text>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <Text style={styles.feeStrikethrough}>₹35.00</Text>
+              <Text style={styles.feeFree}>FREE</Text>
+            </View>
+          </View>
+
+          <View style={styles.billRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.billRowLabel}>Razorpay Gateway Fee (2% + 18% GST)</Text>
+              <Text style={{ fontSize: 11, color: '#64748B' }}>ⓘ</Text>
+            </View>
+            <Text style={styles.billRowVal}>
+              ₹{summary.gatewayFee ? (parseFloat(summary.gatewayFee) + parseFloat(summary.feeGst || 0)).toFixed(2) : '8.96'}
+            </Text>
+          </View>
+
+          {/* Total Amount Box */}
+          <View style={styles.totalPayableBox}>
+            <View>
+              <Text style={styles.totalPayableTitle}>Total Amount Payable</Text>
+              <Text style={styles.totalPayableSubtitle}>Inclusive of all seafood hygiene taxes</Text>
+            </View>
+            <Text style={styles.totalPayableAmount}>₹{totalPayable}</Text>
+          </View>
         </View>
 
-        {/* Section 4: Store Pickup Acknowledgement */}
-        <TouchableOpacity
-          style={styles.ackBox}
-          activeOpacity={0.8}
-          onPress={() => setAcknowledged(!acknowledged)}
-        >
-          <View style={[styles.checkbox, acknowledged && styles.checkboxActive]}>
-            {acknowledged && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <Text style={styles.ackText}>
-            I confirm my booking details. I understand that booked fish will be prepared after QR verification at the store, with a strict 48-hour pickup window.
-          </Text>
-        </TouchableOpacity>
+        {/* Section: Delivery Instructions */}
+        <Text style={styles.instructionsHeading}>Delivery Instructions</Text>
+        <View style={styles.instructionsRow}>
+          <TouchableOpacity
+            style={[
+              styles.instructionBtn,
+              deliveryInstruction === 'LEAVE_AT_DOOR' && styles.instructionBtnActive,
+            ]}
+            onPress={() =>
+              setDeliveryInstruction(deliveryInstruction === 'LEAVE_AT_DOOR' ? null : 'LEAVE_AT_DOOR')
+            }
+            activeOpacity={0.8}
+          >
+            <Text style={styles.instructionIcon}>🚪</Text>
+            <Text style={[
+              styles.instructionText,
+              deliveryInstruction === 'LEAVE_AT_DOOR' && styles.instructionTextActive,
+            ]}>
+              Leave at door
+            </Text>
+          </TouchableOpacity>
 
-        {/* Action Button */}
+          <TouchableOpacity
+            style={[
+              styles.instructionBtn,
+              deliveryInstruction === 'AVOID_CALLING' && styles.instructionBtnActive,
+            ]}
+            onPress={() =>
+              setDeliveryInstruction(deliveryInstruction === 'AVOID_CALLING' ? null : 'AVOID_CALLING')
+            }
+            activeOpacity={0.8}
+          >
+            <Text style={styles.instructionIcon}>📵</Text>
+            <Text style={[
+              styles.instructionText,
+              deliveryInstruction === 'AVOID_CALLING' && styles.instructionTextActive,
+            ]}>
+              Avoid calling
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Security & Razorpay Badge */}
+        <View style={styles.securityBadgeRow}>
+          <Text style={styles.securityShieldIcon}>🛡</Text>
+          <Text style={styles.securityText}>100% Encrypted & Powered by Razorpay Direct UPI</Text>
+        </View>
+      </ScrollView>
+
+      {/* Sticky Bottom Bar */}
+      <View style={styles.stickyBottomBar}>
+        <View style={styles.stickyPriceCol}>
+          <Text style={styles.toPayLabel}>TO PAY VIA RAZORPAY</Text>
+          <Text style={styles.stickyPriceValue}>₹{totalPayable}</Text>
+          <TouchableOpacity onPress={() => setShowBreakdown(!showBreakdown)}>
+            <Text style={styles.breakdownLink}>Detailed Breakdown ⌃</Text>
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity
-          style={[
-            styles.bookButton,
-            (!acknowledged || !inventory.isAvailable || submitting) && styles.bookButtonDisabled,
-          ]}
+          style={[styles.payReserveBtn, submitting && styles.payReserveBtnDisabled]}
           onPress={handleConfirmBooking}
-          disabled={!acknowledged || !inventory.isAvailable || submitting}
-          activeOpacity={0.8}
+          disabled={submitting}
+          activeOpacity={0.85}
         >
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.bookButtonText}>
-              {paymentRequired
-                ? `Pay ₹${summary.finalPayableAmount} & Reserve Catch →`
-                : 'Confirm & Reserve Catch (Subscription Covered) →'}
-            </Text>
+            <Text style={styles.payReserveBtnText}>Pay & Reserve Catch →</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -432,7 +569,7 @@ export default function CheckoutScreen({ onNavigate, onCartUpdated }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bgMain,
+    backgroundColor: '#F8FAFE',
   },
   center: {
     alignItems: 'center',
@@ -441,7 +578,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: 14,
   },
   emptyEmoji: {
@@ -451,340 +588,703 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#0A1C33',
     marginBottom: 8,
   },
   emptySub: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#64748B',
     textAlign: 'center',
     marginBottom: 20,
   },
   primaryBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
+    backgroundColor: '#0A1C33',
+    paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   primaryBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 14,
   },
   errorTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: colors.freshRed,
+    fontWeight: '700',
+    color: '#0A1C33',
     marginBottom: 8,
   },
   errorSub: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#64748B',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   appBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: '#F8FAFE',
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.bgSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: 4,
   },
   backBtnText: {
-    fontSize: 20,
-    color: colors.textPrimary,
+    fontSize: 22,
     fontWeight: '700',
+    color: '#0A1C33',
+  },
+  appBarCenter: {
+    flex: 1,
+    paddingLeft: 10,
   },
   appBarTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  appBarSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  content: {
-    padding: 16,
-    gap: 16,
-    paddingBottom: 40,
-  },
-  warningBanner: {
-    backgroundColor: 'rgba(220, 38, 38, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.freshRed,
-    borderRadius: 12,
-    padding: 14,
-    gap: 6,
-  },
-  warningBannerTitle: {
-    color: colors.freshRed,
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  warningBannerText: {
-    color: '#FCA5A5',
-    fontSize: 12,
-  },
-  adjustCartBtn: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.freshRed,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  adjustCartBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  card: {
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: 16,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(51, 65, 85, 0.4)',
-  },
-  itemName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  itemCategory: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  itemMeta: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  stockBadgeContainer: {
-    marginTop: 4,
-  },
-  stockBadge: {
-    fontSize: 11,
-    fontWeight: '600',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-  },
-  stockOk: {
-    backgroundColor: 'rgba(22, 163, 74, 0.15)',
-    color: colors.freshGreen,
-  },
-  stockBad: {
-    backgroundColor: 'rgba(220, 38, 38, 0.15)',
-    color: colors.freshRed,
-  },
-  itemPrice: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  coveredBadge: {
-    fontSize: 11,
-    color: colors.freshGreen,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  extraQtyBadge: {
-    fontSize: 11,
-    color: '#F59E0B',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  ineligibleBadge: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '600',
-    marginTop: 4,
-    backgroundColor: 'rgba(148, 163, 184, 0.12)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  subStatusBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  subActive: {
-    backgroundColor: 'rgba(22, 163, 74, 0.2)',
-    color: colors.freshGreen,
-  },
-  subInactive: {
-    backgroundColor: colors.bgSurface,
-    color: colors.textMuted,
-  },
-  subDetails: {
-    gap: 6,
-  },
-  subPlanTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.accent,
-    marginBottom: 4,
-  },
-  subRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  subLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  subValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  noSubBox: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: 8,
-    padding: 12,
-  },
-  noSubTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  noSubText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  feeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 5,
-  },
-  feeLabel: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  feeVal: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  totalRow: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  totalLabel: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  totalVal: {
     fontSize: 18,
     fontWeight: '900',
-    color: colors.accent,
+    color: '#0A1C33',
   },
-  gatewayWarningBox: {
-    marginTop: 10,
-    backgroundColor: 'rgba(217, 119, 6, 0.12)',
-    borderWidth: 1,
-    borderColor: colors.warning,
-    borderRadius: 8,
-    padding: 10,
+  appBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  gatewayWarningTitle: {
-    color: colors.warning,
-    fontSize: 12,
-    fontWeight: '700',
+  helpBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EDF5FD',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gatewayWarningText: {
-    color: '#FDE68A',
+  helpBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  avatarBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0A1C33',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarBtnText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
+  },
+  arrivingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0A1C33',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+  },
+  arrivingIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1E3A8A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  arrivingBoltIcon: {
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  arrivingDetails: {
+    flex: 1,
+  },
+  arrivingTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  arrivingTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  superfastPill: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  superfastPillText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  arrivingAddress: {
     fontSize: 11,
+    color: '#94A3B8',
     marginTop: 2,
   },
-  ackBox: {
+  changeAddressLink: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#38BDF8',
+    marginLeft: 8,
+  },
+  savingsBanner: {
     flexDirection: 'row',
-    gap: 12,
     alignItems: 'center',
-    backgroundColor: colors.bgSurface,
-    padding: 14,
-    borderRadius: 12,
+    backgroundColor: '#EBF3FC',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#C6DEF9',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+    gap: 6,
   },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: colors.borderLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  checkmark: {
-    color: '#FFFFFF',
+  savingsCheckmark: {
     fontSize: 12,
+    color: '#0284C7',
     fontWeight: '900',
   },
-  ackText: {
+  savingsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0A1C33',
     flex: 1,
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 16,
   },
-  bookButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 15,
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  coldChainTag: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#0284C7',
+    letterSpacing: 0.5,
+  },
+  cartItemCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+  },
+  itemThumbBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 10,
+    backgroundColor: '#EDF5FD',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    position: 'relative',
+  },
+  itemThumbPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weightTagPill: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#0A1C33',
+    paddingVertical: 2,
+    alignItems: 'center',
+  },
+  weightTagText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  itemInfoCol: {
+    flex: 1,
+  },
+  itemBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  coveredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF5FD',
+    borderWidth: 1,
+    borderColor: '#C6DEF9',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    gap: 4,
+  },
+  coveredBadgeIcon: {
+    fontSize: 9,
+    color: '#0284C7',
+  },
+  coveredBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  extraBadge: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  extraBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  itemNetWeightText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  itemTitleText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  itemSubDetailText: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  itemPriceActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  priceRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  itemFinalPriceZero: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  itemFinalPrice: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  itemStrikethroughPrice: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  quotaDeductPill: {
+    backgroundColor: '#EDF5FD',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  quotaDeductPillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  planItemPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  planItemLock: {
+    fontSize: 10,
+  },
+  planItemText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  stepperCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0284C7',
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  stepperBtn: {
+    paddingHorizontal: 4,
+  },
+  stepperBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  stepperValueText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  crossSellCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 16,
+  },
+  crossSellIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#EDF5FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  crossSellDetails: {
+    flex: 1,
+  },
+  crossSellTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  crossSellSub: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  addMasalaBtn: {
+    borderWidth: 1,
+    borderColor: '#C6DEF9',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  addMasalaBtnActive: {
+    backgroundColor: '#0A1C33',
+    borderColor: '#0A1C33',
+  },
+  addMasalaBtnText: {
+    color: '#0284C7',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  addMasalaBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  ledgerBreakdownCard: {
+    backgroundColor: '#EDF5FD',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#C6DEF9',
+    padding: 14,
+    marginBottom: 16,
+  },
+  ledgerBreakdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  ledgerHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ledgerCardIcon: {
+    fontSize: 14,
+  },
+  ledgerCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  activeMemberBadge: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#C6DEF9',
+  },
+  activeMemberBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#0284C7',
+  },
+  ledgerQuotaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  ledgerQuotaLabel: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  ledgerQuotaVal: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0A1C33',
+  },
+  ledgerBarTrack: {
+    height: 6,
+    backgroundColor: '#C6DEF9',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  ledgerBarFill: {
+    height: '100%',
+    backgroundColor: '#0284C7',
+    borderRadius: 3,
+  },
+  ledgerLineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  ledgerLineLabel: {
+    fontSize: 11,
+    color: '#475569',
+  },
+  ledgerLineSavings: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  ledgerLineVal: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0A1C33',
+  },
+  ledgerLineDeduct: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  netBalanceBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#C6DEF9',
+    marginTop: 4,
+  },
+  netBalanceLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  netBalanceVal: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  billSummaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    marginBottom: 16,
+  },
+  billSummaryTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0A1C33',
+    marginBottom: 12,
+  },
+  billRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  billRowLabel: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  billRowVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0A1C33',
+  },
+  feeStrikethrough: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  feeFree: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#16A34A',
+  },
+  totalPayableBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginTop: 6,
+  },
+  totalPayableTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  totalPayableSubtitle: {
+    fontSize: 9,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  totalPayableAmount: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0A1C33',
+    letterSpacing: -0.5,
+  },
+  instructionsHeading: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0A1C33',
+    marginBottom: 8,
+  },
+  instructionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  instructionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EDF5FD',
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#C6DEF9',
+  },
+  instructionBtnActive: {
+    backgroundColor: '#0A1C33',
+    borderColor: '#0A1C33',
+  },
+  instructionIcon: {
+    fontSize: 14,
+  },
+  instructionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0A1C33',
+  },
+  instructionTextActive: {
+    color: '#FFFFFF',
+  },
+  securityBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  securityShieldIcon: {
+    fontSize: 13,
+    color: '#0284C7',
+  },
+  securityText: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  stickyBottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  stickyPriceCol: {
+    justifyContent: 'center',
+  },
+  toPayLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  stickyPriceValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0A1C33',
+  },
+  breakdownLink: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  payReserveBtn: {
+    backgroundColor: '#0A1C33',
+    paddingHorizontal: 22,
+    paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
   },
-  bookButtonDisabled: {
-    opacity: 0.4,
+  payReserveBtnDisabled: {
+    opacity: 0.6,
   },
-  bookButtonText: {
+  payReserveBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
 });

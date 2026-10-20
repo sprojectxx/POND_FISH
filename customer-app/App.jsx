@@ -242,17 +242,20 @@ export default function App() {
     }
   }
 
-  // Hide bottom navigation during initial auth, splash, and mandatory profile completion (Task 1)
+  // Hide bottom navigation during initial auth, splash, mandatory profile completion, and checkout/details flows
   const showBottomNav = AUTHENTICATED_SCREENS.includes(currentScreen) &&
     isProfileComplete &&
     currentScreen !== 'SPLASH' &&
     currentScreen !== 'PHONE_AUTH' &&
     currentScreen !== 'OTP_VERIFY' &&
-    currentScreen !== 'PROFILE_COMPLETION';
+    currentScreen !== 'PROFILE_COMPLETION' &&
+    currentScreen !== 'FISH_DETAILS' &&
+    currentScreen !== 'CHECKOUT' &&
+    currentScreen !== 'CART';
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A192F" />
+      <StatusBar barStyle="light-content" backgroundColor="#0A1C33" />
 
       <View style={styles.screenContainer}>
         {currentScreen === 'SPLASH' && (

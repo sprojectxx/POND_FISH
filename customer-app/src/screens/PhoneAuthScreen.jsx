@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
@@ -85,7 +86,11 @@ export default function PhoneAuthScreen({ onNavigate }) {
         {/* 1. Top Header & Branding Banner */}
         <View style={styles.header}>
           <View style={styles.logoBadge}>
-            <Text style={styles.logoIcon}>🐟</Text>
+            <Image
+              source={require('../assets/logo.png')}
+              style={styles.logoBadgeImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.brandTitle}>
             POND<Text style={{ color: '#0284C7' }}>FISH</Text>
@@ -205,18 +210,25 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   logoBadge: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: 18,
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1.5,
-    borderColor: '#BAE6FD',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  logoIcon: {
-    fontSize: 32,
+  logoBadgeImage: {
+    width: '100%',
+    height: '100%',
   },
   brandTitle: {
     fontSize: 28,

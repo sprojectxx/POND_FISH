@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { getAuthTokens, clearAuthTokens } from '../services/auth-storage';
@@ -95,7 +96,11 @@ export default function SplashScreen({ onNavigate }) {
     <View style={styles.container}>
       {/* Brand Logo Box */}
       <View style={styles.logoBox}>
-        <Text style={styles.logoIcon}>🐟</Text>
+        <Image
+          source={require('../assets/logo.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
       </View>
 
       <Text style={styles.brandTitle}>
@@ -139,18 +144,23 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   logoBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: 'rgba(2, 132, 199, 0.15)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(2, 132, 199, 0.4)',
+    width: 96,
+    height: 96,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  logoIcon: {
-    fontSize: 40,
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   brandTitle: {
     fontSize: 32,
