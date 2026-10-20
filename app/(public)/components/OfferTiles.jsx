@@ -1,146 +1,154 @@
 'use client';
 
-import React from 'react';
-import { FishIcon } from './Icons';
+/**
+ * OfferTiles Component — Featured Daily Offers & Promotions
+ * Traceability: PondFish Public UI Specification
+ * Binds strictly to authoritative backend discounts (/api/v1/public/discounts).
+ * Zero fake stock quantities, artificial freshness claims, or hardcoded sample prices.
+ */
 
-const sampleOffers = [
-  {
-    id: 'rohu',
-    name: 'Rohu (Farm Fresh Whole)',
-    teluguName: 'రోహు / Rohu',
-    offerPrice: 224,
-    originalPrice: 260,
-    discountBadge: '15% OFF',
-    specialBadge: 'TOP SELLER',
-    origin: 'Nellore Ponds',
-    freshness: 'Harvested Today',
-    stockLeft: '33 kg left',
-    unit: '/ KG',
-    image: 'https://urkxrefqtrwjfttrukhw.supabase.co/storage/v1/object/public/fish-assets/rohu.png'
-  },
-  {
-    id: 'boche',
-    name: 'Boche (Fresh Cut Steaks)',
-    teluguName: 'బొచ్చె / Bocche',
-    offerPrice: 245,
-    originalPrice: 280,
-    discountBadge: '12% OFF',
-    specialBadge: 'BEST VALUE',
-    origin: 'Bhimavaram Farms',
-    freshness: '0–24h Fresh',
-    stockLeft: '24 kg left',
-    unit: '/ KG',
-    image: 'https://urkxrefqtrwjfttrukhw.supabase.co/storage/v1/object/public/fish-assets/bochu.png'
-  },
-  {
-    id: 'pomfret',
-    name: 'White Pomfret (Tella Chanduva)',
-    teluguName: 'తెల్ల చందువ / Pomfret',
-    offerPrice: 1299,
-    originalPrice: 1500,
-    discountBadge: 'SAVE ₹201',
-    specialBadge: 'PREMIUM CATCH',
-    origin: 'Coastal Catch',
-    freshness: 'Direct Transit',
-    stockLeft: '8 kg left',
-    unit: '/ KG',
-    image: 'https://urkxrefqtrwjfttrukhw.supabase.co/storage/v1/object/public/fish-assets/white-pomfret.png'
-  },
-  {
-    id: 'tilapia',
-    name: 'Tilapia (Whole Cleaned)',
-    teluguName: 'తిలాపియా / Tilapia',
-    offerPrice: 155,
-    originalPrice: 180,
-    discountBadge: 'SAVE ₹25',
-    specialBadge: 'FRESHWATER',
-    origin: 'Krishna Basin Ponds',
-    freshness: 'Pond Harvest',
-    stockLeft: '18 kg left',
-    unit: '/ KG',
-    image: 'https://urkxrefqtrwjfttrukhw.supabase.co/storage/v1/object/public/fish-assets/tilapia-whole-fish.png'
-  }
-];
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { Tag, ArrowRight, Check, FishIcon } from './Icons';
 
 export default function OfferTiles() {
+  const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadOffers() {
+      try {
+        const res = await fetch('/api/v1/public/discounts');
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted && Array.isArray(json.data)) {
+            setOffers(json.data);
+          }
+        }
+      } catch {
+        // Non-blocking: fail quietly on network issues
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadOffers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // If no active discounts exist from backend, omit the section to avoid fabricating fake deals
+  if (!loading && offers.length === 0) {
+    return null;
+  }
+
+  if (loading) {
+    return null;
+  }
+
   return (
     <section id="featured-offers" style={{ padding: '60px 0', backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
       <div className="pf-container">
         <div className="pf-section-head">
           <div>
-            <p className="pf-eyebrow">TODAY&apos;S FRESH OFFERS</p>
-            <h2 className="pf-section-title">Fresh catch, flash savings.</h2>
+            <p className="pf-eyebrow">TODAY&apos;S VERIFIED OFFERS</p>
+            <h2 className="pf-section-title">Fresh catch, verified savings.</h2>
           </div>
 
           <div className="pf-carousel-nav">
             <span className="pf-carousel-badge">
-              4 Daily Flash Specials
+              {offers.length} {offers.length === 1 ? 'Promotion Active' : 'Promotions Active'}
             </span>
           </div>
         </div>
 
         <div className="pf-offers-grid">
-          {sampleOffers.map((offer) => (
-            <article key={offer.id} className="pf-offer-card">
-              <div className="pf-offer-imgwrap">
-                <span className="pf-discount-badge">{offer.discountBadge}</span>
-                <span className="pf-seller-badge">{offer.specialBadge}</span>
-                {offer.image ? (
-                  <img
-                    src={offer.image}
-                    alt={offer.name}
+          {offers.map((offer) => {
+            const discountValue = offer.discount_percent
+              ? `${offer.discount_percent}% OFF`
+              : offer.flat_discount_amount
+              ? `₹${offer.flat_discount_amount} OFF`
+              : 'SPECIAL DEAL';
+
+            const codeText = offer.discount_code || offer.code;
+
+            return (
+              <article key={offer.id} className="pf-offer-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div style={{ padding: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    {codeText ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: '#f8fafc',
+                          border: '1px dashed #1e56a0',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          color: '#1e56a0',
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        <Tag size={12} color="#1e56a0" />
+                        <span>{codeText}</span>
+                      </span>
+                    ) : <span />}
+
+                    <span
+                      style={{
+                        background: '#ecfdf5',
+                        border: '1px solid #a7f3d0',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        fontSize: '10px',
+                        fontWeight: '800',
+                        color: '#047857',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Check size={10} color="#047857" />
+                      <span>ACTIVE</span>
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '28px', fontWeight: '900', color: '#1e56a0', marginBottom: '6px' }}>
+                    {discountValue}
+                  </div>
+
+                  <p style={{ fontSize: '13px', color: '#64748b', lineHeight: '1.5', margin: '0 0 16px 0' }}>
+                    {offer.description || (offer.fish_name ? `Special promotion on ${offer.fish_name}.` : 'Applied on eligible counter & app reservations.')}
+                  </p>
+                </div>
+
+                <div style={{ padding: '14px 20px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>
+                    {offer.fish_name || 'All Store Varieties'}
+                  </span>
+                  <Link
+                    href={offer.fish_id ? `/fish/${offer.fish_id}` : '/fish'}
                     style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      padding: '12px'
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: '#1e56a0',
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      textDecoration: 'none',
                     }}
-                  />
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                    <FishIcon size={40} color="#94a3b8" />
-                  </div>
-                )}
-              </div>
-
-              <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#0f2c59' }}>{offer.name}</h3>
+                  >
+                    <span>View Catch</span>
+                    <ArrowRight size={12} color="#1e56a0" />
+                  </Link>
                 </div>
-                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                  {offer.teluguName} · <span style={{ color: '#1e56a0', fontWeight: '600' }}>{offer.origin}</span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                  <span className="pf-freshness-pill" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
-                    <span>{offer.freshness}</span>
-                  </span>
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-                    {offer.stockLeft}
-                  </span>
-                </div>
-
-                <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
-                  <div>
-                    <span style={{ fontSize: '12px', color: '#94a3b8', textDecoration: 'line-through', marginRight: '6px' }}>
-                      ₹{offer.originalPrice}
-                    </span>
-                    <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e56a0' }}>
-                      ₹{offer.offerPrice}
-                    </span>
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#64748b' }}>
-                      {offer.unit}
-                    </span>
-                  </div>
-
-                  <a href="#fish-availability" className="pf-btn-book">
-                    Book Now
-                  </a>
-                </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

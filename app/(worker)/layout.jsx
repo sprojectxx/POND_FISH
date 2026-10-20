@@ -32,18 +32,12 @@ export default function WorkerLayout({ children }) {
   }, [pathname]);
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_token') : null;
-    const cachedWorker = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_info') : null;
-
-    if (!token) {
-      setWorker(null);
+    if (isLoginPage) {
       setLoading(false);
-      if (!isLoginPage) {
-        router.replace('/worker/login');
-      }
       return;
     }
 
+    const cachedWorker = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_info') : null;
     if (cachedWorker) {
       try {
         setWorker(JSON.parse(cachedWorker));
@@ -52,40 +46,50 @@ export default function WorkerLayout({ children }) {
       }
     }
 
-    // Verify token with backend
+    // Verify session with backend via credentials (cookie) and optional Bearer header
+    const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_token') : null;
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
     fetch('/api/v1/worker/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
+      credentials: 'include',
     })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success && json.data?.worker) {
-          setWorker(json.data.worker);
-          localStorage.setItem('pondfish_worker_info', JSON.stringify(json.data.worker));
-        } else {
+      .then((res) => {
+        if (res.status === 401 || res.status === 403) {
           localStorage.removeItem('pondfish_worker_token');
           localStorage.removeItem('pondfish_worker_info');
           setWorker(null);
-          if (!isLoginPage) {
-            router.replace('/worker/login');
-          }
+          router.replace('/worker/login');
+          return null;
+        }
+        return res.json();
+      })
+      .then((json) => {
+        if (json && json.success && json.data?.worker) {
+          setWorker(json.data.worker);
+          localStorage.setItem('pondfish_worker_info', JSON.stringify(json.data.worker));
         }
       })
-      .catch(() => {
-        // network issue, keep cached if present
+      .catch((err) => {
+        // Transient network issue: keep cached worker info if present
+        console.warn('[WorkerLayout] Network issue during session verification:', err.message);
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [pathname, isLoginPage, router]);
+  }, [isLoginPage, router]);
 
-  function handleLogout() {
-    const token = localStorage.getItem('pondfish_worker_token');
-    if (token) {
-      fetch('/api/v1/worker/auth/logout', {
+  async function handleLogout() {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_token') : null;
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      await fetch('/api/v1/worker/auth/logout', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
-    }
+        headers,
+        credentials: 'include',
+      });
+    } catch {}
+
     localStorage.removeItem('pondfish_worker_token');
     localStorage.removeItem('pondfish_worker_info');
     setWorker(null);

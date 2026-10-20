@@ -15,7 +15,6 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase-client';
 
 export default function TVPortalPage() {
   const [transactions, setTransactions] = useState([]);
@@ -179,7 +178,7 @@ export default function TVPortalPage() {
     [playCounterChime]
   );
 
-  // Real-time WebSocket connection setup (Local Dev / Fallback)
+  // Authoritative native WebSocket connection setup
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -210,65 +209,31 @@ export default function TVPortalPage() {
       };
 
       ws.onclose = () => {
+        setConnectionStatus('RECONNECTING');
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = setTimeout(() => {
           connectWebSocket();
-        }, 5000);
+        }, 3000);
       };
 
       ws.onerror = () => {
-        // Silent error; Supabase Realtime manages production connections
+        setConnectionStatus('RECONNECTING');
       };
     } catch {
+      setConnectionStatus('RECONNECTING');
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = setTimeout(() => {
         connectWebSocket();
-      }, 5000);
+      }, 3000);
     }
   }, [fetchRecentTransactions, handleIncomingTransaction]);
 
-  // Mount lifecycle: hydrate and connect both Supabase Realtime & Fallback
+  // Mount lifecycle: hydrate and establish native WebSocket connection
   useEffect(() => {
     fetchRecentTransactions();
-
-    // 1. Supabase Realtime Channel Subscription (Production & Vercel)
-    let channel = null;
-    try {
-      channel = supabase
-        .channel('tv-live-feed')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'transactions' },
-          () => {
-            fetchRecentTransactions();
-          }
-        )
-        .on(
-          'broadcast',
-          { event: 'successful_transaction' },
-          (payload) => {
-            const data = payload?.payload || payload?.data;
-            if (data) {
-              handleIncomingTransaction(data);
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            setConnectionStatus('CONNECTED');
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            setConnectionStatus('RECONNECTING');
-          }
-        });
-    } catch (err) {
-      console.warn('[TV PORTAL] Supabase Realtime connection fallback:', err.message);
-    }
-
-    // 2. Connect local WebSocket fallback
     connectWebSocket();
 
     return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
       if (wsRef.current) {
         wsRef.current.close();
       }
@@ -276,7 +241,7 @@ export default function TVPortalPage() {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [fetchRecentTransactions, connectWebSocket, handleIncomingTransaction]);
+  }, [fetchRecentTransactions, connectWebSocket]);
 
   return (
     <div className="pf-tv-shell" style={styles.container}>

@@ -239,7 +239,7 @@ export default function FishDetailPage() {
             <div style={{ marginTop: 'auto', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               {fish.onlineBookable ? (
                 <Link
-                  href={`/booking?fish_id=${fish.id}`}
+                  href={`/booking?fishId=${fish.id}`}
                   style={{
                     flex: 1,
                     textAlign: 'center',
@@ -253,7 +253,7 @@ export default function FishDetailPage() {
                     boxShadow: '0 4px 12px rgba(30, 86, 160, 0.25)',
                   }}
                 >
-                  Reserve Today's Catch Online
+                  Reserve Today's Catch Info
                 </Link>
               ) : (
                 <div

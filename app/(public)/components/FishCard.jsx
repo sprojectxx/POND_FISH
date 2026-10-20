@@ -245,7 +245,7 @@ export default function FishCard({ fish }) {
             </Link>
             {fish.onlineBookable && (
               <Link
-                href={`/booking?fish_id=${fish.id}`}
+                href={`/booking?fishId=${fish.id}`}
                 style={{
                   padding: '7px 14px',
                   background: '#1e56a0',
@@ -258,7 +258,7 @@ export default function FishCard({ fish }) {
                   transition: 'background 0.15s ease',
                 }}
               >
-                Book
+                Reserve
               </Link>
             )}
           </div>

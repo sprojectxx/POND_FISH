@@ -7,8 +7,9 @@
  * - Slice 13 Scope: Admin Access Control, Security & Session Governance
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import './admin.css';
 
@@ -18,6 +19,7 @@ export default function AdminLayout({ children }) {
 
   const [adminUser, setAdminUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);
+  const [networkError, setNetworkError] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -40,62 +42,58 @@ export default function AdminLayout({ children }) {
     });
   };
 
-  useEffect(() => {
+  const verifyAuth = useCallback(async () => {
     if (isLoginPage) {
       setCheckingAuth(false);
+      setNetworkError(false);
       return;
     }
 
-    let isMounted = true;
+    setCheckingAuth(true);
+    setNetworkError(false);
 
-    async function verifyAuth() {
-      try {
-        const res = await fetch('/api/v1/admin/auth/me', {
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-          },
-        });
+    try {
+      const res = await fetch('/api/v1/admin/auth/me', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+      });
 
-        if (!res.ok || res.status === 401 || res.status === 403) {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('pondfish_admin_user');
-            window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
-          }
-          return;
+      if (!res.ok || res.status === 401 || res.status === 403) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('pondfish_admin_user');
+          window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
         }
-
-        const data = await res.json();
-        if (isMounted && data.success && data.admin) {
-          setAdminUser(data.admin);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
-          }
-        } else {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('pondfish_admin_user');
-            window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
-          }
-          return;
-        }
-      } catch (err) {
-        // Fail closed: transient network errors must not grant authentication based on cached metadata
-        console.error('[AdminLayout] Session verification error:', err);
-        if (isMounted) {
-          setAdminUser(null);
-        }
-      } finally {
-        if (isMounted) {
-          setCheckingAuth(false);
-        }
+        return;
       }
+
+      const data = await res.json();
+      if (data.success && data.admin) {
+        setAdminUser(data.admin);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
+        }
+      } else {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('pondfish_admin_user');
+          window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
+        }
+        return;
+      }
+    } catch (err) {
+      // Handle network errors separately from confirmed unauthorized responses
+      console.error('[AdminLayout] Session verification network error:', err);
+      setNetworkError(true);
+    } finally {
+      setCheckingAuth(false);
     }
+  }, [isLoginPage, pathname]);
 
+  // Verify administrative credentials on mount or when navigating to/from login page
+  // Does NOT re-verify on every internal route navigation to avoid redundant latency
+  useEffect(() => {
     verifyAuth();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [pathname, isLoginPage]);
+  }, [isLoginPage, verifyAuth]);
 
   // Handle ESC key and scroll lock for mobile drawer
   useEffect(() => {
@@ -163,6 +161,77 @@ export default function AdminLayout({ children }) {
     );
   }
 
+  // If network connection failed during authentication check, display clear retry screen rather than misleading authenticated shell
+  if (networkError && !adminUser) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#F0F5FA',
+        color: '#0F2C59',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        padding: '24px',
+      }}>
+        <div style={{
+          maxWidth: '440px',
+          width: '100%',
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #E2E8F0',
+          padding: '36px 28px',
+          textAlign: 'center',
+          boxShadow: '0 8px 24px rgba(15, 44, 89, 0.08)',
+        }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#FEE2E2', color: '#DC2626', marginBottom: '16px' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <div style={{ fontSize: '18px', fontWeight: '800', color: '#0F2C59', marginBottom: '8px' }}>Connection Failure</div>
+          <p style={{ fontSize: '13px', color: '#64748B', lineHeight: '1.6', margin: '0 0 24px' }}>
+            Unable to verify administrative credentials due to a transient network error. Please check your internet connection and retry.
+          </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button
+              onClick={() => verifyAuth()}
+              style={{
+                padding: '10px 20px',
+                background: '#1E56A0',
+                color: '#FFFFFF',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '700',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Retry Connection
+            </button>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '10px 16px',
+                background: '#F1F5F9',
+                color: '#475569',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '600',
+                border: '1px solid #CBD5E1',
+                cursor: 'pointer',
+              }}
+            >
+              Sign In Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const getNavLinkStyle = (isActive) => ({
     color: isActive ? '#FFFFFF' : '#CBD5E1',
     background: isActive ? '#1E56A0' : 'transparent',
@@ -182,164 +251,164 @@ export default function AdminLayout({ children }) {
       <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', margin: '8px 8px 4px', fontWeight: '700' }}>
         Operations
       </div>
-      <a
+      <Link
         href="/admin"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin')}
       >
         Executive Dashboard
-      </a>
-      <a
+      </Link>
+      <Link
         id="nav-admin-bookings"
         href="/admin/bookings"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname?.startsWith('/admin/bookings'))}
       >
         Bookings
-      </a>
-      <a
+      </Link>
+      <Link
         id="nav-admin-transactions"
         href="/admin/transactions"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname?.startsWith('/admin/transactions'))}
       >
         Transactions
-      </a>
-      <a
+      </Link>
+      <Link
         id="nav-admin-notifications"
         href="/admin/notifications"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname?.startsWith('/admin/notifications'))}
       >
         Notifications
-      </a>
-      <a
+      </Link>
+      <Link
         href="/admin/journeys"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname?.startsWith('/admin/journeys'))}
       >
         GPS Truck Journey
-      </a>
-      <a
+      </Link>
+      <Link
         href="/admin/settings"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/settings')}
       >
         Business Settings
-      </a>
-      <a
+      </Link>
+      <Link
         href="/admin/reports"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/reports' || pathname === '/admin/exports')}
       >
         Reports & Exports
-      </a>
+      </Link>
 
       <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
         Catalog & Sales
       </div>
-      <a
+      <Link
         id="nav-admin-fish"
         href="/admin/fish"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/fish')}
       >
         Fish Management
-      </a>
-      <a
+      </Link>
+      <Link
         id="nav-admin-categories"
         href="/admin/categories"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/categories')}
       >
         Categories
-      </a>
-      <a
+      </Link>
+      <Link
         id="nav-admin-discounts"
         href="/admin/discounts"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/discounts')}
       >
         Discounts
-      </a>
+      </Link>
 
       <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
         Subscriptions
       </div>
-      <a
+      <Link
         id="nav-admin-subscription-plans"
         href="/admin/subscriptions/plans"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/subscriptions/plans')}
       >
         Subscription Plans
-      </a>
-      <a
+      </Link>
+      <Link
         id="nav-admin-customer-subscriptions"
         href="/admin/subscriptions"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/subscriptions')}
       >
         Customer Subscriptions
-      </a>
+      </Link>
 
       <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
         People & Teams
       </div>
-      <a
+      <Link
         id="nav-admin-customers"
         href="/admin/customers"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/customers')}
       >
         Customers
-      </a>
-      <a
+      </Link>
+      <Link
         id="nav-admin-workers"
         href="/admin/workers"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/workers')}
       >
         Workers
-      </a>
+      </Link>
 
       <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
         Governance
       </div>
-      <a
+      <Link
         href="/admin/audit"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/audit' || pathname === '/admin/audit-logs')}
       >
         Audit Trail
-      </a>
-      <a
+      </Link>
+      <Link
         href="/admin/exceptions"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/exceptions')}
       >
         Exceptions Center
-      </a>
-      <a
+      </Link>
+      <Link
         id="nav-admin-security"
         href="/admin/security"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/security')}
       >
         Admin Security
-      </a>
+      </Link>
 
       <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
         Account
       </div>
-      <a
+      <Link
         id="nav-admin-profile"
         href="/admin/profile"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin/profile')}
       >
         Profile & Identity
-      </a>
+      </Link>
       <button
         id="nav-admin-logout"
         onClick={() => {

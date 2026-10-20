@@ -143,7 +143,7 @@ export default function FishAvailability() {
         ) : (
           <div ref={scrollContainerRef} className="pf-fish-grid">
             {filteredFish.map((fish) => {
-              const price = fish.unitPrice || fish.unit_price || (fish.pricing && (fish.pricing.effectivePrice || fish.pricing.basePrice)) || 260;
+              const price = fish.unitPrice || fish.unit_price || (fish.pricing && (fish.pricing.effectivePrice || fish.pricing.basePrice)) || null;
               const telugu = TELUGU_NAMES[fish.name.toUpperCase()] || TELUGU_NAMES[fish.name] || '';
               const category = fish.categoryName || fish.category_name || 'Fresh catch';
 
@@ -207,12 +207,20 @@ export default function FishAvailability() {
 
                     <div className="pf-fish-card-bottom">
                       <div>
-                        <span className="pf-fish-card-price">₹{price}</span>
-                        <span className="pf-fish-card-unit">/ KG</span>
+                        {price ? (
+                          <>
+                            <span className="pf-fish-card-price">₹{price}</span>
+                            <span className="pf-fish-card-unit">/ KG</span>
+                          </>
+                        ) : (
+                          <span className="pf-fish-card-unit" style={{ fontSize: '13px', fontWeight: '700', color: '#1e56a0' }}>
+                            Counter Price
+                          </span>
+                        )}
                       </div>
 
                       <Link href={`/booking?fishId=${fish.id}`} className="pf-btn-book">
-                        Book Online
+                        Reserve Info
                       </Link>
                     </div>
                   </div>

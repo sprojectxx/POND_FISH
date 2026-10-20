@@ -6,52 +6,28 @@
  */
 
 import { NextResponse } from 'next/server';
-const { verifyWorkerSessionToken } = require('../../../../../../lib/engines/worker');
-const { findWorkerById } = require('../../../../../../lib/db/repositories/workerRepository');
+const { verifyWorkerSessionAsync, extractWorkerToken } = require('../../../../../../lib/engines/worker');
 
 export const dynamic = 'force-dynamic';
 
-function authenticateWorkerRequest(request) {
-  const authHeader = request.headers.get('authorization') || '';
-  if (!authHeader.startsWith('Bearer ')) {
-    const err = new Error('MISSING_BEARER_TOKEN');
-    err.code = 'UNAUTHORIZED';
-    throw err;
-  }
-  const token = authHeader.substring(7).trim();
-  return verifyWorkerSessionToken(token);
-}
-
 export async function GET(request) {
   try {
-    const session = authenticateWorkerRequest(request);
-    const worker = await findWorkerById(session.workerId);
-
-    if (!worker) {
+    const token = extractWorkerToken(request);
+    if (!token) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            code: 'WORKER_NOT_FOUND',
-            message: 'Worker account no longer exists.',
+            code: 'UNAUTHORIZED',
+            message: 'Worker authentication session or token is required.',
           },
         },
-        { status: 404 }
+        { status: 401 }
       );
     }
 
-    if (!worker.active) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'WORKER_ACCOUNT_DISABLED',
-            message: 'Your worker account is disabled. Contact your administrator.',
-          },
-        },
-        { status: 403 }
-      );
-    }
+    const session = await verifyWorkerSessionAsync(token);
+    const worker = session.worker;
 
     return NextResponse.json({
       success: true,
@@ -67,16 +43,42 @@ export async function GET(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    if (error.code === 'UNAUTHORIZED' || error.code === 'FORBIDDEN') {
+    if (error.code === 'WORKER_ACCOUNT_DISABLED') {
       return NextResponse.json(
         {
           success: false,
           error: {
-            code: error.code,
-            message: 'Valid worker authorization is required.',
+            code: 'WORKER_ACCOUNT_DISABLED',
+            message: error.message || 'Your worker account is disabled. Contact your administrator.',
           },
         },
-        { status: error.code === 'FORBIDDEN' ? 403 : 401 }
+        { status: 403 }
+      );
+    }
+
+    if (error.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: error.message || 'Forbidden: Worker role required.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED' || error.code === 'WORKER_NOT_FOUND') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: error.code || 'UNAUTHORIZED',
+            message: error.message || 'Valid worker authorization is required.',
+          },
+        },
+        { status: 401 }
       );
     }
 

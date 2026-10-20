@@ -30,7 +30,7 @@ export async function POST(request) {
 
     const result = await authenticateWorker({ mobileNumber, password });
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: true,
         data: result,
@@ -39,6 +39,17 @@ export async function POST(request) {
       },
       { status: 200 }
     );
+
+    // Set secure production-grade worker session cookie for page navigation and SSR
+    response.cookies.set('worker_session', result.token, {
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 12 * 60 * 60, // 12 hours
+    });
+
+    return response;
   } catch (error) {
     if (error.code === 'WORKER_ACCOUNT_DISABLED') {
       return NextResponse.json(

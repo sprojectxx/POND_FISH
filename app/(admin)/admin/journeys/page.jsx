@@ -8,7 +8,6 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/lib/supabase-client';
 
 export default function AdminJourneysPage() {
   const [journeys, setJourneys] = useState([]);
@@ -90,76 +89,63 @@ export default function AdminJourneysPage() {
     selectedJourneyRef.current = selectedJourney;
   }, [selectedJourney]);
 
-  // Realtime connection for live telemetry (Supabase Realtime + WS fallback)
+  // Realtime connection for live telemetry via authoritative native WebSocket server
   useEffect(() => {
     fetchJourneys();
 
-    // 1. Supabase Realtime channel
-    let channel = null;
-    try {
-      channel = supabase
-        .channel('gps-live')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'truck_gps_logs' },
-          (payload) => {
-            const currentSelected = selectedJourneyRef.current;
-            const updatedJourneyId = payload.new?.journey_id || payload.new?.journeyId;
-            if (currentSelected && updatedJourneyId === currentSelected.journey?.id) {
-              fetchJourneyDetail(currentSelected.journey.id);
-            }
-          }
-        )
-        .on(
-          'broadcast',
-          { event: 'gps:live' },
-          (payload) => {
-            const data = payload?.payload || payload?.data;
-            const currentSelected = selectedJourneyRef.current;
-            if (currentSelected && data?.journeyId === currentSelected.journey?.id) {
-              fetchJourneyDetail(currentSelected.journey.id);
-            }
-          }
-        )
-        .subscribe();
-    } catch (e) {
-      console.warn('[ADMIN JOURNEYS] Supabase Realtime fallback:', e.message);
-    }
+    let ws = null;
+    let reconnectTimer = null;
+    let isDisposed = false;
 
-    // 2. Local WebSocket fallback
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/realtime`;
+    function connectWs() {
+      if (typeof window === 'undefined' || isDisposed) return;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/v1/realtime`;
 
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      try {
+        ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
 
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.event === 'gps:live' || msg.event === 'successful_transaction') {
-            const currentSelected = selectedJourneyRef.current;
-            if (currentSelected && msg.data?.journeyId === currentSelected.journey?.id) {
-              fetchJourneyDetail(currentSelected.journey.id);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.event === 'gps:live') {
+              const currentSelected = selectedJourneyRef.current;
+              if (currentSelected && msg.data?.journeyId === currentSelected.journey?.id) {
+                fetchJourneyDetail(currentSelected.journey.id);
+              }
             }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
+        };
+
+        ws.onclose = () => {
+          if (!isDisposed) {
+            reconnectTimer = setTimeout(connectWs, 3000);
+          }
+        };
+
+        ws.onerror = () => {
+          if (ws) ws.close();
+        };
+      } catch {
+        if (!isDisposed) {
+          reconnectTimer = setTimeout(connectWs, 3000);
         }
-      };
-    } catch {
-      // ignore
+      }
     }
+
+    connectWs();
 
     return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      isDisposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (wsRef.current) {
         wsRef.current.close();
       }
     };
-  }, []);
+  }, [fetchJourneys]);
 
   const showNotification = (msg) => {
     setSuccessMsg(msg);

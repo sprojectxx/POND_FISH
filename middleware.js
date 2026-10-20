@@ -5,7 +5,65 @@
 
 import { NextResponse } from 'next/server.js';
 
-export function middleware(request) {
+function base64UrlToUint8Array(base64Url) {
+  let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) {
+    base64 += '=';
+  }
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing in production.');
+    }
+    return 'pondfish-dev-only-secret-do-not-use-in-production';
+  }
+  return secret;
+}
+
+/**
+ * Verify JWT signature, expiry, and payload integrity using standard Web Crypto API
+ * Runs safely in all Next.js runtimes (Node.js and Edge) with zero dependencies
+ * @param {string} token
+ * @returns {Promise<object|null>}
+ */
+async function verifyJwt(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [headerB64, payloadB64, sigB64] = parts;
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlToUint8Array(payloadB64)));
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      return null; // Expired token
+    }
+    const secret = getJwtSecret();
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+    const data = encoder.encode(`${headerB64}.${payloadB64}`);
+    const signature = base64UrlToUint8Array(sigB64);
+    const isValid = await crypto.subtle.verify('HMAC', key, signature, data);
+    return isValid ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
   // Let static files, Next.js internals, and public assets pass through
@@ -24,7 +82,7 @@ export function middleware(request) {
   const workerCookie = request.cookies.get('worker_session')?.value || request.cookies.get('pf_session')?.value;
 
   const adminToken = adminCookie || bearerToken;
-  const workerToken = workerCookie || bearerToken || adminCookie;
+  const workerToken = workerCookie || bearerToken; // Worker token MUST never inherit adminCookie
 
   // 1. Admin API Route Guard
   if (pathname.startsWith('/api/v1/admin')) {
@@ -71,8 +129,7 @@ export function middleware(request) {
       return NextResponse.next();
     }
 
-    // All standard admin routes strictly require an admin session token
-    // Arbitrary x-internal-secret or x-admin-key headers are NEVER allowed to bypass
+    // All standard admin routes strictly require a cryptographically valid admin session
     if (!adminToken) {
       return NextResponse.json(
         {
@@ -83,6 +140,20 @@ export function middleware(request) {
           },
         },
         { status: 401 }
+      );
+    }
+
+    const adminPayload = await verifyJwt(adminToken);
+    if (!adminPayload || (adminPayload.role !== 'ADMIN' && !adminPayload.is_super_admin)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Administrative privileges required.',
+          },
+        },
+        { status: 403 }
       );
     }
 
@@ -97,17 +168,17 @@ export function middleware(request) {
   // 2. Admin Page Route Guard
   if (pathname.startsWith('/admin')) {
     const isLoginPage = pathname === '/admin/login' || pathname.startsWith('/admin/login/');
+    const adminPayload = await verifyJwt(adminToken);
+    const isValidAdmin = Boolean(adminPayload && (adminPayload.role === 'ADMIN' || adminPayload.is_super_admin));
 
     if (isLoginPage) {
-      // If already authenticated, redirect away from login page to dashboard
-      if (adminToken) {
+      if (isValidAdmin) {
         return NextResponse.redirect(new URL('/admin', request.url));
       }
       return NextResponse.next();
     }
 
-    // All other /admin routes require an active admin session
-    if (!adminToken) {
+    if (!isValidAdmin) {
       const redirectUrl = new URL('/admin/login', request.url);
       const search = request.nextUrl.search || '';
       redirectUrl.searchParams.set('redirect', `${pathname}${search}`);
@@ -120,15 +191,17 @@ export function middleware(request) {
   // 3. Worker Page Route Guard
   if (pathname.startsWith('/worker')) {
     const isWorkerLogin = pathname === '/worker/login' || pathname.startsWith('/worker/login/');
+    const workerPayload = await verifyJwt(workerToken);
+    const isValidWorker = Boolean(workerPayload && workerPayload.role === 'WORKER');
 
     if (isWorkerLogin) {
-      if (workerToken) {
+      if (isValidWorker) {
         return NextResponse.redirect(new URL('/worker', request.url));
       }
       return NextResponse.next();
     }
 
-    if (!workerToken) {
+    if (!isValidWorker) {
       const redirectUrl = new URL('/worker/login', request.url);
       const search = request.nextUrl.search || '';
       redirectUrl.searchParams.set('redirect', `${pathname}${search}`);
