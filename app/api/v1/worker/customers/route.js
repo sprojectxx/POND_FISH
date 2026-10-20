@@ -7,34 +7,22 @@
  */
 
 import { NextResponse } from 'next/server';
-const { verifyWorkerSessionToken } = require('../../../../../lib/engines/worker');
-const workerRepository = require('../../../../../lib/db/repositories/workerRepository');
+const { verifyWorkerSessionAsync, extractWorkerToken } = require('../../../../../lib/engines/worker');
 const customerRepository = require('../../../../../lib/db/repositories/customerRepository');
 
 export const dynamic = 'force-dynamic';
 
 async function authenticateWorkerRequest(request) {
-  const authHeader = request.headers.get('authorization') || '';
-  if (!authHeader.startsWith('Bearer ')) {
+  const token = extractWorkerToken(request);
+  if (!token) {
     const err = new Error('A valid worker authentication token is required.');
     err.code = 'UNAUTHORIZED';
     err.status = 401;
     throw err;
   }
 
-  const token = authHeader.substring(7).trim();
-  const session = verifyWorkerSessionToken(token);
-
-  // Enforce active status in database
-  const worker = await workerRepository.findWorkerById(session.workerId);
-  if (!worker || !worker.active) {
-    const err = new Error('Worker account is disabled or not found.');
-    err.code = 'FORBIDDEN';
-    err.status = 403;
-    throw err;
-  }
-
-  return worker;
+  const session = await verifyWorkerSessionAsync(token);
+  return session.worker;
 }
 
 export async function GET(request) {

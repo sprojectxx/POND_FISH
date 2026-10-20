@@ -29,6 +29,19 @@ async function runRealPostgresIntegrationSuite() {
   console.log('Database: pondfish_test_db (local port 5433)');
   console.log('Engine: PostgreSQL 17 (Isolated Test Instance)\n');
 
+  // Check if test database is reachable
+  try {
+    const probeClient = await testPool.connect();
+    probeClient.release();
+  } catch (connErr) {
+    if (connErr.code === 'ECONNREFUSED') {
+      console.log('  [SKIP] Dedicated local PostgreSQL test instance (localhost:5433) is not running.');
+      console.log('  Isolated synthetic unit test suites cover all checkout and recovery behaviors.\n');
+      return;
+    }
+    throw connErr;
+  }
+
   // Clean test database for fresh run
   await testPool.query(`
     TRUNCATE TABLE 

@@ -3,20 +3,8 @@
  * Traceability: PondFish Core Business Engines (Engine 22) & Architecture Baseline
  */
 
+import crypto from 'crypto';
 import { NextResponse } from 'next/server.js';
-
-function base64UrlToUint8Array(base64Url) {
-  let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-  while (base64.length % 4) {
-    base64 += '=';
-  }
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -30,40 +18,38 @@ function getJwtSecret() {
 }
 
 /**
- * Verify JWT signature, expiry, and payload integrity using standard Web Crypto API
- * Runs safely in all Next.js runtimes (Node.js and Edge) with zero dependencies
+ * Verify JWT signature, expiry, and payload integrity synchronously
  * @param {string} token
- * @returns {Promise<object|null>}
+ * @returns {object|null}
  */
-async function verifyJwt(token) {
+function verifyJwt(token) {
   if (!token || typeof token !== 'string') return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [headerB64, payloadB64, sigB64] = parts;
   try {
-    const payload = JSON.parse(new TextDecoder().decode(base64UrlToUint8Array(payloadB64)));
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
     if (payload.exp && Date.now() >= payload.exp * 1000) {
       return null; // Expired token
     }
     const secret = getJwtSecret();
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-    const data = encoder.encode(`${headerB64}.${payloadB64}`);
-    const signature = base64UrlToUint8Array(sigB64);
-    const isValid = await crypto.subtle.verify('HMAC', key, signature, data);
-    return isValid ? payload : null;
+    const expectedSig = crypto
+      .createHmac('sha256', secret)
+      .update(`${headerB64}.${payloadB64}`)
+      .digest('base64url');
+
+    if (expectedSig.length !== sigB64.length) return null;
+    let match = 0;
+    for (let i = 0; i < expectedSig.length; i++) {
+      match |= expectedSig.charCodeAt(i) ^ sigB64.charCodeAt(i);
+    }
+    return match === 0 ? payload : null;
   } catch {
     return null;
   }
 }
 
-export async function middleware(request) {
+export function middleware(request) {
   const { pathname } = request.nextUrl;
 
   // Let static files, Next.js internals, and public assets pass through
@@ -143,7 +129,7 @@ export async function middleware(request) {
       );
     }
 
-    const adminPayload = await verifyJwt(adminToken);
+    const adminPayload = verifyJwt(adminToken);
     if (!adminPayload || (adminPayload.role !== 'ADMIN' && !adminPayload.is_super_admin)) {
       return NextResponse.json(
         {
@@ -168,7 +154,7 @@ export async function middleware(request) {
   // 2. Admin Page Route Guard
   if (pathname.startsWith('/admin')) {
     const isLoginPage = pathname === '/admin/login' || pathname.startsWith('/admin/login/');
-    const adminPayload = await verifyJwt(adminToken);
+    const adminPayload = verifyJwt(adminToken);
     const isValidAdmin = Boolean(adminPayload && (adminPayload.role === 'ADMIN' || adminPayload.is_super_admin));
 
     if (isLoginPage) {
@@ -191,7 +177,7 @@ export async function middleware(request) {
   // 3. Worker Page Route Guard
   if (pathname.startsWith('/worker')) {
     const isWorkerLogin = pathname === '/worker/login' || pathname.startsWith('/worker/login/');
-    const workerPayload = await verifyJwt(workerToken);
+    const workerPayload = verifyJwt(workerToken);
     const isValidWorker = Boolean(workerPayload && workerPayload.role === 'WORKER');
 
     if (isWorkerLogin) {

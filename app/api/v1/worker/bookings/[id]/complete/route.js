@@ -7,18 +7,17 @@
  */
 
 import { NextResponse } from 'next/server';
-const { verifyWorkerSessionToken, completeBookingOrder } = require('../../../../../../../lib/engines/worker');
+const { verifyWorkerSessionToken, extractWorkerToken, completeBookingOrder } = require('../../../../../../../lib/engines/worker');
 
 export const dynamic = 'force-dynamic';
 
 function authenticateWorker(request) {
-  const authHeader = request.headers.get('authorization') || '';
-  if (!authHeader.startsWith('Bearer ')) {
+  const token = extractWorkerToken(request);
+  if (!token) {
     const err = new Error('MISSING_BEARER_TOKEN');
     err.code = 'UNAUTHORIZED';
     throw err;
   }
-  const token = authHeader.substring(7).trim();
   return verifyWorkerSessionToken(token);
 }
 
