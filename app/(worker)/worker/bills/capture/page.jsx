@@ -30,12 +30,17 @@ function BillCaptureContent() {
 
   if (!customerId) {
     return (
-      <div style={{ maxWidth: '680px', margin: '40px auto', background: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '32px', textAlign: 'center' }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
-        <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
+      <div style={{ maxWidth: '680px', margin: '40px auto', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '40px', textAlign: 'center', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)' }}>
+        <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', borderRadius: '12px', background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+        <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0F2C59', marginBottom: '8px' }}>
           No Customer Selected
         </h2>
-        <p style={{ fontSize: '14px', color: '#94A3B8', marginBottom: '24px' }}>
+        <p style={{ fontSize: '14px', color: '#64748B', marginBottom: '24px' }}>
           Please select a customer from the customer directory before capturing a physical bill.
         </p>
         <Link
@@ -44,12 +49,13 @@ function BillCaptureContent() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '8px',
-            background: '#0284C7',
+            background: '#1E56A0',
             color: '#FFFFFF',
             padding: '12px 24px',
             borderRadius: '8px',
             fontWeight: '700',
             textDecoration: 'none',
+            boxShadow: '0 2px 8px rgba(30, 86, 160, 0.2)',
           }}
         >
           <span>Go to Customer Search</span>
@@ -128,29 +134,32 @@ function BillCaptureContent() {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
         <Link
           href="/worker/customers"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '38px',
-            height: '38px',
-            background: '#1E293B',
-            border: '1px solid #334155',
-            borderRadius: '8px',
-            color: '#F8FAFC',
+            width: '40px',
+            height: '40px',
+            background: '#FFFFFF',
+            border: '1px solid #CBD5E1',
+            borderRadius: '10px',
+            color: '#0F2C59',
             textDecoration: 'none',
+            fontSize: '16px',
+            fontWeight: '800',
+            boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
           }}
         >
           ←
         </Link>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 4px 0', color: '#F8FAFC' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: '900', margin: '0 0 4px 0', color: '#0F2C59', letterSpacing: '-0.02em' }}>
             Capture Paper Bill Slip (WP-07)
           </h1>
-          <p style={{ fontSize: '13px', color: '#94A3B8', margin: 0 }}>
+          <p style={{ fontSize: '13px', color: '#64748B', margin: 0, fontWeight: '500' }}>
             Photograph the SI-801 weighing scale ticket to extract weights, prices, and bill number
           </p>
         </div>
@@ -159,41 +168,43 @@ function BillCaptureContent() {
       {/* Selected Customer Banner */}
       <div
         style={{
-          background: '#0F172A',
-          border: '1px solid #1E293B',
-          borderRadius: '12px',
-          padding: '16px 20px',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: '16px',
+          padding: '18px 22px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '24px',
           flexWrap: 'wrap',
           gap: '12px',
+          boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              background: subActive ? 'rgba(34, 197, 94, 0.15)' : 'rgba(56, 189, 248, 0.15)',
-              color: subActive ? '#22C55E' : '#38BDF8',
+              width: '42px',
+              height: '42px',
+              borderRadius: '10px',
+              background: subActive ? '#DCFCE7' : '#E0F2FE',
+              color: subActive ? '#166534' : '#0369A1',
+              border: subActive ? '1px solid #BBF7D0' : '1px solid #BAE6FD',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '18px',
+              fontSize: '16px',
               fontWeight: '800',
             }}
           >
-            👤
+            {customerName ? customerName.charAt(0).toUpperCase() : 'C'}
           </div>
           <div>
-            <div style={{ fontSize: '15px', fontWeight: '800', color: '#F8FAFC' }}>
+            <div style={{ fontSize: '15px', fontWeight: '800', color: '#0F2C59' }}>
               {customerName}
             </div>
-            <div style={{ fontSize: '12px', color: '#94A3B8' }}>
-              📱 {phone} {subActive ? `• Active Plan: ${plan}` : '• Standard Walk-in'}
+            <div style={{ fontSize: '12px', color: '#64748B' }}>
+              Phone: {phone} {subActive ? `• Active Plan: ${plan}` : '• Standard Walk-in'}
             </div>
           </div>
         </div>
@@ -202,10 +213,11 @@ function BillCaptureContent() {
           {subActive ? (
             <span
               style={{
-                background: 'rgba(34, 197, 94, 0.15)',
-                color: '#22C55E',
+                background: '#DCFCE7',
+                color: '#166534',
+                border: '1px solid #BBF7D0',
                 padding: '6px 12px',
-                borderRadius: '8px',
+                borderRadius: '20px',
                 fontSize: '12px',
                 fontWeight: '800',
               }}
@@ -215,10 +227,11 @@ function BillCaptureContent() {
           ) : (
             <span
               style={{
-                background: '#1E293B',
-                color: '#94A3B8',
+                background: '#F1F5F9',
+                color: '#64748B',
+                border: '1px solid #CBD5E1',
                 padding: '6px 12px',
-                borderRadius: '8px',
+                borderRadius: '20px',
                 fontSize: '12px',
                 fontWeight: '600',
               }}
@@ -232,11 +245,12 @@ function BillCaptureContent() {
       {/* Capture Area */}
       <div
         style={{
-          background: '#0F172A',
-          border: '1px solid #1E293B',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
           borderRadius: '16px',
           padding: '28px',
           marginBottom: '24px',
+          boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
         }}
       >
         <input
@@ -252,26 +266,31 @@ function BillCaptureContent() {
           <div
             onClick={() => fileInputRef.current?.click()}
             style={{
-              border: '2px dashed #334155',
+              border: '2px dashed #CBD5E1',
               borderRadius: '14px',
               padding: '48px 24px',
               textAlign: 'center',
               cursor: 'pointer',
-              background: '#0B1120',
+              background: '#F8FAFC',
               transition: 'border 0.2s',
             }}
           >
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📷</div>
-            <div style={{ fontSize: '18px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
+            <div style={{ width: '56px', height: '56px', margin: '0 auto 16px', borderRadius: '14px', background: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </div>
+            <div style={{ fontSize: '18px', fontWeight: '800', color: '#0F2C59', marginBottom: '8px' }}>
               Tap to Open Camera or Upload Bill Photo
             </div>
-            <p style={{ fontSize: '13px', color: '#94A3B8', maxWidth: '380px', margin: '0 auto 16px auto', lineHeight: '1.5' }}>
+            <p style={{ fontSize: '13px', color: '#64748B', maxWidth: '380px', margin: '0 auto 16px auto', lineHeight: '1.5' }}>
               Ensure the SI-801 scale slip is clearly lit and flattened so the Bill Number, weights (kg), and prices are legible.
             </p>
             <button
               type="button"
               style={{
-                background: 'linear-gradient(135deg, #0284C7, #0369A1)',
+                background: '#1E56A0',
                 border: 'none',
                 color: '#FFFFFF',
                 padding: '12px 24px',
@@ -279,6 +298,7 @@ function BillCaptureContent() {
                 fontWeight: '700',
                 fontSize: '14px',
                 cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(30, 86, 160, 0.2)',
               }}
             >
               Take Photo / Choose File
@@ -287,7 +307,7 @@ function BillCaptureContent() {
         ) : (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: '#F8FAFC' }}>
+              <div style={{ fontSize: '14px', fontWeight: '800', color: '#0F2C59' }}>
                 Bill Image Preview
               </div>
               <button
@@ -298,10 +318,10 @@ function BillCaptureContent() {
                 }}
                 disabled={processing}
                 style={{
-                  background: '#1E293B',
-                  border: '1px solid #334155',
-                  color: '#EF4444',
-                  padding: '6px 12px',
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#DC2626',
+                  padding: '6px 14px',
                   borderRadius: '6px',
                   fontSize: '12px',
                   fontWeight: '700',
@@ -314,9 +334,9 @@ function BillCaptureContent() {
 
             <div
               style={{
-                background: '#0B1120',
-                border: '1px solid #334155',
-                borderRadius: '10px',
+                background: '#F8FAFC',
+                border: '1px solid #CBD5E1',
+                borderRadius: '12px',
                 padding: '16px',
                 textAlign: 'center',
                 maxHeight: '380px',
@@ -334,7 +354,7 @@ function BillCaptureContent() {
                   maxHeight: '340px',
                   maxWidth: '100%',
                   objectFit: 'contain',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                 }}
               />
             </div>
@@ -346,13 +366,14 @@ function BillCaptureContent() {
       {error && (
         <div
           style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid #EF4444',
+            background: '#FEF2F2',
+            border: '1px solid #FECACA',
             borderRadius: '12px',
             padding: '16px',
-            color: '#EF4444',
+            color: '#DC2626',
             marginBottom: '24px',
             fontSize: '14px',
+            fontWeight: '500',
           }}
         >
           <strong>Scan Alert:</strong> {error}
@@ -364,7 +385,7 @@ function BillCaptureContent() {
         <Link
           href="/worker/customers"
           style={{
-            color: '#94A3B8',
+            color: '#64748B',
             textDecoration: 'none',
             fontSize: '14px',
             fontWeight: '600',
@@ -380,11 +401,11 @@ function BillCaptureContent() {
           disabled={processing || (!selectedFile && !imagePreview)}
           style={{
             background: processing
-              ? '#475569'
+              ? '#CBD5E1'
               : selectedFile || imagePreview
-              ? 'linear-gradient(135deg, #16A34A, #15803D)'
-              : '#334155',
-            color: '#FFFFFF',
+              ? '#15803D'
+              : '#E2E8F0',
+            color: selectedFile || imagePreview ? '#FFFFFF' : '#94A3B8',
             border: 'none',
             padding: '14px 28px',
             borderRadius: '10px',
@@ -394,12 +415,14 @@ function BillCaptureContent() {
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2)',
+            boxShadow: selectedFile || imagePreview ? '0 4px 12px rgba(21, 128, 61, 0.25)' : 'none',
           }}
         >
           {processing ? (
             <>
-              <span>⏳</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+              </svg>
               <span>Running Tesseract AI OCR...</span>
             </>
           ) : (

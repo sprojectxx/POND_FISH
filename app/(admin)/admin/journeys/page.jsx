@@ -8,10 +8,12 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '@/lib/supabase-client';
 
 export default function AdminJourneysPage() {
   const [journeys, setJourneys] = useState([]);
   const [selectedJourney, setSelectedJourney] = useState(null);
+  const selectedJourneyRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -83,10 +85,48 @@ export default function AdminJourneysPage() {
     }
   };
 
-  // WebSocket connection for live telemetry
+  // Keep selectedJourneyRef in sync
+  useEffect(() => {
+    selectedJourneyRef.current = selectedJourney;
+  }, [selectedJourney]);
+
+  // Realtime connection for live telemetry (Supabase Realtime + WS fallback)
   useEffect(() => {
     fetchJourneys();
 
+    // 1. Supabase Realtime channel
+    let channel = null;
+    try {
+      channel = supabase
+        .channel('gps-live')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'truck_gps_logs' },
+          (payload) => {
+            const currentSelected = selectedJourneyRef.current;
+            const updatedJourneyId = payload.new?.journey_id || payload.new?.journeyId;
+            if (currentSelected && updatedJourneyId === currentSelected.journey?.id) {
+              fetchJourneyDetail(currentSelected.journey.id);
+            }
+          }
+        )
+        .on(
+          'broadcast',
+          { event: 'gps:live' },
+          (payload) => {
+            const data = payload?.payload || payload?.data;
+            const currentSelected = selectedJourneyRef.current;
+            if (currentSelected && data?.journeyId === currentSelected.journey?.id) {
+              fetchJourneyDetail(currentSelected.journey.id);
+            }
+          }
+        )
+        .subscribe();
+    } catch (e) {
+      console.warn('[ADMIN JOURNEYS] Supabase Realtime fallback:', e.message);
+    }
+
+    // 2. Local WebSocket fallback
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/api/v1/realtime`;
 
@@ -98,24 +138,27 @@ export default function AdminJourneysPage() {
         try {
           const msg = JSON.parse(event.data);
           if (msg.event === 'gps:live' || msg.event === 'successful_transaction') {
-            // Live GPS update received! Refresh detail
-            if (selectedJourney && msg.data?.journeyId === selectedJourney.journey?.id) {
-              fetchJourneyDetail(selectedJourney.journey.id);
+            const currentSelected = selectedJourneyRef.current;
+            if (currentSelected && msg.data?.journeyId === currentSelected.journey?.id) {
+              fetchJourneyDetail(currentSelected.journey.id);
             }
           }
-        } catch (e) {
+        } catch {
           // ignore
         }
       };
-
-      return () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
-      };
-    } catch (e) {
-      console.warn('Realtime WS unavailable, using standard refresh');
+    } catch {
+      // ignore
     }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      }
+    };
   }, []);
 
   const showNotification = (msg) => {
@@ -330,7 +373,7 @@ export default function AdminJourneysPage() {
   const latestPos = selectedJourney?.latestPosition;
 
   return (
-    <div style={{ color: '#F8FAFC', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ color: '#0F2C59', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Notifications */}
       {successMsg && (
         <div style={{
@@ -362,10 +405,10 @@ export default function AdminJourneysPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
         <div>
-          <div style={{ fontSize: '13px', color: '#38BDF8', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
+          <div style={{ fontSize: '13px', color: '#1E56A0', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
             AP-14 Management Console
           </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#F8FAFC', margin: '4px 0 0 0' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#0F2C59', margin: '4px 0 0 0' }}>
             Truck Journeys & GPS Publishing Manager
           </h1>
         </div>
@@ -392,18 +435,18 @@ export default function AdminJourneysPage() {
       </div>
 
       {/* Overview Metric Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
-        <div style={{ background: '#1E293B', padding: '18px', borderRadius: '8px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>
+      <div className="pf-admin-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+        <div style={{ background: '#FFFFFF', padding: '18px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', textTransform: 'uppercase', marginBottom: '6px' }}>
             Total Journeys
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#F8FAFC' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0F2C59' }}>
             {journeys.length}
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', padding: '18px', borderRadius: '8px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>
+        <div style={{ background: '#FFFFFF', padding: '18px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', textTransform: 'uppercase', marginBottom: '6px' }}>
             Customer Published
           </div>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#22C55E' }}>
@@ -411,8 +454,8 @@ export default function AdminJourneysPage() {
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', padding: '18px', borderRadius: '8px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>
+        <div style={{ background: '#FFFFFF', padding: '18px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', textTransform: 'uppercase', marginBottom: '6px' }}>
             OneLap Provider Adapter
           </div>
           <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#F59E0B' }}>
@@ -423,11 +466,11 @@ export default function AdminJourneysPage() {
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', padding: '18px', borderRadius: '8px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>
+        <div style={{ background: '#FFFFFF', padding: '18px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', textTransform: 'uppercase', marginBottom: '6px' }}>
             Store Geofence Radius
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#38BDF8' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1E56A0' }}>
             500 m
           </div>
           <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
@@ -437,23 +480,23 @@ export default function AdminJourneysPage() {
       </div>
 
       {/* Main Grid: Left List (40%), Right Detail & Telemetry (60%) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: '24px' }}>
+      <div className="pf-admin-journeys-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 420px) 1fr', gap: '24px' }}>
         {/* Left Column: Journeys List */}
-        <div style={{ background: '#1E293B', borderRadius: '8px', border: '1px solid #334155', padding: '20px' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Registered Journeys</h2>
             <button
               onClick={fetchJourneys}
-              style={{ background: 'transparent', border: 'none', color: '#38BDF8', cursor: 'pointer', fontSize: '13px' }}
+              style={{ background: 'transparent', border: 'none', color: '#1E56A0', cursor: 'pointer', fontSize: '13px' }}
             >
               ↻ Refresh
             </button>
           </div>
 
           {loading && journeys.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>Loading journeys...</div>
+            <div style={{ textAlign: 'center', padding: '32px', color: '#64748B' }}>Loading journeys...</div>
           ) : journeys.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>
+            <div style={{ textAlign: 'center', padding: '32px', color: '#64748B' }}>
               No journeys recorded yet.<br />
               <button
                 onClick={() => setShowCreateModal(true)}
@@ -471,7 +514,7 @@ export default function AdminJourneysPage() {
                     key={j.id}
                     onClick={() => fetchJourneyDetail(j.id)}
                     style={{
-                      background: isSelected ? '#0F172A' : '#1E293B',
+                      background: isSelected ? '#EFF6FF' : '#FFFFFF',
                       border: isSelected ? '2px solid #38BDF8' : '1px solid #334155',
                       padding: '14px',
                       borderRadius: '8px',
@@ -480,7 +523,7 @@ export default function AdminJourneysPage() {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                      <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#F8FAFC' }}>
+                      <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#0F2C59' }}>
                         🚛 {j.truck_number}
                       </span>
                       <span
@@ -500,7 +543,7 @@ export default function AdminJourneysPage() {
                       </span>
                     </div>
 
-                    <div style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '13px', color: '#64748B', marginBottom: '6px' }}>
                       Driver: <strong style={{ color: '#E2E8F0' }}>{j.driver_name}</strong>
                     </div>
 
@@ -508,7 +551,7 @@ export default function AdminJourneysPage() {
                       From: {j.origin?.name || 'Harbor'} → Store
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #334155' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
                       <span
                         style={{
                           fontSize: '11px',
@@ -530,9 +573,9 @@ export default function AdminJourneysPage() {
         </div>
 
         {/* Right Column: Selected Journey Inspection & Live Controls */}
-        <div style={{ background: '#1E293B', borderRadius: '8px', border: '1px solid #334155', padding: '24px' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '24px' }}>
           {!selectedJourney ? (
-            <div style={{ textAlign: 'center', padding: '64px', color: '#94A3B8' }}>
+            <div style={{ textAlign: 'center', padding: '64px', color: '#64748B' }}>
               Select a journey from the list on the left to inspect live GPS telemetry.
             </div>
           ) : (
@@ -540,10 +583,10 @@ export default function AdminJourneysPage() {
               {/* Journey Title & Actions Row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                 <div>
-                  <div style={{ fontSize: '13px', color: '#94A3B8' }}>
+                  <div style={{ fontSize: '13px', color: '#64748B' }}>
                     Journey ID: <code>{currentJourney.id}</code>
                   </div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#F8FAFC', margin: '4px 0 0 0' }}>
+                  <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0F2C59', margin: '4px 0 0 0' }}>
                     Truck {currentJourney.truck_number} — {currentJourney.driver_name}
                   </h2>
                 </div>
@@ -623,20 +666,20 @@ export default function AdminJourneysPage() {
 
               {/* Status Badges Row */}
               <div style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}>
-                <div style={{ padding: '6px 14px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155' }}>
-                  <span style={{ fontSize: '11px', color: '#94A3B8' }}>State: </span>
-                  <strong style={{ color: '#38BDF8' }}>{currentJourney.status}</strong>
+                <div style={{ padding: '6px 14px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                  <span style={{ fontSize: '11px', color: '#64748B' }}>State: </span>
+                  <strong style={{ color: '#1E56A0' }}>{currentJourney.status}</strong>
                 </div>
 
-                <div style={{ padding: '6px 14px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155' }}>
-                  <span style={{ fontSize: '11px', color: '#94A3B8' }}>Customer Visibility: </span>
+                <div style={{ padding: '6px 14px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                  <span style={{ fontSize: '11px', color: '#64748B' }}>Customer Visibility: </span>
                   <strong style={{ color: currentJourney.published_to_customer ? '#22C55E' : '#94A3B8' }}>
                     {currentJourney.published_to_customer ? 'PUBLISHED' : 'PRIVATE'}
                   </strong>
                 </div>
 
-                <div style={{ padding: '6px 14px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155' }}>
-                  <span style={{ fontSize: '11px', color: '#94A3B8' }}>Arrival State: </span>
+                <div style={{ padding: '6px 14px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                  <span style={{ fontSize: '11px', color: '#64748B' }}>Arrival State: </span>
                   <strong style={{ color: currentJourney.ended_at ? '#22C55E' : '#F59E0B' }}>
                     {currentJourney.ended_at ? 'ARRIVED AT STORE' : 'EN ROUTE'}
                   </strong>
@@ -652,13 +695,13 @@ export default function AdminJourneysPage() {
               </div>
 
               {/* Live GPS Telemetry Card */}
-              <div style={{ background: '#0F172A', padding: '20px', borderRadius: '8px', border: '1px solid #334155', marginBottom: '24px' }}>
+              <div style={{ background: '#F8FAFC', padding: '20px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#38BDF8' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#1E56A0' }}>
                     Live GPS Telemetry
                   </h3>
                   {latestPos && (
-                    <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+                    <span style={{ fontSize: '12px', color: '#64748B' }}>
                       Last Recorded: {new Date(latestPos.recorded_at).toLocaleTimeString()}
                     </span>
                   )}
@@ -696,7 +739,7 @@ export default function AdminJourneysPage() {
                     </div>
                   </div>
                 ) : (
-                  <div style={{ textAlign: 'center', padding: '20px', color: '#94A3B8' }}>
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#64748B' }}>
                     No GPS coordinates received yet. Use <strong>📡 Ingest GPS Ping</strong> to send coordinates.
                   </div>
                 )}
@@ -734,8 +777,8 @@ export default function AdminJourneysPage() {
               {/* Route & Fish Manifest Details */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 {/* Route Information */}
-                <div style={{ background: '#0F172A', padding: '18px', borderRadius: '8px', border: '1px solid #334155' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 12px 0', color: '#94A3B8' }}>
+                <div style={{ background: '#F8FAFC', padding: '18px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 12px 0', color: '#64748B' }}>
                     Route Specifications
                   </h4>
                   <div style={{ fontSize: '13px', marginBottom: '8px' }}>
@@ -757,16 +800,16 @@ export default function AdminJourneysPage() {
                 </div>
 
                 {/* Fish Manifest */}
-                <div style={{ background: '#0F172A', padding: '18px', borderRadius: '8px', border: '1px solid #334155' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 12px 0', color: '#94A3B8' }}>
+                <div style={{ background: '#F8FAFC', padding: '18px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 12px 0', color: '#64748B' }}>
                     Cargo Manifest
                   </h4>
                   {Array.isArray(currentJourney.fish_manifest) && currentJourney.fish_manifest.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {currentJourney.fish_manifest.map((item, idx) => (
-                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', borderBottom: '1px solid #1E293B', paddingBottom: '4px' }}>
-                          <span>🐟 {item.fishName || item.name}</span>
-                          <strong style={{ color: '#38BDF8' }}>{item.quantityKg || item.quantity} kg</strong>
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', borderBottom: '1px solid #E2E8F0', paddingBottom: '4px' }}>
+                          <span>{item.fishName || item.name}</span>
+                          <strong style={{ color: '#1E56A0' }}>{item.quantityKg || item.quantity} kg</strong>
                         </div>
                       ))}
                     </div>
@@ -788,29 +831,29 @@ export default function AdminJourneysPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           zIndex: 1000,
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             borderRadius: '12px',
-            border: '1px solid #334155',
+            border: '1px solid #E2E8F0',
             width: '640px',
             maxHeight: '90vh',
             overflowY: 'auto',
             padding: '28px',
           }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 20px 0', color: '#F8FAFC' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 20px 0', color: '#0F2C59' }}>
               Create New Truck Journey
             </h2>
 
             <form onSubmit={handleCreateJourney}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                     Truck Number *
                   </label>
                   <input
@@ -818,12 +861,12 @@ export default function AdminJourneysPage() {
                     required
                     value={createForm.truckNumber}
                     onChange={(e) => setCreateForm({ ...createForm, truckNumber: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                     Driver Name *
                   </label>
                   <input
@@ -831,39 +874,39 @@ export default function AdminJourneysPage() {
                     required
                     value={createForm.driverName}
                     onChange={(e) => setCreateForm({ ...createForm, driverName: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59' }}
                   />
                 </div>
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                   Origin Harbor Name
                 </label>
                 <input
                   type="text"
                   value={createForm.originName}
                   onChange={(e) => setCreateForm({ ...createForm, originName: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59' }}
                 />
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                   Fixed Store Destination
                 </label>
                 <input
                   type="text"
                   disabled
                   value={`${createForm.destinationName} (${createForm.destinationAddress})`}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#334155', border: '1px solid #475569', color: '#94A3B8' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#F1F5F9', border: '1px solid #CBD5E1', color: '#64748B' }}
                 />
               </div>
 
               {/* Manifest Items Section */}
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#38BDF8' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1E56A0' }}>
                     Fish Cargo Manifest
                   </label>
                   <button
@@ -882,14 +925,14 @@ export default function AdminJourneysPage() {
                       placeholder="Fish name & cut"
                       value={item.fishName}
                       onChange={(e) => updateFishItem(idx, 'fishName', e.target.value)}
-                      style={{ padding: '8px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC', fontSize: '13px' }}
+                      style={{ padding: '8px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59', fontSize: '13px' }}
                     />
                     <input
                       type="number"
                       placeholder="Kg"
                       value={item.quantityKg}
                       onChange={(e) => updateFishItem(idx, 'quantityKg', e.target.value)}
-                      style={{ padding: '8px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC', fontSize: '13px' }}
+                      style={{ padding: '8px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59', fontSize: '13px' }}
                     />
                     <button
                       type="button"
@@ -906,7 +949,7 @@ export default function AdminJourneysPage() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  style={{ background: '#475569', color: '#FFF', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer' }}
+                  style={{ background: '#CBD5E1', color: '#FFF', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
@@ -931,30 +974,30 @@ export default function AdminJourneysPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           zIndex: 1000,
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             borderRadius: '12px',
-            border: '1px solid #334155',
+            border: '1px solid #E2E8F0',
             width: '500px',
             padding: '28px',
           }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', color: '#F8FAFC' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', color: '#0F2C59' }}>
               📡 Ingest GPS Position Telemetry
             </h2>
-            <p style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '20px' }}>
+            <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '20px' }}>
               Send genuine coordinates for <strong>{currentJourney.truck_number}</strong>. Telemetry evaluates the store geofence (12.9716, 77.5946 within 500m).
             </p>
 
             <form onSubmit={handleIngestPosition}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                     Latitude
                   </label>
                   <input
@@ -963,12 +1006,12 @@ export default function AdminJourneysPage() {
                     required
                     value={ingestForm.latitude}
                     onChange={(e) => setIngestForm({ ...ingestForm, latitude: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                     Longitude
                   </label>
                   <input
@@ -977,33 +1020,33 @@ export default function AdminJourneysPage() {
                     required
                     value={ingestForm.longitude}
                     onChange={(e) => setIngestForm({ ...ingestForm, longitude: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59' }}
                   />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                     Speed (km/h)
                   </label>
                   <input
                     type="number"
                     value={ingestForm.speed}
                     onChange={(e) => setIngestForm({ ...ingestForm, speed: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                     Heading (degrees)
                   </label>
                   <input
                     type="number"
                     value={ingestForm.heading}
                     onChange={(e) => setIngestForm({ ...ingestForm, heading: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0F172A', border: '1px solid #334155', color: '#F8FAFC' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F2C59' }}
                   />
                 </div>
               </div>
@@ -1012,7 +1055,7 @@ export default function AdminJourneysPage() {
                 <button
                   type="button"
                   onClick={() => setShowIngestModal(false)}
-                  style={{ background: '#475569', color: '#FFF', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer' }}
+                  style={{ background: '#CBD5E1', color: '#FFF', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>

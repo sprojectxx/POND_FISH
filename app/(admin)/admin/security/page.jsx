@@ -161,23 +161,23 @@ export default function AdminSecurityPage() {
 
   if (loading) {
     return (
-      <div style={{ color: '#94A3B8', fontSize: '14px', padding: '24px' }}>
-        ⏳ Loading administrative security posture...
+      <div style={{ color: '#64748B', fontSize: '14px', padding: '24px' }}>
+        Loading administrative security posture...
       </div>
     );
   }
 
   return (
-    <div style={{ color: '#F8FAFC', maxWidth: '1000px' }}>
+    <div style={{ color: '#0F2C59', maxWidth: '1000px' }}>
       {/* Page Header */}
       <div style={{ marginBottom: '28px' }}>
-        <div style={{ fontSize: '12px', color: '#38BDF8', fontWeight: '600', textTransform: 'uppercase', marginBottom: '4px' }}>
+        <div style={{ fontSize: '12px', color: '#1E56A0', fontWeight: '600', textTransform: 'uppercase', marginBottom: '4px' }}>
           Governance / Admin Security
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px 0' }}>
           Admin Security & Session Governance
         </h1>
-        <p style={{ fontSize: '14px', color: '#94A3B8', margin: 0 }}>
+        <p style={{ fontSize: '14px', color: '#64748B', margin: 0 }}>
           Manage your account credential security, active session tokens, and access policy.
         </p>
       </div>
@@ -193,7 +193,7 @@ export default function AdminSecurityPage() {
           marginBottom: '24px',
           fontSize: '14px',
         }}>
-          ⚠️ {error}
+          {error}
         </div>
       )}
 
@@ -218,31 +218,31 @@ export default function AdminSecurityPage() {
         gap: '16px',
         marginBottom: '28px',
       }}>
-        <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Account Status</div>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Account Status</div>
           <div style={{ fontSize: '16px', fontWeight: '600', color: '#10B981', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#10B981' }}></span>
             {profile?.status || 'ACTIVE'}
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Privilege Level</div>
-          <div style={{ fontSize: '16px', fontWeight: '600', color: '#38BDF8' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Privilege Level</div>
+          <div style={{ fontSize: '16px', fontWeight: '600', color: '#1E56A0' }}>
             {profile?.is_super_admin ? 'SUPER ADMINISTRATOR' : 'ADMINISTRATOR'}
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Current Session</div>
-          <div style={{ fontSize: '16px', fontWeight: '600', color: '#F8FAFC' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Current Session</div>
+          <div style={{ fontSize: '16px', fontWeight: '600', color: '#0F2C59' }}>
             AUTHENTICATED (JWT 12h)
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Last Profile Touch</div>
-          <div style={{ fontSize: '14px', fontWeight: '500', color: '#CBD5E1' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Last Profile Touch</div>
+          <div style={{ fontSize: '14px', fontWeight: '500', color: '#425B73' }}>
             {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'N/A'}
           </div>
         </div>
@@ -251,15 +251,15 @@ export default function AdminSecurityPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px' }}>
         {/* Change Password Card */}
         <div style={{
-          background: '#1E293B',
-          border: '1px solid #334155',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
           borderRadius: '12px',
           padding: '24px',
         }}>
           <h2 style={{ fontSize: '18px', fontWeight: '600', margin: '0 0 4px 0' }}>
             Change Password
           </h2>
-          <p style={{ fontSize: '13px', color: '#94A3B8', margin: '0 0 20px 0' }}>
+          <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 20px 0' }}>
             Updating credentials terminates all existing active sessions immediately.
           </p>
 
@@ -273,7 +273,7 @@ export default function AdminSecurityPage() {
               fontSize: '13px',
               marginBottom: '16px',
             }}>
-              ⚠️ {passwordError}
+              {passwordError}
             </div>
           )}
 
@@ -293,7 +293,7 @@ export default function AdminSecurityPage() {
 
           <form onSubmit={handleChangePassword}>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: '#CBD5E1', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#425B73', marginBottom: '6px' }}>
                 Current Password
               </label>
               <input
@@ -308,10 +308,10 @@ export default function AdminSecurityPage() {
                   width: '100%',
                   boxSizing: 'border-box',
                   padding: '10px 12px',
-                  background: '#0F172A',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '6px',
-                  color: '#F8FAFC',
+                  color: '#0F2C59',
                   fontSize: '14px',
                   outline: 'none',
                 }}
@@ -319,7 +319,7 @@ export default function AdminSecurityPage() {
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: '#CBD5E1', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#425B73', marginBottom: '6px' }}>
                 New Password (minimum 8 characters)
               </label>
               <input
@@ -334,10 +334,10 @@ export default function AdminSecurityPage() {
                   width: '100%',
                   boxSizing: 'border-box',
                   padding: '10px 12px',
-                  background: '#0F172A',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '6px',
-                  color: '#F8FAFC',
+                  color: '#0F2C59',
                   fontSize: '14px',
                   outline: 'none',
                 }}
@@ -345,7 +345,7 @@ export default function AdminSecurityPage() {
             </div>
 
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: '#CBD5E1', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#425B73', marginBottom: '6px' }}>
                 Confirm New Password
               </label>
               <input
@@ -360,10 +360,10 @@ export default function AdminSecurityPage() {
                   width: '100%',
                   boxSizing: 'border-box',
                   padding: '10px 12px',
-                  background: '#0F172A',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '6px',
-                  color: '#F8FAFC',
+                  color: '#0F2C59',
                   fontSize: '14px',
                   outline: 'none',
                 }}
@@ -393,8 +393,8 @@ export default function AdminSecurityPage() {
 
         {/* Active Sessions Card */}
         <div style={{
-          background: '#1E293B',
-          border: '1px solid #334155',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
           borderRadius: '12px',
           padding: '24px',
           display: 'flex',
@@ -404,11 +404,11 @@ export default function AdminSecurityPage() {
             <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
               Active Sessions
             </h2>
-            <span style={{ fontSize: '12px', background: '#334155', color: '#CBD5E1', padding: '2px 8px', borderRadius: '12px' }}>
+            <span style={{ fontSize: '12px', background: '#F1F5F9', color: '#425B73', padding: '2px 8px', borderRadius: '12px' }}>
               {sessions.length} Active
             </span>
           </div>
-          <p style={{ fontSize: '13px', color: '#94A3B8', margin: '0 0 20px 0' }}>
+          <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 20px 0' }}>
             Review sessions authorized to perform administrative operations.
           </p>
 
@@ -422,7 +422,7 @@ export default function AdminSecurityPage() {
                 <div
                   key={sess.sessionId}
                   style={{
-                    background: sess.isCurrent ? '#0F172A' : '#1E293B',
+                    background: sess.isCurrent ? '#EFF6FF' : '#FFFFFF',
                     border: sess.isCurrent ? '1px solid #0284C7' : '1px solid #334155',
                     borderRadius: '8px',
                     padding: '12px',
@@ -433,14 +433,14 @@ export default function AdminSecurityPage() {
                     <span style={{ fontSize: '13px', fontWeight: '600', color: sess.isCurrent ? '#38BDF8' : '#F8FAFC' }}>
                       {sess.isCurrent ? '📍 This Browser (Current Session)' : '💻 External Administrator Device'}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                    <span style={{ fontSize: '11px', color: '#64748B' }}>
                       IP: {sess.ip}
                     </span>
                   </div>
                   <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                     Client: {sess.userAgent}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#94A3B8' }}>
+                  <div style={{ fontSize: '11px', color: '#64748B' }}>
                     Signed in: {new Date(sess.createdAt).toLocaleString()}
                   </div>
                 </div>

@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * ADMIN-08 — Subscription Plans
+ * ADMIN-08 — Subscription Plans & Plan Fish Eligibility Management
  * Traceability:
  * - PondFish Page-by-Page UI Specification Admin Portal (Sections 67–69)
  * - PondFish Master PRD v2 (Section 12, 17)
+ * - Phase 2J-I: Plan Fish Eligibility Management
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -18,7 +19,7 @@ export default function AdminSubscriptionPlansPage() {
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // Modal State
+  // Create / Edit Plan Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
   const [formData, setFormData] = useState({
@@ -30,17 +31,15 @@ export default function AdminSubscriptionPlansPage() {
     active: true,
   });
 
-  // Fish Eligibility Modal State
+  // Fish Eligibility Modal State (Phase 2J-I)
   const [isFishModalOpen, setIsFishModalOpen] = useState(false);
   const [eligibilityPlan, setEligibilityPlan] = useState(null);
   const [eligibilityLoading, setEligibilityLoading] = useState(false);
   const [eligibilityFish, setEligibilityFish] = useState([]);
   const [selectedFishIds, setSelectedFishIds] = useState(new Set());
   const [fishSearch, setFishSearch] = useState('');
-  const [fishCategoryFilter, setFishCategoryFilter] = useState('ALL');
   const [fishModalError, setFishModalError] = useState(null);
   const [fishModalSaving, setFishModalSaving] = useState(false);
-
 
   const fetchPlans = async () => {
     try {
@@ -90,13 +89,13 @@ export default function AdminSubscriptionPlansPage() {
     setIsModalOpen(true);
   };
 
+  // Phase 2J-I: Open Fish Eligibility Modal and fetch eligibility records
   const openFishEligibilityModal = async (plan) => {
     setEligibilityPlan(plan);
     setIsFishModalOpen(true);
     setEligibilityLoading(true);
     setFishModalError(null);
     setFishSearch('');
-    setFishCategoryFilter('ALL');
 
     try {
       const res = await fetch(`/api/v1/admin/subscriptions/plans/${plan.id}/fish`);
@@ -178,7 +177,6 @@ export default function AdminSubscriptionPlansPage() {
       setFishModalSaving(false);
     }
   };
-
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -282,33 +280,33 @@ export default function AdminSubscriptionPlansPage() {
   }, [plans, search, statusFilter]);
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: '1400px', margin: '0 auto', color: '#F8FAFC' }}>
+    <div style={{ padding: '32px 40px', maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
         <div>
-          <h1 style={{ fontSize: '26px', fontWeight: '700', margin: '0 0 6px 0', letterSpacing: '-0.02em', color: '#F8FAFC' }}>
-            💳 Subscription Plans
+          <h1 style={{ fontSize: '26px', fontWeight: '800', margin: '0 0 6px 0', letterSpacing: '-0.02em', color: '#0F2C59' }}>
+            Subscription Plans
           </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#94A3B8' }}>
-            ADMIN-08 — Configuration-driven subscription tiers, pricing, credit allowances, and active subscriber metrics
+          <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
+            ADMIN-08 — Configuration-driven subscription tiers, pricing, credit allowances, and species eligibility
           </p>
         </div>
         <button
           id="btn-create-plan"
           onClick={openCreateModal}
           style={{
-            background: '#0284C7',
+            background: 'linear-gradient(135deg, #1E56A0 0%, #0F2C59 100%)',
             color: '#FFFFFF',
             border: 'none',
             padding: '10px 20px',
             borderRadius: '8px',
             fontSize: '14px',
-            fontWeight: '600',
+            fontWeight: '700',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
+            boxShadow: '0 4px 12px rgba(30, 86, 160, 0.25)',
             transition: 'all 0.15s ease',
           }}
         >
@@ -320,9 +318,9 @@ export default function AdminSubscriptionPlansPage() {
       {/* Feedback Messages */}
       {errorMsg && (
         <div style={{
-          background: 'rgba(239, 68, 68, 0.12)',
-          border: '1px solid #EF4444',
-          color: '#FCA5A5',
+          background: '#FEF2F2',
+          border: '1px solid #FECACA',
+          color: '#DC2626',
           padding: '12px 16px',
           borderRadius: '8px',
           marginBottom: '20px',
@@ -332,15 +330,15 @@ export default function AdminSubscriptionPlansPage() {
           alignItems: 'center',
         }}>
           <span>⚠️ {errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer', fontSize: '16px' }}>×</button>
+          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: '16px' }}>×</button>
         </div>
       )}
 
       {successMsg && (
         <div style={{
-          background: 'rgba(16, 185, 129, 0.12)',
-          border: '1px solid #10B981',
-          color: '#6EE7B7',
+          background: '#F0FDF4',
+          border: '1px solid #BBF7D0',
+          color: '#16A34A',
           padding: '12px 16px',
           borderRadius: '8px',
           marginBottom: '20px',
@@ -349,22 +347,23 @@ export default function AdminSubscriptionPlansPage() {
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <span>✅ {successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer', fontSize: '16px' }}>×</button>
+          <span>✓ {successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#16A34A', cursor: 'pointer', fontSize: '16px' }}>×</button>
         </div>
       )}
 
       {/* Control Bar: Search & Status Filters */}
       <div style={{
-        background: '#1E293B',
+        background: '#FFFFFF',
         padding: '16px 20px',
         borderRadius: '12px',
-        border: '1px solid #334155',
+        border: '1px solid #E2E8F0',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: '16px',
         marginBottom: '24px',
+        boxShadow: '0 2px 4px rgba(15, 44, 89, 0.04)',
       }}>
         <div style={{ display: 'flex', gap: '12px', flex: 1, maxWidth: '400px' }}>
           <input
@@ -376,10 +375,10 @@ export default function AdminSubscriptionPlansPage() {
             style={{
               width: '100%',
               padding: '10px 14px',
-              background: '#0F172A',
-              border: '1px solid #334155',
+              background: '#F8FAFC',
+              border: '1px solid #CBD5E1',
               borderRadius: '8px',
-              color: '#F8FAFC',
+              color: '#0F2C59',
               fontSize: '13px',
               outline: 'none',
             }}
@@ -393,13 +392,13 @@ export default function AdminSubscriptionPlansPage() {
               id={`filter-${st.toLowerCase()}`}
               onClick={() => setStatusFilter(st)}
               style={{
-                background: statusFilter === st ? '#0284C7' : '#0F172A',
-                color: statusFilter === st ? '#FFFFFF' : '#94A3B8',
-                border: '1px solid #334155',
+                background: statusFilter === st ? '#1E56A0' : '#F8FAFC',
+                color: statusFilter === st ? '#FFFFFF' : '#64748B',
+                border: '1px solid #CBD5E1',
                 padding: '8px 14px',
                 borderRadius: '6px',
                 fontSize: '12px',
-                fontWeight: '600',
+                fontWeight: '700',
                 cursor: 'pointer',
               }}
             >
@@ -411,30 +410,31 @@ export default function AdminSubscriptionPlansPage() {
 
       {/* Plans Table */}
       <div style={{
-        background: '#1E293B',
+        background: '#FFFFFF',
         borderRadius: '12px',
-        border: '1px solid #334155',
+        border: '1px solid #E2E8F0',
         overflow: 'hidden',
+        boxShadow: '0 4px 12px rgba(15, 44, 89, 0.04)',
       }}>
         {loading ? (
-          <div style={{ padding: '60px 20px', textAlign: 'center', color: '#94A3B8' }}>
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748B' }}>
             <div style={{ fontSize: '28px', marginBottom: '10px' }}>⏳</div>
             <div>Loading Subscription Plans...</div>
           </div>
         ) : filteredPlans.length === 0 ? (
-          <div style={{ padding: '60px 20px', textAlign: 'center', color: '#94A3B8' }}>
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748B' }}>
             <div style={{ fontSize: '32px', marginBottom: '10px' }}>📋</div>
-            <div style={{ fontSize: '16px', fontWeight: '600', color: '#E2E8F0', marginBottom: '4px' }}>
+            <div style={{ fontSize: '16px', fontWeight: '700', color: '#0F2C59', marginBottom: '4px' }}>
               No Subscription Plans Found
             </div>
-            <div style={{ fontSize: '13px' }}>
+            <div style={{ fontSize: '13px', color: '#64748B' }}>
               {search ? 'Try clearing your search query' : 'Create your first subscription plan to get started.'}
             </div>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
-              <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '11px' }}>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '11px', fontWeight: '800' }}>
                 <th style={{ padding: '14px 20px' }}>Plan Name</th>
                 <th style={{ padding: '14px 20px' }}>Price</th>
                 <th style={{ padding: '14px 20px' }}>Credit Added</th>
@@ -451,26 +451,26 @@ export default function AdminSubscriptionPlansPage() {
                   key={p.id}
                   id={`row-plan-${p.id}`}
                   style={{
-                    borderBottom: idx < filteredPlans.length - 1 ? '1px solid #334155' : 'none',
-                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.01)',
+                    borderBottom: idx < filteredPlans.length - 1 ? '1px solid #E2E8F0' : 'none',
+                    background: idx % 2 === 0 ? 'transparent' : '#F8FAFC',
                   }}
                 >
-                  <td style={{ padding: '16px 20px', fontWeight: '600', color: '#F8FAFC' }}>
+                  <td style={{ padding: '16px 20px', fontWeight: '700', color: '#0F2C59' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '16px' }}>👑</span>
+                      <span style={{ fontSize: '16px' }}>💎</span>
                       <span>{p.title}</span>
                     </div>
                   </td>
-                  <td style={{ padding: '16px 20px', color: '#38BDF8', fontWeight: '700', fontSize: '14px' }}>
+                  <td style={{ padding: '16px 20px', color: '#1E56A0', fontWeight: '700', fontSize: '14px' }}>
                     ₹{Number(p.price).toLocaleString('en-IN')}
                   </td>
-                  <td style={{ padding: '16px 20px', color: '#10B981', fontWeight: '600' }}>
+                  <td style={{ padding: '16px 20px', color: '#16A34A', fontWeight: '700' }}>
                     ₹{Number(p.credit_amount).toLocaleString('en-IN')}
                   </td>
-                  <td style={{ padding: '16px 20px', color: '#F8FAFC' }}>
+                  <td style={{ padding: '16px 20px', color: '#0F2C59', fontWeight: '600' }}>
                     {p.weekly_qty_limit_kg} kg / week
                   </td>
-                  <td style={{ padding: '16px 20px', color: '#94A3B8' }}>
+                  <td style={{ padding: '16px 20px', color: '#64748B' }}>
                     {p.validity_days} days validity
                   </td>
                   <td style={{ padding: '16px 20px' }}>
@@ -479,61 +479,61 @@ export default function AdminSubscriptionPlansPage() {
                       padding: '4px 10px',
                       borderRadius: '999px',
                       fontSize: '11px',
-                      fontWeight: '700',
+                      fontWeight: '800',
                       textTransform: 'uppercase',
                       letterSpacing: '0.04em',
-                      background: p.active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                      color: p.active ? '#10B981' : '#EF4444',
-                      border: `1px solid ${p.active ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                      background: p.active ? '#DCFCE7' : '#FEE2E2',
+                      color: p.active ? '#16A34A' : '#DC2626',
+                      border: `1px solid ${p.active ? '#BBF7D0' : '#FECACA'}`,
                     }}>
                       {p.active ? 'ACTIVE' : 'INACTIVE'}
                     </span>
                   </td>
-                  <td style={{ padding: '16px 20px', fontWeight: '600', color: '#E2E8F0' }}>
+                  <td style={{ padding: '16px 20px', fontWeight: '700', color: '#0F2C59' }}>
                     <span style={{
-                      background: '#0F172A',
+                      background: '#FFFFFF',
                       padding: '4px 12px',
                       borderRadius: '6px',
-                      border: '1px solid #334155',
+                      border: '1px solid #E2E8F0',
                     }}>
-                      👥 {p.active_subscribers || 0}
+                      {p.active_subscribers || 0}
                     </span>
                   </td>
                   <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {/* Phase 2J-I: Manage Plan Fish Eligibility Button */}
                       <button
                         id={`btn-fish-plan-${p.id}`}
                         onClick={() => openFishEligibilityModal(p)}
                         disabled={actionLoading}
                         style={{
-                          background: 'rgba(16, 185, 129, 0.1)',
-                          color: '#10B981',
-                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          background: '#ECFDF5',
+                          color: '#059669',
+                          border: '1px solid #A7F3D0',
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '12px',
-                          fontWeight: '600',
+                          fontWeight: '700',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '5px',
                         }}
                       >
-                        <span>🐟</span>
-                        <span>Eligible Fish</span>
+                        🐟 Eligible Fish {p.eligible_fish_count !== undefined ? `(${p.eligible_fish_count})` : ''}
                       </button>
                       <button
                         id={`btn-edit-plan-${p.id}`}
                         onClick={() => openEditModal(p)}
                         disabled={actionLoading}
                         style={{
-                          background: '#0F172A',
-                          color: '#38BDF8',
-                          border: '1px solid #334155',
+                          background: '#F0F9FF',
+                          color: '#0369A1',
+                          border: '1px solid #BAE6FD',
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '12px',
-                          fontWeight: '600',
+                          fontWeight: '700',
                           cursor: 'pointer',
                         }}
                       >
@@ -544,13 +544,13 @@ export default function AdminSubscriptionPlansPage() {
                         onClick={() => handleToggleActive(p)}
                         disabled={actionLoading}
                         style={{
-                          background: p.active ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                          color: p.active ? '#EF4444' : '#10B981',
-                          border: `1px solid ${p.active ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+                          background: p.active ? '#FEF2F2' : '#F0FDF4',
+                          color: p.active ? '#DC2626' : '#16A34A',
+                          border: `1px solid ${p.active ? '#FECACA' : '#BBF7D0'}`,
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '12px',
-                          fontWeight: '600',
+                          fontWeight: '700',
                           cursor: 'pointer',
                         }}
                       >
@@ -565,7 +565,7 @@ export default function AdminSubscriptionPlansPage() {
         )}
       </div>
 
-      {/* Plan Create / Edit Modal */}
+      {/* Create / Edit Plan Modal */}
       {isModalOpen && (
         <div style={{
           position: 'fixed',
@@ -573,7 +573,7 @@ export default function AdminSubscriptionPlansPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(11, 17, 32, 0.85)',
+          background: 'rgba(15, 44, 89, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -582,33 +582,35 @@ export default function AdminSubscriptionPlansPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             borderRadius: '16px',
-            border: '1px solid #334155',
+            border: '1px solid #E2E8F0',
             width: '100%',
-            maxWidth: '560px',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+            maxWidth: '540px',
+            boxShadow: '0 20px 40px rgba(15, 44, 89, 0.15)',
             overflow: 'hidden',
           }}>
             <div style={{
               padding: '20px 24px',
-              borderBottom: '1px solid #334155',
+              borderBottom: '1px solid #E2E8F0',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              background: '#0F172A',
+              background: '#F8FAFC',
             }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: '#F8FAFC' }}>
-                {editingPlan ? '✏️ Edit Subscription Plan' : '➕ Create Subscription Plan'}
+              <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#0F2C59' }}>
+                {editingPlan ? `Edit Plan: ${editingPlan.title}` : 'Create Subscription Plan'}
               </h2>
               <button
+                id="btn-close-plan-modal"
                 onClick={() => setIsModalOpen(false)}
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#94A3B8',
-                  fontSize: '20px',
+                  color: '#64748B',
+                  fontSize: '22px',
                   cursor: 'pointer',
+                  padding: '4px',
                 }}
               >
                 ×
@@ -619,7 +621,7 @@ export default function AdminSubscriptionPlansPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 {/* Plan Name */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '6px', textTransform: 'uppercase' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#425B73', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     Plan Name *
                   </label>
                   <input
@@ -632,10 +634,10 @@ export default function AdminSubscriptionPlansPage() {
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #CBD5E1',
                       borderRadius: '8px',
-                      color: '#F8FAFC',
+                      color: '#0F2C59',
                       fontSize: '14px',
                       outline: 'none',
                       boxSizing: 'border-box',
@@ -646,7 +648,7 @@ export default function AdminSubscriptionPlansPage() {
                 {/* Price and Credit Amount */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#425B73', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Price (₹) *
                     </label>
                     <input
@@ -661,17 +663,16 @@ export default function AdminSubscriptionPlansPage() {
                         setFormData({
                           ...formData,
                           price: val,
-                          // Default credit_amount to price if empty or creating
                           credit_amount: formData.credit_amount ? formData.credit_amount : val,
                         });
                       }}
                       style={{
                         width: '100%',
                         padding: '10px 14px',
-                        background: '#0F172A',
-                        border: '1px solid #334155',
+                        background: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
                         borderRadius: '8px',
-                        color: '#F8FAFC',
+                        color: '#0F2C59',
                         fontSize: '14px',
                         outline: 'none',
                         boxSizing: 'border-box',
@@ -680,7 +681,7 @@ export default function AdminSubscriptionPlansPage() {
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#425B73', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Credit Amount (₹) *
                     </label>
                     <input
@@ -694,10 +695,10 @@ export default function AdminSubscriptionPlansPage() {
                       style={{
                         width: '100%',
                         padding: '10px 14px',
-                        background: '#0F172A',
-                        border: '1px solid #334155',
+                        background: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
                         borderRadius: '8px',
-                        color: '#F8FAFC',
+                        color: '#0F2C59',
                         fontSize: '14px',
                         outline: 'none',
                         boxSizing: 'border-box',
@@ -709,7 +710,7 @@ export default function AdminSubscriptionPlansPage() {
                 {/* Weekly Quota and Validity Days */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#425B73', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Weekly Allowance (kg)
                     </label>
                     <input
@@ -722,10 +723,10 @@ export default function AdminSubscriptionPlansPage() {
                       style={{
                         width: '100%',
                         padding: '10px 14px',
-                        background: '#0F172A',
-                        border: '1px solid #334155',
+                        background: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
                         borderRadius: '8px',
-                        color: '#F8FAFC',
+                        color: '#0F2C59',
                         fontSize: '14px',
                         outline: 'none',
                         boxSizing: 'border-box',
@@ -734,7 +735,7 @@ export default function AdminSubscriptionPlansPage() {
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#425B73', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Expiry Rule (Days) *
                     </label>
                     <input
@@ -747,10 +748,10 @@ export default function AdminSubscriptionPlansPage() {
                       style={{
                         width: '100%',
                         padding: '10px 14px',
-                        background: '#0F172A',
-                        border: '1px solid #334155',
+                        background: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
                         borderRadius: '8px',
-                        color: '#F8FAFC',
+                        color: '#0F2C59',
                         fontSize: '14px',
                         outline: 'none',
                         boxSizing: 'border-box',
@@ -768,54 +769,55 @@ export default function AdminSubscriptionPlansPage() {
                     onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
                     style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                   />
-                  <label htmlFor="input-plan-active" style={{ fontSize: '14px', color: '#E2E8F0', cursor: 'pointer' }}>
+                  <label htmlFor="input-plan-active" style={{ fontSize: '14px', color: '#0F2C59', fontWeight: '600', cursor: 'pointer' }}>
                     Active Status (Eligible for new customer subscriptions)
                   </label>
                 </div>
               </div>
 
               {/* Modal Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '28px', borderTop: '1px solid #334155', paddingTop: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '28px', borderTop: '1px solid #E2E8F0', paddingTop: '20px' }}>
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   style={{
-                    background: '#0F172A',
-                    color: '#94A3B8',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    color: '#64748B',
+                    border: '1px solid #CBD5E1',
                     padding: '10px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
-                    fontWeight: '600',
+                    fontWeight: '700',
                     cursor: 'pointer',
                   }}
                 >
                   Cancel
                 </button>
                 <button
-                  id="btn-submit-plan"
+                  id="btn-save-plan"
                   type="submit"
                   disabled={actionLoading}
                   style={{
-                    background: '#0284C7',
+                    background: 'linear-gradient(135deg, #1E56A0 0%, #0F2C59 100%)',
                     color: '#FFFFFF',
                     border: 'none',
-                    padding: '10px 20px',
+                    padding: '10px 22px',
                     borderRadius: '8px',
                     fontSize: '13px',
-                    fontWeight: '600',
+                    fontWeight: '700',
                     cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)',
+                    boxShadow: '0 4px 12px rgba(30, 86, 160, 0.25)',
                   }}
                 >
-                  {actionLoading ? 'Saving...' : editingPlan ? 'Save Changes' : 'Create Plan'}
+                  {actionLoading ? 'Saving...' : editingPlan ? 'Update Plan' : 'Save Plan'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-      {/* Fish Eligibility Management Modal */}
+
+      {/* Phase 2J-I: Fish Eligibility Management Modal */}
       {isFishModalOpen && eligibilityPlan && (
         <div style={{
           position: 'fixed',
@@ -823,7 +825,7 @@ export default function AdminSubscriptionPlansPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(11, 17, 32, 0.85)',
+          background: 'rgba(15, 44, 89, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -832,13 +834,13 @@ export default function AdminSubscriptionPlansPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             borderRadius: '16px',
-            border: '1px solid #334155',
+            border: '1px solid #E2E8F0',
             width: '100%',
             maxWidth: '780px',
             maxHeight: '90vh',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+            boxShadow: '0 20px 40px rgba(15, 44, 89, 0.15)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -846,17 +848,17 @@ export default function AdminSubscriptionPlansPage() {
             {/* Modal Header */}
             <div style={{
               padding: '20px 24px',
-              borderBottom: '1px solid #334155',
+              borderBottom: '1px solid #E2E8F0',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              background: '#0F172A',
+              background: '#F8FAFC',
             }}>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 4px 0', color: '#F8FAFC' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 4px 0', color: '#0F2C59' }}>
                   🐟 Manage Eligible Fish — {eligibilityPlan.title}
                 </h2>
-                <p style={{ margin: 0, fontSize: '12px', color: '#94A3B8' }}>
+                <p style={{ margin: 0, fontSize: '12px', color: '#64748B' }}>
                   Plan quota: {eligibilityPlan.weekly_qty_limit_kg} kg/week • Plan price: ₹{Number(eligibilityPlan.price).toLocaleString('en-IN')}
                 </p>
               </div>
@@ -866,9 +868,10 @@ export default function AdminSubscriptionPlansPage() {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#94A3B8',
+                  color: '#64748B',
                   fontSize: '22px',
                   cursor: 'pointer',
+                  padding: '4px',
                 }}
               >
                 ×
@@ -878,11 +881,12 @@ export default function AdminSubscriptionPlansPage() {
             {/* Modal Error Banner */}
             {fishModalError && (
               <div style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                borderBottom: '1px solid #EF4444',
-                color: '#FCA5A5',
+                background: '#FEF2F2',
+                borderBottom: '1px solid #FECACA',
+                color: '#DC2626',
                 padding: '12px 24px',
                 fontSize: '13px',
+                fontWeight: '600',
               }}>
                 ⚠️ {fishModalError}
               </div>
@@ -891,8 +895,8 @@ export default function AdminSubscriptionPlansPage() {
             {/* Controls Bar: Search & Quick Selection */}
             <div style={{
               padding: '16px 24px',
-              background: '#1E293B',
-              borderBottom: '1px solid #334155',
+              background: '#FFFFFF',
+              borderBottom: '1px solid #E2E8F0',
               display: 'flex',
               gap: '12px',
               alignItems: 'center',
@@ -909,10 +913,10 @@ export default function AdminSubscriptionPlansPage() {
                   style={{
                     flex: 1,
                     padding: '8px 12px',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
                     borderRadius: '6px',
-                    color: '#F8FAFC',
+                    color: '#0F2C59',
                     fontSize: '13px',
                     outline: 'none',
                   }}
@@ -921,13 +925,13 @@ export default function AdminSubscriptionPlansPage() {
 
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <span style={{
-                  background: '#0F172A',
-                  color: '#38BDF8',
+                  background: '#F0F9FF',
+                  color: '#0369A1',
                   padding: '6px 12px',
                   borderRadius: '6px',
                   fontSize: '12px',
-                  fontWeight: '600',
-                  border: '1px solid #334155',
+                  fontWeight: '700',
+                  border: '1px solid #BAE6FD',
                 }}>
                   {selectedFishIds.size} of {eligibilityFish.length} eligible
                 </span>
@@ -943,12 +947,13 @@ export default function AdminSubscriptionPlansPage() {
                     handleSelectAllFiltered(filtered);
                   }}
                   style={{
-                    background: '#0F172A',
-                    color: '#F8FAFC',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    color: '#0F2C59',
+                    border: '1px solid #CBD5E1',
                     padding: '6px 12px',
                     borderRadius: '6px',
                     fontSize: '12px',
+                    fontWeight: '600',
                     cursor: 'pointer',
                   }}
                 >
@@ -965,12 +970,13 @@ export default function AdminSubscriptionPlansPage() {
                     handleDeselectAllFiltered(filtered);
                   }}
                   style={{
-                    background: '#0F172A',
-                    color: '#94A3B8',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    color: '#64748B',
+                    border: '1px solid #CBD5E1',
                     padding: '6px 12px',
                     borderRadius: '6px',
                     fontSize: '12px',
+                    fontWeight: '600',
                     cursor: 'pointer',
                   }}
                 >
@@ -980,14 +986,14 @@ export default function AdminSubscriptionPlansPage() {
             </div>
 
             {/* Fish List Body */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', background: '#F8FAFC' }}>
               {eligibilityLoading ? (
-                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94A3B8' }}>
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748B' }}>
                   <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
                   <div>Loading catalogue fish and plan eligibility...</div>
                 </div>
               ) : eligibilityFish.length === 0 ? (
-                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94A3B8' }}>
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748B' }}>
                   No fish found in the catalogue.
                 </div>
               ) : (
@@ -1010,8 +1016,8 @@ export default function AdminSubscriptionPlansPage() {
                             justifyContent: 'space-between',
                             padding: '12px 16px',
                             borderRadius: '8px',
-                            background: isChecked ? 'rgba(16, 185, 129, 0.08)' : '#0F172A',
-                            border: `1px solid ${isChecked ? 'rgba(16, 185, 129, 0.3)' : '#334155'}`,
+                            background: isChecked ? '#F0FDF4' : '#FFFFFF',
+                            border: `1px solid ${isChecked ? '#86EFAC' : '#E2E8F0'}`,
                             cursor: 'pointer',
                             transition: 'all 0.15s ease',
                           }}
@@ -1027,24 +1033,24 @@ export default function AdminSubscriptionPlansPage() {
                             />
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontWeight: '600', color: '#F8FAFC', fontSize: '14px' }}>
+                                <span style={{ fontWeight: '700', color: '#0F2C59', fontSize: '14px' }}>
                                   {fish.name}
                                 </span>
                                 {fish.categoryName && (
                                   <span style={{
                                     fontSize: '11px',
-                                    background: '#1E293B',
-                                    color: '#94A3B8',
+                                    background: '#F1F5F9',
+                                    color: '#475569',
                                     padding: '2px 8px',
                                     borderRadius: '4px',
-                                    border: '1px solid #334155',
+                                    fontWeight: '600',
                                   }}>
                                     {fish.categoryName}
                                   </span>
                                 )}
                               </div>
-                              <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>
-                                ₹{fish.unitPrice}/kg • {fish.physicalAvailable ? '✓ In Stock' : '✗ Out of Stock'}
+                              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                                Default Base Price: ₹{Number(fish.pricePerKg).toLocaleString('en-IN')}/kg
                               </div>
                             </div>
                           </div>
@@ -1056,9 +1062,9 @@ export default function AdminSubscriptionPlansPage() {
                               borderRadius: '999px',
                               fontSize: '11px',
                               fontWeight: '700',
-                              background: isChecked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.1)',
-                              color: isChecked ? '#10B981' : '#64748B',
-                              border: `1px solid ${isChecked ? 'rgba(16, 185, 129, 0.3)' : 'rgba(148, 163, 184, 0.2)'}`,
+                              background: isChecked ? '#DCFCE7' : '#F1F5F9',
+                              color: isChecked ? '#16A34A' : '#94A3B8',
+                              border: `1px solid ${isChecked ? '#BBF7D0' : '#E2E8F0'}`,
                             }}>
                               {isChecked ? 'ELIGIBLE' : 'NOT ELIGIBLE'}
                             </span>
@@ -1070,26 +1076,26 @@ export default function AdminSubscriptionPlansPage() {
               )}
             </div>
 
-            {/* Modal Footer */}
+            {/* Modal Footer Actions */}
             <div style={{
               padding: '16px 24px',
-              borderTop: '1px solid #334155',
+              borderTop: '1px solid #E2E8F0',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              background: '#0F172A',
+              background: '#FFFFFF',
             }}>
-              <div style={{ fontSize: '13px', color: '#94A3B8' }}>
-                Changes will take effect immediately for customer checkout.
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                Only eligible species can be claimed under this plan's weekly allowance.
               </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   type="button"
                   onClick={() => setIsFishModalOpen(false)}
                   style={{
-                    background: '#1E293B',
-                    color: '#94A3B8',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    color: '#64748B',
+                    border: '1px solid #CBD5E1',
                     padding: '8px 16px',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -1105,15 +1111,15 @@ export default function AdminSubscriptionPlansPage() {
                   onClick={handleSaveFishEligibility}
                   disabled={fishModalSaving || eligibilityLoading}
                   style={{
-                    background: '#0284C7',
+                    background: 'linear-gradient(135deg, #1E56A0 0%, #0F2C59 100%)',
                     color: '#FFFFFF',
                     border: 'none',
                     padding: '8px 20px',
                     borderRadius: '6px',
                     fontSize: '13px',
-                    fontWeight: '600',
+                    fontWeight: '700',
                     cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)',
+                    boxShadow: '0 2px 8px rgba(30, 86, 160, 0.3)',
                   }}
                 >
                   {fishModalSaving ? 'Saving...' : `Save Eligible Fish (${selectedFishIds.size})`}

@@ -129,7 +129,7 @@ export default function AdminCustomersPage() {
   }, [customers]);
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#F8FAFC' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -149,7 +149,7 @@ export default function AdminCustomersPage() {
               ADMIN-10
             </span>
           </div>
-          <p style={{ margin: '6px 0 0', color: '#94A3B8', fontSize: '14px' }}>
+          <p style={{ margin: '6px 0 0', color: '#64748B', fontSize: '14px' }}>
             View customer profiles, active subscription quotas, order histories, and account status governance.
           </p>
         </div>
@@ -157,9 +157,9 @@ export default function AdminCustomersPage() {
         <button
           onClick={fetchCustomers}
           style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
-            color: '#CBD5E1',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            color: '#425B73',
             padding: '10px 16px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -184,7 +184,7 @@ export default function AdminCustomersPage() {
           display: 'flex',
           justifyContent: 'space-between',
         }}>
-          <span>⚠️ {errorMsg}</span>
+          <span>{errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -208,20 +208,20 @@ export default function AdminCustomersPage() {
 
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>TOTAL CUSTOMERS</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#F8FAFC', marginTop: '4px' }}>{metrics.total}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TOTAL CUSTOMERS</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#0F2C59', marginTop: '4px' }}>{metrics.total}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>ACTIVE SUBSCRIBERS</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>ACTIVE SUBSCRIBERS</div>
           <div style={{ fontSize: '26px', fontWeight: '700', color: '#10B981', marginTop: '4px' }}>{metrics.subscribers}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>TOTAL BOOKINGS</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#38BDF8', marginTop: '4px' }}>{metrics.totalBookings}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TOTAL BOOKINGS</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#1E56A0', marginTop: '4px' }}>{metrics.totalBookings}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>BLOCKED ACCOUNTS</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>BLOCKED ACCOUNTS</div>
           <div style={{ fontSize: '26px', fontWeight: '700', color: metrics.blocked > 0 ? '#EF4444' : '#64748B', marginTop: '4px' }}>
             {metrics.blocked}
           </div>
@@ -230,10 +230,10 @@ export default function AdminCustomersPage() {
 
       {/* Search & Filters */}
       <div style={{
-        background: '#1E293B',
+        background: '#FFFFFF',
         padding: '16px 20px',
         borderRadius: '10px',
-        border: '1px solid #334155',
+        border: '1px solid #E2E8F0',
         marginBottom: '24px',
         display: 'flex',
         gap: '16px',
@@ -248,13 +248,11 @@ export default function AdminCustomersPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{
               width: '100%',
-              background: '#0F172A',
-              border: '1px solid #334155',
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
               borderRadius: '6px',
               padding: '10px 14px',
-              color: '#F8FAFC',
-              fontSize: '13px',
-              boxSizing: 'border-box',
+              color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
             }}
           />
         </div>
@@ -263,11 +261,11 @@ export default function AdminCustomersPage() {
           value={subFilter}
           onChange={(e) => setSubFilter(e.target.value)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #334155',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
             borderRadius: '6px',
             padding: '10px 14px',
-            color: '#F8FAFC',
+            color: '#0F2C59',
             fontSize: '13px',
           }}
         >
@@ -280,11 +278,11 @@ export default function AdminCustomersPage() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #334155',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
             borderRadius: '6px',
             padding: '10px 14px',
-            color: '#F8FAFC',
+            color: '#0F2C59',
             fontSize: '13px',
           }}
         >
@@ -295,10 +293,10 @@ export default function AdminCustomersPage() {
       </div>
 
       {/* Customers Table */}
-      <div style={{ background: '#1E293B', borderRadius: '10px', border: '1px solid #334155', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
-            <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Customer</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Phone</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Account Status</th>
@@ -311,21 +309,21 @@ export default function AdminCustomersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   Loading customer records...
                 </td>
               </tr>
             ) : filteredCustomers.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   No customer records found matching search filters.
                 </td>
               </tr>
             ) : (
               filteredCustomers.map((c) => (
-                <tr key={c.id} style={{ borderBottom: '1px solid #334155' }}>
+                <tr key={c.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                   <td style={{ padding: '14px 18px' }}>
-                    <div style={{ fontWeight: '600', color: '#F8FAFC' }}>
+                    <div style={{ fontWeight: '600', color: '#0F2C59' }}>
                       {c.name || 'Unnamed Customer'}
                     </div>
                     <div style={{ fontSize: '11px', color: '#64748B' }}>
@@ -333,7 +331,7 @@ export default function AdminCustomersPage() {
                     </div>
                   </td>
 
-                  <td style={{ padding: '14px 18px', fontFamily: 'monospace', color: '#CBD5E1' }}>
+                  <td style={{ padding: '14px 18px', fontFamily: 'monospace', color: '#425B73' }}>
                     +91 {c.mobile_number}
                   </td>
 
@@ -371,7 +369,7 @@ export default function AdminCustomersPage() {
                         <div style={{ color: '#10B981', fontWeight: '600', fontSize: '12px' }}>
                           ✓ {c.subscription_plan_name || 'Active Plan'}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#38BDF8', fontWeight: '600' }}>
+                        <div style={{ fontSize: '11px', color: '#1E56A0', fontWeight: '600' }}>
                           Balance: {Number(c.credit_balance || 0).toFixed(1)} kg
                         </div>
                       </div>
@@ -381,7 +379,7 @@ export default function AdminCustomersPage() {
                   </td>
 
                   <td style={{ padding: '14px 18px' }}>
-                    <div style={{ color: '#F8FAFC', fontWeight: '600' }}>
+                    <div style={{ color: '#0F2C59', fontWeight: '600' }}>
                       {c.bookings_count || 0} Bookings
                     </div>
                     <div style={{ fontSize: '11px', color: '#64748B' }}>
@@ -389,7 +387,7 @@ export default function AdminCustomersPage() {
                     </div>
                   </td>
 
-                  <td style={{ padding: '14px 18px', color: '#94A3B8', fontSize: '12px' }}>
+                  <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '12px' }}>
                     {new Date(c.created_at).toLocaleDateString()}
                   </td>
 
@@ -398,9 +396,9 @@ export default function AdminCustomersPage() {
                       <button
                         onClick={() => openCustomerDetails(c.id)}
                         style={{
-                          background: '#334155',
+                          background: '#F1F5F9',
                           border: 'none',
-                          color: '#F8FAFC',
+                          color: '#0F2C59',
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '12px',
@@ -437,7 +435,7 @@ export default function AdminCustomersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -446,8 +444,8 @@ export default function AdminCustomersPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             width: '100%',
             maxWidth: '720px',
@@ -460,7 +458,7 @@ export default function AdminCustomersPage() {
             {/* Modal Header */}
             <div style={{
               padding: '20px 24px',
-              borderBottom: '1px solid #334155',
+              borderBottom: '1px solid #E2E8F0',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
@@ -475,7 +473,7 @@ export default function AdminCustomersPage() {
               </div>
               <button
                 onClick={() => setSelectedCustomerId(null)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '18px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -484,7 +482,7 @@ export default function AdminCustomersPage() {
             {/* Modal Body */}
             <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
               {detailsLoading ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>
                   Loading customer details...
                 </div>
               ) : !customerDetails ? (
@@ -493,10 +491,10 @@ export default function AdminCustomersPage() {
                 <div>
                   {/* Identity Section */}
                   <div style={{
-                    background: '#0F172A',
+                    background: '#F8FAFC',
                     borderRadius: '8px',
                     padding: '16px 20px',
-                    border: '1px solid #334155',
+                    border: '1px solid #E2E8F0',
                     marginBottom: '20px',
                     display: 'grid',
                     gridTemplateColumns: 'repeat(3, 1fr)',
@@ -504,13 +502,13 @@ export default function AdminCustomersPage() {
                   }}>
                     <div>
                       <div style={{ fontSize: '11px', color: '#64748B' }}>CUSTOMER NAME</div>
-                      <div style={{ fontSize: '14px', fontWeight: '600', color: '#F8FAFC', marginTop: '4px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: '#0F2C59', marginTop: '4px' }}>
                         {customerDetails.customer?.name || 'Unnamed'}
                       </div>
                     </div>
                     <div>
                       <div style={{ fontSize: '11px', color: '#64748B' }}>MOBILE NUMBER</div>
-                      <div style={{ fontSize: '14px', fontWeight: '600', color: '#38BDF8', marginTop: '4px', fontFamily: 'monospace' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: '#1E56A0', marginTop: '4px', fontFamily: 'monospace' }}>
                         +91 {customerDetails.customer?.mobile_number}
                       </div>
                     </div>
@@ -522,19 +520,19 @@ export default function AdminCustomersPage() {
                     </div>
                     <div>
                       <div style={{ fontSize: '11px', color: '#64748B' }}>LOCALITY / AREA</div>
-                      <div style={{ fontSize: '13px', color: '#CBD5E1', marginTop: '4px' }}>
+                      <div style={{ fontSize: '13px', color: '#425B73', marginTop: '4px' }}>
                         {customerDetails.customer?.area || 'Not provided'}
                       </div>
                     </div>
                     <div>
                       <div style={{ fontSize: '11px', color: '#64748B' }}>AGE</div>
-                      <div style={{ fontSize: '13px', color: '#CBD5E1', marginTop: '4px' }}>
+                      <div style={{ fontSize: '13px', color: '#425B73', marginTop: '4px' }}>
                         {customerDetails.customer?.age || 'Not provided'}
                       </div>
                     </div>
                     <div>
                       <div style={{ fontSize: '11px', color: '#64748B' }}>JOINED DATE</div>
-                      <div style={{ fontSize: '13px', color: '#CBD5E1', marginTop: '4px' }}>
+                      <div style={{ fontSize: '13px', color: '#425B73', marginTop: '4px' }}>
                         {new Date(customerDetails.customer?.created_at).toLocaleDateString()}
                       </div>
                     </div>
@@ -542,7 +540,7 @@ export default function AdminCustomersPage() {
 
                   {/* Active Subscription Section */}
                   <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#38BDF8', marginBottom: '10px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1E56A0', marginBottom: '10px' }}>
                       Subscription State
                     </h3>
                     {customerDetails.activeSubscription ? (
@@ -575,7 +573,7 @@ export default function AdminCustomersPage() {
                         </div>
                       </div>
                     ) : (
-                      <div style={{ background: '#0F172A', padding: '12px 16px', borderRadius: '8px', border: '1px solid #334155', color: '#94A3B8', fontSize: '13px' }}>
+                      <div style={{ background: '#F8FAFC', padding: '12px 16px', borderRadius: '8px', border: '1px solid #E2E8F0', color: '#64748B', fontSize: '13px' }}>
                         No active monthly subscription plan.
                       </div>
                     )}
@@ -583,15 +581,15 @@ export default function AdminCustomersPage() {
 
                   {/* Recent Bookings Section */}
                   <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#CBD5E1', marginBottom: '10px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#425B73', marginBottom: '10px' }}>
                       Recent Bookings ({customerDetails.bookings?.length || 0})
                     </h3>
                     {(!customerDetails.bookings || customerDetails.bookings.length === 0) ? (
                       <div style={{ fontSize: '13px', color: '#64748B' }}>No booking records found.</div>
                     ) : (
-                      <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #334155', borderRadius: '6px' }}>
+                      <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                          <thead style={{ background: '#0F172A', color: '#94A3B8' }}>
+                          <thead style={{ background: '#F8FAFC', color: '#64748B' }}>
                             <tr>
                               <th style={{ padding: '8px 12px', textAlign: 'left' }}>Booking Code</th>
                               <th style={{ padding: '8px 12px', textAlign: 'left' }}>Total</th>
@@ -601,21 +599,21 @@ export default function AdminCustomersPage() {
                           </thead>
                           <tbody>
                             {customerDetails.bookings.slice(0, 10).map((b) => (
-                              <tr key={b.id} style={{ borderBottom: '1px solid #334155' }}>
-                                <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#38BDF8' }}>{b.booking_code}</td>
+                              <tr key={b.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                                <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#1E56A0' }}>{b.booking_code}</td>
                                 <td style={{ padding: '8px 12px' }}>₹{Number(b.total_amount).toFixed(2)}</td>
                                 <td style={{ padding: '8px 12px' }}>
                                   <span style={{
                                     fontSize: '10px',
                                     padding: '2px 6px',
                                     borderRadius: '3px',
-                                    background: b.status === 'COMPLETED' ? '#064E3B' : '#334155',
+                                    background: b.status === 'COMPLETED' ? '#064E3B' : '#E2E8F0',
                                     color: b.status === 'COMPLETED' ? '#6EE7B7' : '#CBD5E1',
                                   }}>
                                     {b.status}
                                   </span>
                                 </td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', color: '#94A3B8' }}>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748B' }}>
                                   {new Date(b.created_at).toLocaleDateString()}
                                 </td>
                               </tr>
@@ -628,15 +626,15 @@ export default function AdminCustomersPage() {
 
                   {/* Recent Transactions Section */}
                   <div>
-                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#CBD5E1', marginBottom: '10px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#425B73', marginBottom: '10px' }}>
                       Recent Financial Transactions ({customerDetails.transactions?.length || 0})
                     </h3>
                     {(!customerDetails.transactions || customerDetails.transactions.length === 0) ? (
                       <div style={{ fontSize: '13px', color: '#64748B' }}>No transaction records found.</div>
                     ) : (
-                      <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #334155', borderRadius: '6px' }}>
+                      <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                          <thead style={{ background: '#0F172A', color: '#94A3B8' }}>
+                          <thead style={{ background: '#F8FAFC', color: '#64748B' }}>
                             <tr>
                               <th style={{ padding: '8px 12px', textAlign: 'left' }}>Txn #</th>
                               <th style={{ padding: '8px 12px', textAlign: 'left' }}>Method</th>
@@ -646,11 +644,11 @@ export default function AdminCustomersPage() {
                           </thead>
                           <tbody>
                             {customerDetails.transactions.slice(0, 10).map((t) => (
-                              <tr key={t.id} style={{ borderBottom: '1px solid #334155' }}>
-                                <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#CBD5E1' }}>{t.transaction_number || t.id.slice(0, 8)}</td>
-                                <td style={{ padding: '8px 12px', color: '#94A3B8' }}>{t.payment_method}</td>
+                              <tr key={t.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                                <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#425B73' }}>{t.transaction_number || t.id.slice(0, 8)}</td>
+                                <td style={{ padding: '8px 12px', color: '#64748B' }}>{t.payment_method}</td>
                                 <td style={{ padding: '8px 12px', fontWeight: '600', color: '#10B981' }}>₹{Number(t.final_paid_amount || 0).toFixed(2)}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', color: '#94A3B8' }}>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748B' }}>
                                   {new Date(t.created_at).toLocaleDateString()}
                                 </td>
                               </tr>
@@ -665,13 +663,13 @@ export default function AdminCustomersPage() {
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #334155', display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setSelectedCustomerId(null)}
                 style={{
-                  background: '#334155',
+                  background: '#F1F5F9',
                   border: 'none',
-                  color: '#CBD5E1',
+                  color: '#425B73',
                   padding: '8px 18px',
                   borderRadius: '6px',
                   fontSize: '13px',
@@ -690,7 +688,7 @@ export default function AdminCustomersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -699,7 +697,7 @@ export default function AdminCustomersPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             border: `1px solid ${blockTarget.isBlocked ? '#10B981' : '#EF4444'}`,
             borderRadius: '12px',
             width: '100%',
@@ -709,7 +707,7 @@ export default function AdminCustomersPage() {
             <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: blockTarget.isBlocked ? '#6EE7B7' : '#FCA5A5' }}>
               {blockTarget.isBlocked ? `Reactivate Account: ${blockTarget.name}` : `Block Account: ${blockTarget.name}`}
             </h3>
-            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#CBD5E1', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#425B73', lineHeight: '1.5' }}>
               {blockTarget.isBlocked
                 ? `Customer (+91 ${blockTarget.mobile_number}) will regain access to create fresh bookings and claim subscription quotas.`
                 : `Blocking customer (+91 ${blockTarget.mobile_number}) will immediately reject all new order creation attempts at checkout. Historical booking snapshots and payment records remain preserved.`}
@@ -718,9 +716,9 @@ export default function AdminCustomersPage() {
               <button
                 onClick={() => setBlockTarget(null)}
                 style={{
-                  background: '#334155',
+                  background: '#F1F5F9',
                   border: 'none',
-                  color: '#CBD5E1',
+                  color: '#425B73',
                   padding: '8px 16px',
                   borderRadius: '6px',
                   fontSize: '13px',

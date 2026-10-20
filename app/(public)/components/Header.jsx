@@ -1,160 +1,260 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
+import { Download, ChevronDown, Menu, X } from './Icons';
+
+const navLinks = [
+  { label: 'Home', href: '/' },
+  { label: 'Fish', href: '/fish' },
+  { label: 'Offers', href: '/discounts' },
+  { label: 'Subscriptions', href: '/subscriptions' },
+  { label: 'How It Works', href: '/#how-it-works' },
+  { label: 'About', href: '/about' },
+  { label: 'Contact', href: '/contact' },
+];
 
 export default function Header() {
+  const [fishDropdown, setFishDropdown] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setFishDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  // Close mobile drawer on ESC or route change
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleKeyDown);
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [mobileMenuOpen]);
+
+  const closeMenu = () => {
+    setMobileMenuOpen(false);
+    setFishDropdown(false);
+  };
 
   return (
-    <header style={{
-      position: 'sticky',
-      top: 0,
-      zIndex: 50,
-      background: 'rgba(15, 23, 42, 0.95)',
-      backdropFilter: 'blur(8px)',
-      borderBottom: '1px solid #1E293B',
-      width: '100%'
-    }}>
-      <div style={{
-        maxWidth: '1240px',
-        margin: '0 auto',
-        padding: '0 24px',
-        height: '72px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        {/* Brand Logo & Tagline */}
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '10px',
-            background: '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            padding: '2px',
-            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
-            flexShrink: 0
-          }}>
-            <img
-              src="/logo.png"
-              alt="PondFish Logo"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
-          </div>
-          <div>
-            <span style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px', color: '#F8FAFC' }}>
-              POND<span style={{ color: '#38BDF8' }}>FISH</span>
-            </span>
-            <span style={{ display: 'block', fontSize: '11px', color: '#94A3B8', fontWeight: '500', marginTop: '-2px' }}>
-              Fresh Lake Catch Daily
-            </span>
-          </div>
-        </Link>
-
-        {/* Desktop Navigation */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '28px' }} className="pf-desktop-nav">
-          <Link href="/" style={{ fontSize: '14px', fontWeight: '600', color: '#F8FAFC', transition: 'color 0.2s' }}>
-            Home
-          </Link>
-          <Link href="/fish" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
-            Fish Catalogue
-          </Link>
-          <Link href="/categories" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
-            Categories
-          </Link>
-          <Link href="/discounts" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
-            Offers
-          </Link>
-          <Link href="/subscriptions" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
-            Subscriptions
-          </Link>
-          <Link href="/about" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
-            About
-          </Link>
-          <Link href="/contact" style={{ fontSize: '14px', fontWeight: '600', color: '#94A3B8', transition: 'color 0.2s' }}>
-            Store & Contact
-          </Link>
-        </nav>
-
-        {/* Right CTA */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Link
-            href="/fish"
-            style={{
-              padding: '10px 20px',
-              background: '#0284C7',
-              color: '#FFFFFF',
+    <header className="pf-header">
+      <div className="pf-container">
+        <div className="pf-header-inner">
+          {/* Brand Logo */}
+          <Link href="/" className="pf-logo" aria-label="PondFish Home" onClick={closeMenu} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+            <div style={{
+              width: '36px',
+              height: '36px',
               borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: '700',
-              display: 'inline-flex',
+              background: '#FFFFFF',
+              display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
-              transition: 'background 0.2s'
-            }}
-          >
-            <span>Browse Fish</span>
-            <span>&rarr;</span>
+              justifyContent: 'center',
+              overflow: 'hidden',
+              padding: '2px',
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 2px 4px rgba(15, 44, 89, 0.06)'
+            }}>
+              <img
+                src="/logo.png"
+                alt="PondFish"
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+            </div>
+            <span>
+              <span className="pf-logo-pond">Pond</span>
+              <span className="pf-logo-fish">Fish</span>
+            </span>
           </Link>
 
-          {/* Mobile Menu Button */}
+          {/* Desktop Nav */}
+          <nav className="pf-nav-links">
+            <Link href="/" className="pf-nav-link">Home</Link>
+
+            {/* Fish Dropdown Anchor */}
+            <div
+              ref={dropdownRef}
+              className="pf-nav-dropdown-wrapper"
+              onMouseEnter={() => setFishDropdown(true)}
+              onMouseLeave={() => setFishDropdown(false)}
+            >
+              <button
+                type="button"
+                className="pf-nav-link pf-nav-link-dropdown"
+                onClick={() => setFishDropdown((prev) => !prev)}
+                aria-expanded={fishDropdown}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  font: 'inherit',
+                  padding: '6px 12px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                <span>Fish</span>
+                <ChevronDown
+                  size={12}
+                  style={{
+                    transform: fishDropdown ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 0.15s ease',
+                  }}
+                />
+              </button>
+
+              {fishDropdown && (
+                <div className="pf-dropdown-menu">
+                  <Link href="/fish" className="pf-dropdown-item" onClick={() => setFishDropdown(false)}>All Fish Varieties</Link>
+                  <Link href="/fish?category=freshwater" className="pf-dropdown-item" onClick={() => setFishDropdown(false)}>Freshwater / Pond</Link>
+                  <Link href="/fish?category=marine" className="pf-dropdown-item" onClick={() => setFishDropdown(false)}>Sea Fish / Marine</Link>
+                  <Link href="/fish?category=shellfish" className="pf-dropdown-item" onClick={() => setFishDropdown(false)}>Shellfish &amp; Prawns</Link>
+                </div>
+              )}
+            </div>
+
+            {navLinks.slice(2).map((link) => (
+              <Link key={link.label} href={link.href} className="pf-nav-link">
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Right Action CTA (Desktop) */}
+          <div className="pf-header-actions">
+            <Link href="/#mobile-app" className="pf-btn-primary pf-btn-app" title="Download the PondFish Mobile App">
+              <Download size={14} />
+              <span>Download App</span>
+            </Link>
+          </div>
+
+          {/* Mobile Hamburger Button (3 lines) */}
           <button
+            type="button"
+            className="pf-mobile-hamburger"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle menu"
-            style={{
-              background: 'transparent',
-              border: '1px solid #334155',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              color: '#F8FAFC',
-              cursor: 'pointer',
-              display: 'none'
-            }}
-            className="pf-mobile-toggle"
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileMenuOpen}
           >
-            {mobileMenuOpen ? '✕' : '☰'}
+            {mobileMenuOpen ? <X size={26} color="#0f2c59" /> : <Menu size={26} color="#0f2c59" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div style={{
-          background: '#0B1120',
-          borderTop: '1px solid #1E293B',
-          padding: '20px 24px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px'
-        }}>
-          <Link href="/" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#F8FAFC' }}>
-            Home
-          </Link>
-          <Link href="/fish" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
-            Fish Catalogue
-          </Link>
-          <Link href="/categories" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
-            Categories
-          </Link>
-          <Link href="/discounts" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
-            Special Offers
-          </Link>
-          <Link href="/subscriptions" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
-            Subscription Plans
-          </Link>
-          <Link href="/about" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
-            Our Sourcing & Guarantee
-          </Link>
-          <Link href="/contact" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', fontWeight: '600', color: '#94A3B8' }}>
-            Store Hours & Location
-          </Link>
-        </div>
+      {/* Mobile Drawer Backdrop & Menu mounted to body */}
+      {mounted && mobileMenuOpen && createPortal(
+        <div className="pf-mobile-menu-overlay" onClick={closeMenu}>
+          <div className="pf-mobile-menu-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="pf-mobile-menu-header">
+              <Link href="/" className="pf-logo" onClick={closeMenu} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '6px',
+                  background: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  padding: '2px',
+                  border: '1px solid #E2E8F0',
+                }}>
+                  <img
+                    src="/logo.png"
+                    alt="PondFish"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                </div>
+                <span>
+                  <span className="pf-logo-pond">Pond</span>
+                  <span className="pf-logo-fish">Fish</span>
+                </span>
+              </Link>
+              <button
+                type="button"
+                className="pf-mobile-close-btn"
+                onClick={closeMenu}
+                aria-label="Close menu"
+              >
+                <X size={22} color="#0f2c59" />
+              </button>
+            </div>
+
+            <nav className="pf-mobile-nav-list">
+              <Link href="/" className="pf-mobile-nav-item" onClick={closeMenu}>
+                Home
+              </Link>
+              <Link href="/fish" className="pf-mobile-nav-item" onClick={closeMenu}>
+                All Fish Varieties
+              </Link>
+              <div className="pf-mobile-subnav">
+                <Link href="/fish?category=freshwater" className="pf-mobile-sublink" onClick={closeMenu}>
+                  • Freshwater / Pond
+                </Link>
+                <Link href="/fish?category=marine" className="pf-mobile-sublink" onClick={closeMenu}>
+                  • Sea Fish / Marine
+                </Link>
+                <Link href="/fish?category=shellfish" className="pf-mobile-sublink" onClick={closeMenu}>
+                  • Shellfish &amp; Prawns
+                </Link>
+              </div>
+              <Link href="/discounts" className="pf-mobile-nav-item" onClick={closeMenu}>
+                Offers &amp; Deals
+              </Link>
+              <Link href="/subscriptions" className="pf-mobile-nav-item" onClick={closeMenu}>
+                Seafood Subscriptions
+              </Link>
+              <Link href="/#how-it-works" className="pf-mobile-nav-item" onClick={closeMenu}>
+                How PondFish Works
+              </Link>
+              <Link href="/about" className="pf-mobile-nav-item" onClick={closeMenu}>
+                About Us
+              </Link>
+              <Link href="/contact" className="pf-mobile-nav-item" onClick={closeMenu}>
+                Contact Store
+              </Link>
+            </nav>
+
+            <div className="pf-mobile-menu-footer">
+              <Link
+                href="/#mobile-app"
+                className="pf-btn-primary"
+                style={{ width: '100%', justifyContent: 'center', padding: '12px 18px', fontSize: '14px' }}
+                onClick={closeMenu}
+              >
+                <Download size={16} />
+                <span>Download PondFish App</span>
+              </Link>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </header>
   );

@@ -53,10 +53,10 @@ export default function WorkerBookingSearchPage() {
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#F8FAFC', margin: '0 0 4px 0' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#0F2C59', margin: '0 0 4px 0', letterSpacing: '-0.02em' }}>
           Booking Lookup & Search
         </h1>
-        <p style={{ fontSize: '13px', color: '#94A3B8', margin: 0 }}>
+        <p style={{ fontSize: '13px', color: '#64748B', margin: 0, fontWeight: '500' }}>
           Retrieve customer bookings by Booking Code, Customer Name, or Mobile Number
         </p>
       </div>
@@ -64,8 +64,10 @@ export default function WorkerBookingSearchPage() {
       {/* Search Input Box */}
       <form onSubmit={handleSearch} style={{ display: 'flex', gap: '12px', marginBottom: '28px' }}>
         <div style={{ position: 'relative', flex: 1 }}>
-          <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px' }}>
-            🔍
+          <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
           </span>
           <input
             type="text"
@@ -74,14 +76,15 @@ export default function WorkerBookingSearchPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
               width: '100%',
-              padding: '16px 16px 16px 50px',
-              background: '#0F172A',
-              border: '1px solid #334155',
+              padding: '16px 16px 16px 48px',
+              background: '#FFFFFF',
+              border: '1px solid #CBD5E1',
               borderRadius: '12px',
-              color: '#F8FAFC',
+              color: '#0F2C59',
               fontSize: '15px',
               outline: 'none',
               boxSizing: 'border-box',
+              boxShadow: '0 2px 8px rgba(15, 44, 89, 0.04)',
             }}
           />
           {searchTerm.length > 0 && (
@@ -97,13 +100,18 @@ export default function WorkerBookingSearchPage() {
                 right: '16px',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                background: '#1E293B',
+                background: '#F1F5F9',
                 border: 'none',
-                color: '#94A3B8',
+                color: '#64748B',
                 borderRadius: '50%',
                 width: '24px',
                 height: '24px',
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                fontWeight: 'bold',
               }}
             >
               ✕
@@ -115,7 +123,7 @@ export default function WorkerBookingSearchPage() {
           disabled={searching || !searchTerm.trim()}
           style={{
             padding: '16px 28px',
-            background: '#0284C7',
+            background: '#1E56A0',
             border: 'none',
             borderRadius: '12px',
             color: '#FFFFFF',
@@ -124,6 +132,7 @@ export default function WorkerBookingSearchPage() {
             cursor: searching || !searchTerm.trim() ? 'not-allowed' : 'pointer',
             opacity: searching || !searchTerm.trim() ? 0.6 : 1,
             whiteSpace: 'nowrap',
+            boxShadow: '0 4px 12px rgba(30, 86, 160, 0.2)',
           }}
         >
           {searching ? 'Searching...' : 'Search Bookings'}
@@ -131,36 +140,44 @@ export default function WorkerBookingSearchPage() {
       </form>
 
       {/* Results Section */}
-      <div style={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '14px', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #1E293B', fontWeight: '700', fontSize: '14px', color: '#CBD5E1' }}>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)' }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid #E2E8F0', fontWeight: '800', fontSize: '14px', color: '#0F2C59', backgroundColor: '#F8FAFC' }}>
           {hasSearched ? `Search Results (${results.length})` : 'Recent Searches & Direct Lookup'}
         </div>
 
         {error && (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#EF4444', fontSize: '14px' }}>
+          <div style={{ padding: '24px', textAlign: 'center', color: '#DC2626', fontSize: '14px', backgroundColor: '#FEF2F2' }}>
             {error}
           </div>
         )}
 
         {!hasSearched && (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#94A3B8' }}>
-            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔎</div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#F8FAFC', marginBottom: '4px' }}>
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: '#64748B' }}>
+            <div style={{ width: '48px', height: '48px', margin: '0 auto 12px', borderRadius: '12px', background: '#F0F5FA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: '800', color: '#0F2C59', marginBottom: '4px' }}>
               Enter search query above
             </div>
-            <div style={{ fontSize: '13px' }}>
+            <div style={{ fontSize: '13px', color: '#64748B' }}>
               Type a customer name, phone number, or booking reference to retrieve an order.
             </div>
           </div>
         )}
 
         {hasSearched && !searching && results.length === 0 && !error && (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#94A3B8' }}>
-            <div style={{ fontSize: '40px', marginBottom: '12px' }}>❌</div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#F8FAFC', marginBottom: '4px' }}>
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: '#64748B' }}>
+            <div style={{ width: '48px', height: '48px', margin: '0 auto 12px', borderRadius: '12px', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: '800', color: '#0F2C59', marginBottom: '4px' }}>
               No bookings found matching &quot;{searchTerm}&quot;
             </div>
-            <div style={{ fontSize: '13px' }}>
+            <div style={{ fontSize: '13px', color: '#64748B' }}>
               Double check the spelling or ask the customer for their digital QR code.
             </div>
           </div>
@@ -172,8 +189,8 @@ export default function WorkerBookingSearchPage() {
               <div
                 key={booking.id}
                 style={{
-                  padding: '16px 20px',
-                  borderBottom: '1px solid #1E293B',
+                  padding: '18px 22px',
+                  borderBottom: '1px solid #E2E8F0',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -182,15 +199,16 @@ export default function WorkerBookingSearchPage() {
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '15px', fontWeight: '800', color: '#F8FAFC' }}>
+                    <span style={{ fontSize: '15px', fontWeight: '900', color: '#0F2C59', fontFamily: 'monospace' }}>
                       {booking.booking_code}
                     </span>
                     <span
                       style={{
-                        background: 'rgba(56, 189, 248, 0.15)',
-                        color: '#38BDF8',
+                        background: '#E0F2FE',
+                        color: '#0369A1',
+                        border: '1px solid #BAE6FD',
                         padding: '3px 8px',
-                        borderRadius: '6px',
+                        borderRadius: '20px',
                         fontSize: '11px',
                         fontWeight: '800',
                       }}
@@ -198,10 +216,10 @@ export default function WorkerBookingSearchPage() {
                       {booking.status}
                     </span>
                   </div>
-                  <div style={{ fontSize: '13px', color: '#CBD5E1', marginBottom: '4px' }}>
-                    <strong>{booking.customer_name}</strong> • {booking.customer_phone || 'Customer'}
+                  <div style={{ fontSize: '13px', color: '#425B73', marginBottom: '4px' }}>
+                    <strong style={{ color: '#0F2C59' }}>{booking.customer_name}</strong> • {booking.customer_phone || 'Customer'}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#94A3B8' }}>
+                  <div style={{ fontSize: '12px', color: '#64748B' }}>
                     {booking.item_count || 1} items ({booking.total_quantity_kg || 0} kg) • ₹{booking.total_amount}
                   </div>
                 </div>
@@ -209,14 +227,15 @@ export default function WorkerBookingSearchPage() {
                 <button
                   onClick={() => router.push(`/worker/bookings/${booking.id}`)}
                   style={{
-                    background: '#0284C7',
+                    background: '#1E56A0',
                     border: 'none',
                     color: '#FFFFFF',
-                    padding: '10px 16px',
+                    padding: '10px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
-                    fontWeight: '700',
+                    fontWeight: '800',
                     cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(30, 86, 160, 0.2)',
                   }}
                 >
                   Open Booking →

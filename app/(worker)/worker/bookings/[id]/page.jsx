@@ -147,16 +147,20 @@ export default function WorkerBookingDetailsPage({ params }) {
 
   if (error || !booking) {
     return (
-      <div style={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '14px', padding: '36px', textAlign: 'center' }}>
-        <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚠️</div>
-        <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#EF4444', marginBottom: '8px' }}>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '40px', textAlign: 'center', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)' }}>
+        <div style={{ width: '48px', height: '48px', margin: '0 auto 14px', borderRadius: '12px', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+        </div>
+        <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#DC2626', marginBottom: '8px' }}>
           Booking Unavailable
         </h2>
-        <p style={{ fontSize: '14px', color: '#94A3B8', marginBottom: '20px' }}>{error || 'Booking not found.'}</p>
+        <p style={{ fontSize: '14px', color: '#64748B', marginBottom: '20px' }}>{error || 'Booking not found.'}</p>
         <Link
           href="/worker/bookings"
           style={{
-            background: '#0284C7',
+            background: '#1E56A0',
             color: '#FFFFFF',
             padding: '10px 18px',
             borderRadius: '8px',
@@ -182,12 +186,12 @@ export default function WorkerBookingDetailsPage({ params }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Link
           href="/worker/bookings"
-          style={{ color: '#38BDF8', fontSize: '13px', fontWeight: '700', textDecoration: 'none' }}
+          style={{ color: '#1E56A0', fontSize: '13px', fontWeight: '800', textDecoration: 'none' }}
         >
           ← Back to Booking Queue
         </Link>
         <div style={{ fontSize: '12px', color: '#64748B' }}>
-          Booking Ref: <strong style={{ color: '#F8FAFC' }}>{booking.booking_code}</strong>
+          Booking Ref: <strong style={{ color: '#0F2C59' }}>{booking.booking_code}</strong>
         </div>
       </div>
 
@@ -195,21 +199,22 @@ export default function WorkerBookingDetailsPage({ params }) {
       {completed && (
         <div
           style={{
-            background: 'rgba(34, 197, 94, 0.15)',
-            border: '1px solid #22C55E',
-            borderRadius: '14px',
-            padding: '20px',
-            color: '#86EFAC',
+            background: '#ECFDF5',
+            border: '1px solid #A7F3D0',
+            borderRadius: '16px',
+            padding: '20px 24px',
+            color: '#166534',
+            boxShadow: '0 4px 14px rgba(22, 163, 74, 0.08)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '18px', fontWeight: '800', color: '#22C55E' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '18px', fontWeight: '800', color: '#15803D' }}>
             <span>✓</span> Booking Completed & Fulfilled Successfully!
           </div>
-          <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#BBF7D0' }}>
+          <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#166534' }}>
             The fresh catch has been handed over to the customer. Reserved inventory has been permanently consumed and the customer&apos;s digital QR ticket has been invalidated.
           </p>
           {completedTxn && (
-            <div style={{ marginTop: '12px', fontSize: '12px', color: '#4ADE80' }}>
+            <div style={{ marginTop: '12px', fontSize: '12px', color: '#15803D', fontWeight: '600' }}>
               Authoritative Transaction Reference: <strong>{completedTxn.transaction_number}</strong>
             </div>
           )}
@@ -217,23 +222,23 @@ export default function WorkerBookingDetailsPage({ params }) {
       )}
 
       {/* Main Order Card */}
-      <div style={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)' }}>
         {/* Card Header */}
         <div
           style={{
             padding: '20px 24px',
-            borderBottom: '1px solid #1E293B',
+            borderBottom: '1px solid #E2E8F0',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: '#131D33',
+            background: '#F8FAFC',
           }}
         >
           <div>
-            <div style={{ fontSize: '20px', fontWeight: '800', color: '#F8FAFC', letterSpacing: '-0.02em' }}>
+            <div style={{ fontSize: '20px', fontWeight: '900', color: '#0F2C59', letterSpacing: '-0.02em', fontFamily: 'monospace' }}>
               {booking.booking_code}
             </div>
-            <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
               Created: {new Date(booking.created_at).toLocaleString('en-IN')}
             </div>
           </div>
@@ -241,23 +246,29 @@ export default function WorkerBookingDetailsPage({ params }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span
               style={{
-                padding: '6px 12px',
-                borderRadius: '8px',
+                padding: '6px 14px',
+                borderRadius: '20px',
                 fontSize: '12px',
                 fontWeight: '800',
                 textTransform: 'uppercase',
                 background:
                   booking.status === 'COMPLETED'
-                    ? 'rgba(34, 197, 94, 0.2)'
+                    ? '#DCFCE7'
                     : booking.status === 'PENDING_COLLECTION'
-                    ? 'rgba(250, 204, 21, 0.2)'
-                    : 'rgba(56, 189, 248, 0.2)',
+                    ? '#FEF3C7'
+                    : '#E0F2FE',
                 color:
                   booking.status === 'COMPLETED'
-                    ? '#22C55E'
+                    ? '#166534'
                     : booking.status === 'PENDING_COLLECTION'
-                    ? '#FACC15'
-                    : '#38BDF8',
+                    ? '#B45309'
+                    : '#0369A1',
+                border:
+                  booking.status === 'COMPLETED'
+                    ? '1px solid #BBF7D0'
+                    : booking.status === 'PENDING_COLLECTION'
+                    ? '1px solid #FDE68A'
+                    : '1px solid #BAE6FD',
               }}
             >
               {booking.status}
@@ -269,18 +280,18 @@ export default function WorkerBookingDetailsPage({ params }) {
         <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
           {/* Column 1: Customer Details */}
           <div>
-            <h3 style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#94A3B8', margin: '0 0 12px 0' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.06em', margin: '0 0 12px 0' }}>
               Customer Details
             </h3>
-            <div style={{ background: '#1E293B', padding: '16px', borderRadius: '10px' }}>
-              <div style={{ fontSize: '16px', fontWeight: '800', color: '#F8FAFC', marginBottom: '4px' }}>
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px', borderRadius: '12px' }}>
+              <div style={{ fontSize: '16px', fontWeight: '800', color: '#0F2C59', marginBottom: '4px' }}>
                 {booking.customer_name || 'Valued Customer'}
               </div>
-              <div style={{ fontSize: '13px', color: '#38BDF8', marginBottom: '8px' }}>
-                📞 {booking.customer_phone || 'Registered Mobile'}
+              <div style={{ fontSize: '13px', color: '#1E56A0', marginBottom: '8px', fontWeight: '600' }}>
+                {booking.customer_phone || 'Registered Mobile'}
               </div>
-              <div style={{ fontSize: '12px', color: '#94A3B8' }}>
-                Pickup Window: <span style={{ color: isExpired ? '#EF4444' : '#F8FAFC', fontWeight: '700' }}>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                Pickup Window: <span style={{ color: isExpired ? '#DC2626' : '#0F2C59', fontWeight: '700' }}>
                   {isExpired ? 'EXPIRED' : expiresAt.toLocaleString('en-IN')}
                 </span>
               </div>
@@ -289,23 +300,23 @@ export default function WorkerBookingDetailsPage({ params }) {
 
           {/* Column 2: Financial & Payment Status */}
           <div>
-            <h3 style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#94A3B8', margin: '0 0 12px 0' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.06em', margin: '0 0 12px 0' }}>
               Financial & Payment State
             </h3>
-            <div style={{ background: '#1E293B', padding: '16px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span style={{ color: '#94A3B8' }}>Order Gross Total:</span>
-                <span style={{ fontWeight: '700', color: '#F8FAFC' }}>₹{booking.total_amount}</span>
+                <span style={{ color: '#64748B' }}>Order Gross Total:</span>
+                <span style={{ fontWeight: '700', color: '#0F2C59' }}>₹{booking.total_amount}</span>
               </div>
               {booking.sub_credit_used > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: '#94A3B8' }}>Subscription Credit:</span>
-                  <span style={{ fontWeight: '700', color: '#22C55E' }}>-₹{booking.sub_credit_used}</span>
+                  <span style={{ color: '#64748B' }}>Subscription Credit:</span>
+                  <span style={{ fontWeight: '700', color: '#15803D' }}>-₹{booking.sub_credit_used}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span style={{ color: '#94A3B8' }}>Online Paid (Razorpay):</span>
-                <span style={{ fontWeight: '700', color: '#38BDF8' }}>₹{booking.razorpay_paid}</span>
+                <span style={{ color: '#64748B' }}>Online Paid (Razorpay):</span>
+                <span style={{ fontWeight: '700', color: '#1E56A0' }}>₹{booking.razorpay_paid}</span>
               </div>
               <div
                 style={{
@@ -313,13 +324,13 @@ export default function WorkerBookingDetailsPage({ params }) {
                   justifyContent: 'space-between',
                   fontSize: '14px',
                   fontWeight: '800',
-                  borderTop: '1px solid #334155',
+                  borderTop: '1px solid #E2E8F0',
                   paddingTop: '8px',
                   marginTop: '4px',
                 }}
               >
-                <span style={{ color: '#F8FAFC' }}>Counter Balance Due:</span>
-                <span style={{ color: '#22C55E' }}>₹0 (Fully Paid)</span>
+                <span style={{ color: '#0F2C59' }}>Counter Balance Due:</span>
+                <span style={{ color: '#15803D' }}>₹0 (Fully Paid)</span>
               </div>
             </div>
           </div>
@@ -327,32 +338,32 @@ export default function WorkerBookingDetailsPage({ params }) {
 
         {/* Section: Reserved Catch Line Items */}
         <div style={{ padding: '0 24px 24px 24px' }}>
-          <h3 style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#94A3B8', margin: '0 0 12px 0' }}>
+          <h3 style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.06em', margin: '0 0 12px 0' }}>
             Reserved Catch Items ({items.length})
           </h3>
-          <div style={{ border: '1px solid #1E293B', borderRadius: '10px', overflow: 'hidden' }}>
+          <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
-                <tr style={{ background: '#131D33', color: '#94A3B8', borderBottom: '1px solid #1E293B' }}>
-                  <th style={{ padding: '12px 16px' }}>Fish Variety</th>
-                  <th style={{ padding: '12px 16px' }}>Reserved Weight</th>
-                  <th style={{ padding: '12px 16px' }}>Unit Price</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Subtotal</th>
+                <tr style={{ background: '#F1F5F9', color: '#0F2C59', borderBottom: '1px solid #E2E8F0' }}>
+                  <th style={{ padding: '12px 16px', fontWeight: '800' }}>Fish Variety</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '800' }}>Reserved Weight</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '800' }}>Unit Price</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '800' }}>Subtotal</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, idx) => (
-                  <tr key={idx} style={{ borderBottom: idx < items.length - 1 ? '1px solid #1E293B' : 'none' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: '700', color: '#F8FAFC' }}>
+                  <tr key={idx} style={{ borderBottom: idx < items.length - 1 ? '1px solid #E2E8F0' : 'none' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: '700', color: '#0F2C59' }}>
                       {item.fish_name}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#38BDF8', fontWeight: '700' }}>
+                    <td style={{ padding: '14px 16px', color: '#1E56A0', fontWeight: '800' }}>
                       {item.quantity_kg} kg
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#94A3B8' }}>
+                    <td style={{ padding: '14px 16px', color: '#64748B' }}>
                       ₹{item.unit_price}/kg
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '800', color: '#F8FAFC' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '800', color: '#0F2C59' }}>
                       ₹{item.subtotal}
                     </td>
                   </tr>
@@ -364,12 +375,12 @@ export default function WorkerBookingDetailsPage({ params }) {
 
         {/* Section: Preparation Checklist (WP-07) */}
         {!isTerminal && (
-          <div style={{ padding: '24px', background: '#131D33', borderTop: '1px solid #1E293B' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#F8FAFC', margin: '0 0 12px 0' }}>
+          <div style={{ padding: '24px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#0F2C59', margin: '0 0 12px 0' }}>
               Order Preparation & Physical Verification Checklist
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#CBD5E1', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#425B73', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={prepChecklist.inspected}
@@ -379,7 +390,7 @@ export default function WorkerBookingDetailsPage({ params }) {
                 1. Fresh catch inspected from cold storage and weighed to exact reserved quantities.
               </label>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#CBD5E1', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#425B73', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={prepChecklist.cutAndCleaned}
@@ -389,7 +400,7 @@ export default function WorkerBookingDetailsPage({ params }) {
                 2. Descaling, cutting, and dressing performed per customer preference.
               </label>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#CBD5E1', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#425B73', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={prepChecklist.packed}
@@ -405,15 +416,16 @@ export default function WorkerBookingDetailsPage({ params }) {
                 onClick={handleMarkPreparing}
                 disabled={preparing}
                 style={{
-                  background: '#0284C7',
+                  background: '#1E56A0',
                   border: 'none',
                   color: '#FFFFFF',
-                  padding: '10px 18px',
+                  padding: '11px 20px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: '700',
+                  fontWeight: '800',
                   cursor: preparing ? 'not-allowed' : 'pointer',
                   opacity: preparing ? 0.7 : 1,
+                  boxShadow: '0 2px 8px rgba(30, 86, 160, 0.2)',
                 }}
               >
                 {preparing ? 'Updating Status...' : 'Mark as In-Preparation (PENDING_COLLECTION) →'}
@@ -424,8 +436,8 @@ export default function WorkerBookingDetailsPage({ params }) {
 
         {/* Section: Handover Confirmation & Completion (WP-09 / WP-10) */}
         {!isTerminal && (
-          <div style={{ padding: '24px', background: '#0F172A', borderTop: '1px solid #1E293B' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#F8FAFC', margin: '0 0 12px 0' }}>
+          <div style={{ padding: '24px', background: '#FFFFFF', borderTop: '1px solid #E2E8F0' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#0F2C59', margin: '0 0 12px 0' }}>
               Final Order Handover & Fulfillment
             </h3>
 
@@ -434,9 +446,10 @@ export default function WorkerBookingDetailsPage({ params }) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
-                background: '#1E293B',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
                 padding: '16px',
-                borderRadius: '10px',
+                borderRadius: '12px',
                 marginBottom: '16px',
                 cursor: 'pointer',
               }}
@@ -447,7 +460,7 @@ export default function WorkerBookingDetailsPage({ params }) {
                 onChange={(e) => setHandoverConfirmed(e.target.checked)}
                 style={{ width: '20px', height: '20px', cursor: 'pointer' }}
               />
-              <span style={{ fontSize: '13px', color: '#F8FAFC', lineHeight: 1.4 }}>
+              <span style={{ fontSize: '13px', color: '#0F2C59', lineHeight: 1.4 }}>
                 <strong>Confirm Physical Handover:</strong> I verify that the packaged fresh fish has been physically handed over to the customer and the customer&apos;s digital ticket is being completed.
               </span>
             </label>
@@ -458,7 +471,7 @@ export default function WorkerBookingDetailsPage({ params }) {
               style={{
                 width: '100%',
                 padding: '16px',
-                background: '#16A34A',
+                background: '#15803D',
                 border: 'none',
                 borderRadius: '12px',
                 color: '#FFFFFF',
@@ -466,6 +479,7 @@ export default function WorkerBookingDetailsPage({ params }) {
                 fontWeight: '800',
                 cursor: completing || !handoverConfirmed ? 'not-allowed' : 'pointer',
                 opacity: completing || !handoverConfirmed ? 0.4 : 1,
+                boxShadow: '0 4px 12px rgba(21, 128, 61, 0.25)',
               }}
             >
               {completing

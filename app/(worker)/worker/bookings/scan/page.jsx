@@ -118,10 +118,10 @@ export default function WorkerQrScannerPage() {
   return (
     <div style={{ maxWidth: '640px', margin: '0 auto' }}>
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#F8FAFC', margin: '0 0 6px 0' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#0F2C59', margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
           Scan Customer Booking QR
         </h1>
-        <p style={{ fontSize: '13px', color: '#94A3B8', margin: 0 }}>
+        <p style={{ fontSize: '13px', color: '#64748B', margin: 0, fontWeight: '500' }}>
           Align the customer&apos;s digital pickup QR ticket within the camera frame
         </p>
       </div>
@@ -130,17 +130,17 @@ export default function WorkerQrScannerPage() {
       {scanError && (
         <div
           style={{
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid #EF4444',
+            background: '#FEF2F2',
+            border: '1px solid #FECACA',
             borderRadius: '12px',
             padding: '16px',
             marginBottom: '20px',
-            color: '#FCA5A5',
+            color: '#DC2626',
             fontSize: '14px',
             lineHeight: 1.5,
           }}
         >
-          <strong style={{ color: '#EF4444' }}>⚠️ QR Verification Notice:</strong>
+          <strong style={{ color: '#DC2626' }}>QR Verification Notice:</strong>
           <div style={{ marginTop: '4px' }}>{scanError}</div>
         </div>
       )}
@@ -148,19 +148,20 @@ export default function WorkerQrScannerPage() {
       {/* Viewfinder Card */}
       <div
         style={{
-          background: '#0F172A',
-          border: '1px solid #1E293B',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
           borderRadius: '16px',
           overflow: 'hidden',
           marginBottom: '24px',
           position: 'relative',
+          boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
         }}
       >
         <div
           style={{
             width: '100%',
             height: '360px',
-            background: '#000000',
+            background: '#0F2C59',
             position: 'relative',
             display: 'flex',
             alignItems: 'center',
@@ -182,25 +183,31 @@ export default function WorkerQrScannerPage() {
 
           {/* Camera Permission / Unavailable Message */}
           {!hasCamera && (
-            <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8' }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📷</div>
-              <div style={{ fontSize: '15px', fontWeight: '700', color: '#F8FAFC', marginBottom: '6px' }}>
+            <div style={{ padding: '24px', textAlign: 'center', color: '#CBD5E1' }}>
+              <div style={{ width: '56px', height: '56px', margin: '0 auto 14px', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: '800', color: '#FFFFFF', marginBottom: '6px' }}>
                 Camera Viewfinder
               </div>
-              <div style={{ fontSize: '13px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', marginBottom: '16px', color: '#94A3B8' }}>
                 {cameraError || 'Allow camera permission to scan QR tickets directly.'}
               </div>
               <button
                 onClick={startCamera}
                 style={{
-                  background: '#0284C7',
+                  background: '#1E56A0',
                   border: 'none',
                   color: '#FFFFFF',
-                  padding: '8px 16px',
+                  padding: '9px 18px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: '700',
+                  fontWeight: '800',
                   cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(30, 86, 160, 0.3)',
                 }}
               >
                 Retry Camera Access
@@ -215,9 +222,9 @@ export default function WorkerQrScannerPage() {
                 position: 'absolute',
                 width: '240px',
                 height: '240px',
-                border: '2px dashed rgba(56, 189, 248, 0.7)',
+                border: '2px dashed #93CCFF',
                 borderRadius: '16px',
-                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.4)',
+                boxShadow: '0 0 0 9999px rgba(15, 44, 89, 0.5)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -226,14 +233,15 @@ export default function WorkerQrScannerPage() {
             >
               <div
                 style={{
-                  color: '#38BDF8',
+                  color: '#FFFFFF',
                   fontSize: '11px',
                   fontWeight: '800',
                   textTransform: 'uppercase',
-                  background: 'rgba(15, 23, 42, 0.8)',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
+                  background: 'rgba(15, 44, 89, 0.9)',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
                   letterSpacing: '0.05em',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
                 }}
               >
                 Scan Target Area
@@ -242,19 +250,19 @@ export default function WorkerQrScannerPage() {
           )}
         </div>
 
-        <div style={{ padding: '16px', background: '#0F172A', textAlign: 'center', borderTop: '1px solid #1E293B' }}>
-          <span style={{ fontSize: '12px', color: '#64748B' }}>
+        <div style={{ padding: '16px', background: '#F8FAFC', textAlign: 'center', borderTop: '1px solid #E2E8F0' }}>
+          <span style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>
             Tip: Hold the customer&apos;s phone steadily about 6–10 inches from the camera.
           </span>
         </div>
       </div>
 
       {/* Fallback Manual Code / Token Entry Form */}
-      <div style={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '24px' }}>
-        <h2 style={{ fontSize: '16px', fontWeight: '800', color: '#F8FAFC', margin: '0 0 6px 0' }}>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '26px', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)' }}>
+        <h2 style={{ fontSize: '16px', fontWeight: '800', color: '#0F2C59', margin: '0 0 6px 0' }}>
           Manual Booking or Token Entry
         </h2>
-        <p style={{ fontSize: '12px', color: '#94A3B8', margin: '0 0 16px 0' }}>
+        <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 16px 0' }}>
           If the customer cannot present a QR or camera access is restricted, enter the booking reference code or token string:
         </p>
 
@@ -263,7 +271,7 @@ export default function WorkerQrScannerPage() {
             e.preventDefault();
             handleVerify(manualToken);
           }}
-          style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+          style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
         >
           <input
             type="text"
@@ -272,10 +280,10 @@ export default function WorkerQrScannerPage() {
             onChange={(e) => setManualToken(e.target.value)}
             style={{
               padding: '14px 16px',
-              background: '#1E293B',
-              border: '1px solid #334155',
+              background: '#F8FAFC',
+              border: '1px solid #CBD5E1',
               borderRadius: '10px',
-              color: '#F8FAFC',
+              color: '#0F2C59',
               fontSize: '14px',
               outline: 'none',
             }}
@@ -286,7 +294,7 @@ export default function WorkerQrScannerPage() {
             disabled={verifying || !manualToken.trim()}
             style={{
               padding: '14px',
-              background: '#0284C7',
+              background: '#1E56A0',
               border: 'none',
               borderRadius: '10px',
               color: '#FFFFFF',
@@ -294,6 +302,7 @@ export default function WorkerQrScannerPage() {
               fontWeight: '800',
               cursor: verifying || !manualToken.trim() ? 'not-allowed' : 'pointer',
               opacity: verifying || !manualToken.trim() ? 0.6 : 1,
+              boxShadow: '0 2px 8px rgba(30, 86, 160, 0.2)',
             }}
           >
             {verifying ? 'Verifying with Server...' : 'Verify & Open Booking Details →'}

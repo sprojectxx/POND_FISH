@@ -119,18 +119,18 @@ export default function AdminLoginPage() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: '#0B1120',
+      background: '#F0F5FA',
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-      padding: '20px',
+      padding: '24px 20px',
     }}>
       <div style={{
         width: '100%',
         maxWidth: '440px',
-        background: '#1E293B',
-        border: '1px solid #334155',
-        borderRadius: '12px',
-        padding: '36px 32px',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4)',
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
+        borderRadius: '16px',
+        padding: '38px 32px',
+        boxShadow: '0 20px 40px rgba(15, 44, 89, 0.08)',
       }}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
@@ -143,9 +143,10 @@ export default function AdminLoginPage() {
             borderRadius: '16px',
             background: '#FFFFFF',
             marginBottom: '14px',
-            boxShadow: '0 8px 16px -2px rgba(0, 0, 0, 0.4)',
+            boxShadow: '0 4px 12px rgba(15, 44, 89, 0.08)',
+            border: '1px solid #E2E8F0',
             overflow: 'hidden',
-            padding: '4px'
+            padding: '6px'
           }}>
             <img
               src="/logo.png"
@@ -153,39 +154,55 @@ export default function AdminLoginPage() {
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           </div>
-          <h1 style={{
-            fontSize: '22px',
-            fontWeight: '700',
-            color: '#F8FAFC',
-            margin: '0 0 6px 0',
-            letterSpacing: '-0.02em',
-          }}>
-            PONDFISH ADMIN
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '32px', fontWeight: '900', letterSpacing: '-0.06em', lineHeight: 1 }}>
+              <span style={{ color: '#0F2C59' }}>Pond</span>
+              <span style={{ color: '#2670B7' }}>Fish</span>
+            </span>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: '800',
+                background: '#E0F2FE',
+                color: '#0369A1',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              ADMIN
+            </span>
+          </div>
           <p style={{
             fontSize: '13px',
-            color: '#94A3B8',
+            color: '#64748B',
             margin: 0,
+            fontWeight: '500',
           }}>
-            Operational Access Control & Security Center
+            Operational Access Control &amp; Security Center
           </p>
         </div>
 
         {/* Info Notification */}
         {infoMessage && (
           <div style={{
-            background: '#0C4A6E',
-            border: '1px solid #0284C7',
-            color: '#E0F2FE',
+            background: '#F0F9FF',
+            border: '1px solid #BAE6FD',
+            color: '#0369A1',
             padding: '12px 14px',
-            borderRadius: '8px',
+            borderRadius: '10px',
             fontSize: '13px',
             marginBottom: '20px',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
           }}>
-            <span>ℹ️</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
             <span>{infoMessage}</span>
           </div>
         )}
@@ -193,18 +210,22 @@ export default function AdminLoginPage() {
         {/* Error Notification */}
         {errorMessage && (
           <div style={{
-            background: '#450A0A',
-            border: '1px solid #991B1B',
-            color: '#FECACA',
+            background: '#FEF2F2',
+            border: '1px solid #FEE2E2',
+            color: '#DC2626',
             padding: '12px 14px',
-            borderRadius: '8px',
+            borderRadius: '10px',
             fontSize: '13px',
             marginBottom: '20px',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
           }}>
-            <span>⚠️</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
             <span>{errorMessage}</span>
           </div>
         )}
@@ -214,10 +235,12 @@ export default function AdminLoginPage() {
           <div style={{ marginBottom: '20px' }}>
             <label style={{
               display: 'block',
-              fontSize: '13px',
-              fontWeight: '500',
-              color: '#CBD5E1',
+              fontSize: '12px',
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              color: '#425B73',
               marginBottom: '6px',
+              letterSpacing: '0.04em',
             }}>
               Administrator Email
             </label>
@@ -234,10 +257,10 @@ export default function AdminLoginPage() {
                 width: '100%',
                 boxSizing: 'border-box',
                 padding: '12px 14px',
-                background: '#0F172A',
-                border: '1px solid #334155',
-                borderRadius: '8px',
-                color: '#F8FAFC',
+                background: '#F8FAFC',
+                border: '1px solid #CBD5E1',
+                borderRadius: '10px',
+                color: '#0F2C59',
                 fontSize: '14px',
                 outline: 'none',
                 transition: 'border-color 0.2s',
@@ -248,10 +271,12 @@ export default function AdminLoginPage() {
           <div style={{ marginBottom: '24px' }}>
             <label style={{
               display: 'block',
-              fontSize: '13px',
-              fontWeight: '500',
-              color: '#CBD5E1',
+              fontSize: '12px',
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              color: '#425B73',
               marginBottom: '6px',
+              letterSpacing: '0.04em',
             }}>
               Password
             </label>
@@ -269,10 +294,10 @@ export default function AdminLoginPage() {
                   width: '100%',
                   boxSizing: 'border-box',
                   padding: '12px 42px 12px 14px',
-                  background: '#0F172A',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#F8FAFC',
+                  background: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '10px',
+                  color: '#0F2C59',
                   fontSize: '14px',
                   outline: 'none',
                 }}
@@ -289,12 +314,24 @@ export default function AdminLoginPage() {
                   border: 'none',
                   color: '#64748B',
                   cursor: 'pointer',
-                  fontSize: '16px',
-                  padding: '4px',
+                  padding: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
                 title={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? '👁️' : '🔒'}
+                {showPassword ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
@@ -306,30 +343,33 @@ export default function AdminLoginPage() {
             disabled={loading || lockoutSeconds > 0}
             style={{
               width: '100%',
-              padding: '12px',
-              borderRadius: '8px',
-              background: loading || lockoutSeconds > 0 ? '#334155' : '#0284C7',
+              padding: '14px',
+              borderRadius: '10px',
+              background: loading || lockoutSeconds > 0 ? '#CBD5E1' : 'linear-gradient(135deg, #1E56A0 0%, #0F2C59 100%)',
               border: 'none',
               color: '#FFFFFF',
-              fontSize: '14px',
-              fontWeight: '600',
+              fontSize: '15px',
+              fontWeight: '700',
               cursor: loading || lockoutSeconds > 0 ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2)',
+              boxShadow: '0 4px 14px rgba(30, 86, 160, 0.25)',
             }}
           >
             {loading ? (
               <>
-                <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
                 <span>Signing in...</span>
               </>
             ) : lockoutSeconds > 0 ? (
               <span>Locked ({lockoutSeconds}s)</span>
             ) : (
-              <span>Sign In</span>
+              <span>Sign In to Admin Portal</span>
             )}
           </button>
         </form>
@@ -338,13 +378,20 @@ export default function AdminLoginPage() {
         <div style={{
           marginTop: '28px',
           paddingTop: '20px',
-          borderTop: '1px solid #334155',
+          borderTop: '1px solid #E2E8F0',
           textAlign: 'center',
           fontSize: '12px',
           color: '#64748B',
           lineHeight: '1.5',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
         }}>
-          🛡️ Authorized Store Personnel Only. All access attempts are recorded to the permanent audit trail.
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          </svg>
+          <span>Authorized Store Personnel Only. Session logged to audit trail.</span>
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 const TYPE_CONFIG = {
-  SYSTEM: { label: 'System Notice', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#475569' },
+  SYSTEM: { label: 'System Notice', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#CBD5E1' },
   PROMO: { label: 'Promotion', bg: 'rgba(236, 72, 153, 0.15)', text: '#F472B6', border: '#DB2777' },
   ANNOUNCEMENT: { label: 'Announcement', bg: 'rgba(168, 85, 247, 0.15)', text: '#C084FC', border: '#9333EA' },
   BOOKING: { label: 'Booking', bg: 'rgba(56, 189, 248, 0.15)', text: '#38BDF8', border: '#0284C7' },
@@ -75,8 +75,8 @@ export default function AdminNotificationDetailPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: '48px', textAlign: 'center', color: '#94A3B8' }}>
-        <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔄</div>
+      <div style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
+        <div style={{ fontSize: '32px', marginBottom: '12px' }}></div>
         <div style={{ fontSize: '15px' }}>Loading notification details...</div>
       </div>
     );
@@ -84,7 +84,7 @@ export default function AdminNotificationDetailPage() {
 
   if (errorMsg || !notification) {
     return (
-      <div style={{ padding: '32px', maxWidth: '800px', margin: '0 auto', color: '#F8FAFC' }}>
+      <div style={{ padding: '32px', maxWidth: '800px', margin: '0 auto', color: '#0F2C59' }}>
         <div
           style={{
             padding: '24px',
@@ -94,7 +94,7 @@ export default function AdminNotificationDetailPage() {
             textAlign: 'center',
           }}
         >
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}></div>
           <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 8px 0' }}>Notification Not Found</h2>
           <p style={{ fontSize: '13px', color: '#FCA5A5', marginBottom: '20px' }}>{errorMsg}</p>
           <Link
@@ -121,7 +121,7 @@ export default function AdminNotificationDetailPage() {
   const typeBadge = TYPE_CONFIG[notification.type] || TYPE_CONFIG.SYSTEM;
 
   return (
-    <div style={{ padding: '24px 32px', color: '#F8FAFC', maxWidth: '1100px', margin: '0 auto' }}>
+    <div style={{ padding: '24px 32px', color: '#0F2C59', maxWidth: '1100px', margin: '0 auto' }}>
       {/* Back button & Header */}
       <div style={{ marginBottom: '24px' }}>
         <Link
@@ -131,7 +131,7 @@ export default function AdminNotificationDetailPage() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            color: '#38BDF8',
+            color: '#1E56A0',
             textDecoration: 'none',
             fontSize: '13px',
             fontWeight: '500',
@@ -161,8 +161,8 @@ export default function AdminNotificationDetailPage() {
                 {typeBadge.label}
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '6px' }}>
-              Created: <span style={{ color: '#F8FAFC' }}>{formatDate(notification.createdAt)}</span> • ID:{' '}
+            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px' }}>
+              Created: <span style={{ color: '#0F2C59' }}>{formatDate(notification.createdAt)}</span> • ID:{' '}
               <span style={{ fontFamily: 'monospace', color: '#64748B' }}>{notification.id}</span>
             </div>
           </div>
@@ -174,30 +174,30 @@ export default function AdminNotificationDetailPage() {
         <div
           id="card-recipient-details"
           style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             borderRadius: '12px',
             padding: '20px',
-            border: '1px solid #334155',
+            border: '1px solid #E2E8F0',
           }}
         >
-          <h2 style={{ fontSize: '14px', fontWeight: '700', color: '#38BDF8', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>👤</span> Recipient Information
+          <h2 style={{ fontSize: '14px', fontWeight: '700', color: '#1E56A0', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span></span> Recipient Information
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94A3B8' }}>Customer Name:</span>
-              <span style={{ fontWeight: '600', color: '#F8FAFC' }}>{notification.customerName || 'Valued Customer'}</span>
+              <span style={{ color: '#64748B' }}>Customer Name:</span>
+              <span style={{ fontWeight: '600', color: '#0F2C59' }}>{notification.customerName || 'Valued Customer'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94A3B8' }}>Mobile Number:</span>
-              <span style={{ fontWeight: '600', color: '#F8FAFC' }}>{notification.customerPhone || '—'}</span>
+              <span style={{ color: '#64748B' }}>Mobile Number:</span>
+              <span style={{ fontWeight: '600', color: '#0F2C59' }}>{notification.customerPhone || '—'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94A3B8' }}>Delivery Area:</span>
-              <span style={{ color: '#F8FAFC' }}>{notification.customerArea || 'Standard Service Zone'}</span>
+              <span style={{ color: '#64748B' }}>Delivery Area:</span>
+              <span style={{ color: '#0F2C59' }}>{notification.customerArea || 'Standard Service Zone'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94A3B8' }}>Customer UUID:</span>
+              <span style={{ color: '#64748B' }}>Customer UUID:</span>
               <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#64748B' }}>
                 {notification.customerId}
               </span>
@@ -209,18 +209,18 @@ export default function AdminNotificationDetailPage() {
         <div
           id="card-content-details"
           style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             borderRadius: '12px',
             padding: '20px',
-            border: '1px solid #334155',
+            border: '1px solid #E2E8F0',
           }}
         >
-          <h2 style={{ fontSize: '14px', fontWeight: '700', color: '#38BDF8', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: '14px', fontWeight: '700', color: '#1E56A0', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span>✉️</span> Message Content & Status
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#94A3B8' }}>In-App Read State:</span>
+              <span style={{ color: '#64748B' }}>In-App Read State:</span>
               <span
                 style={{
                   padding: '2px 8px',
@@ -235,14 +235,14 @@ export default function AdminNotificationDetailPage() {
               </span>
             </div>
             <div>
-              <span style={{ display: 'block', color: '#94A3B8', marginBottom: '6px' }}>Message Body:</span>
+              <span style={{ display: 'block', color: '#64748B', marginBottom: '6px' }}>Message Body:</span>
               <div
                 style={{
-                  background: '#0F172A',
+                  background: '#F8FAFC',
                   padding: '12px 14px',
                   borderRadius: '8px',
-                  border: '1px solid #334155',
-                  color: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  color: '#0F2C59',
                   lineHeight: '1.5',
                   fontSize: '13px',
                 }}
@@ -258,26 +258,26 @@ export default function AdminNotificationDetailPage() {
       <div
         id="card-deliveries"
         style={{
-          background: '#1E293B',
+          background: '#FFFFFF',
           borderRadius: '12px',
           padding: '20px',
-          border: '1px solid #334155',
+          border: '1px solid #E2E8F0',
           marginBottom: '24px',
         }}
       >
-        <h2 style={{ fontSize: '15px', fontWeight: '700', color: '#F8FAFC', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: '700', color: '#0F2C59', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>🚀</span> Multi-Channel Push Delivery Attempts ({notification.deliveries?.length || 0})
         </h2>
 
         {(!notification.deliveries || notification.deliveries.length === 0) ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+          <div style={{ padding: '24px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
             No external push delivery records logged for this notification. Delivered via In-App Bell Channel.
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
               <thead>
-                <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
                   <th style={{ padding: '10px 14px' }}>Channel</th>
                   <th style={{ padding: '10px 14px' }}>Delivery Status</th>
                   <th style={{ padding: '10px 14px' }}>Provider Message ID</th>
@@ -291,8 +291,8 @@ export default function AdminNotificationDetailPage() {
                   const isSent = del.status === 'SENT';
                   const isFailed = del.status === 'FAILED';
                   return (
-                    <tr key={del.id} style={{ borderBottom: '1px solid #334155' }}>
-                      <td style={{ padding: '12px 14px', fontWeight: '600', color: '#F8FAFC' }}>
+                    <tr key={del.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                      <td style={{ padding: '12px 14px', fontWeight: '600', color: '#0F2C59' }}>
                         {del.channel}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
@@ -316,8 +316,8 @@ export default function AdminNotificationDetailPage() {
                       <td style={{ padding: '12px 14px', fontFamily: 'monospace', color: '#64748B' }}>
                         {del.providerMessageId || '—'}
                       </td>
-                      <td style={{ padding: '12px 14px', color: '#94A3B8' }}>{formatDate(del.sentAt)}</td>
-                      <td style={{ padding: '12px 14px', color: '#94A3B8' }}>
+                      <td style={{ padding: '12px 14px', color: '#64748B' }}>{formatDate(del.sentAt)}</td>
+                      <td style={{ padding: '12px 14px', color: '#64748B' }}>
                         {formatDate(del.deliveredAt || del.failedAt)}
                       </td>
                       <td style={{ padding: '12px 14px', color: isFailed ? '#EF4444' : '#64748B' }}>
@@ -336,18 +336,18 @@ export default function AdminNotificationDetailPage() {
       <div
         id="card-audit-logs"
         style={{
-          background: '#1E293B',
+          background: '#FFFFFF',
           borderRadius: '12px',
           padding: '20px',
-          border: '1px solid #334155',
+          border: '1px solid #E2E8F0',
         }}
       >
-        <h2 style={{ fontSize: '15px', fontWeight: '700', color: '#F8FAFC', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>📋</span> Administrative Audit Records ({notification.auditLogs?.length || 0})
+        <h2 style={{ fontSize: '15px', fontWeight: '700', color: '#0F2C59', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span></span> Administrative Audit Records ({notification.auditLogs?.length || 0})
         </h2>
 
         {(!notification.auditLogs || notification.auditLogs.length === 0) ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+          <div style={{ padding: '20px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
             Event generated via system event trigger (e.g. Booking/Subscription/Order domain event).
           </div>
         ) : (
@@ -356,18 +356,18 @@ export default function AdminNotificationDetailPage() {
               <div
                 key={log.id}
                 style={{
-                  background: '#0F172A',
+                  background: '#F8FAFC',
                   borderRadius: '8px',
                   padding: '14px',
-                  border: '1px solid #334155',
+                  border: '1px solid #E2E8F0',
                   fontSize: '12px',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontWeight: '700', color: '#38BDF8' }}>{log.action}</span>
-                    <span style={{ color: '#94A3B8' }}>by</span>
-                    <span style={{ fontWeight: '600', color: '#F8FAFC' }}>
+                    <span style={{ fontWeight: '700', color: '#1E56A0' }}>{log.action}</span>
+                    <span style={{ color: '#64748B' }}>by</span>
+                    <span style={{ fontWeight: '600', color: '#0F2C59' }}>
                       {log.actorType}: {log.actorId}
                     </span>
                   </div>
@@ -376,13 +376,13 @@ export default function AdminNotificationDetailPage() {
                 {log.payload && (
                   <pre
                     style={{
-                      background: '#1E293B',
+                      background: '#FFFFFF',
                       padding: '8px 12px',
                       borderRadius: '6px',
                       margin: 0,
                       fontFamily: 'monospace',
                       fontSize: '11px',
-                      color: '#CBD5E1',
+                      color: '#425B73',
                       overflowX: 'auto',
                     }}
                   >

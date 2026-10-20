@@ -1,0 +1,242 @@
+/* ==========================================================================
+   PondFish Transaction TV Portal - Mobile & Responsive Stylesheet
+   ========================================================================== */
+
+/* Root Viewport Containment */
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.pf-tv-shell {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #F0F5FA;
+  color: #0F2C59;
+  font-family: 'Plus Jakarta Sans', var(--font-jakarta), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* Header */
+.pf-tv-header {
+  background: #FFFFFF;
+  border-bottom: 1px solid #CBD5E1;
+  padding: 20px 36px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 16px rgba(15, 44, 89, 0.05);
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.pf-tv-header-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-tv-header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Main */
+.pf-tv-main {
+  flex: 1;
+  padding: 24px 36px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.pf-tv-feed-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  width: 100%;
+}
+
+.pf-tv-table-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 24px;
+  background-color: #E8F1F5;
+  border-radius: 12px 12px 0 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #0F2C59;
+  border-bottom: 1px solid #CBD5E1;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.pf-tv-list-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.pf-tv-card {
+  display: flex;
+  align-items: center;
+  padding: 18px 24px;
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(15, 44, 89, 0.04);
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Mobile Responsive Breakpoint (<= 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* TV shell scrolls vertically on mobile phones */
+  .pf-tv-shell {
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Compact Mobile Header */
+  .pf-tv-header {
+    padding: 12px 14px !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+
+  .pf-tv-brand-title {
+    font-size: 20px !important;
+  }
+
+  .pf-tv-brand-subtitle {
+    font-size: 11px !important;
+  }
+
+  .pf-tv-header-right {
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .pf-tv-clock-time {
+    font-size: 16px !important;
+  }
+
+  .pf-tv-clock-date {
+    font-size: 10px !important;
+  }
+
+  .pf-tv-status-badge {
+    padding: 5px 10px !important;
+    gap: 6px !important;
+  }
+
+  .pf-tv-status-text {
+    font-size: 11px !important;
+  }
+
+  .pf-tv-action-btn {
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+
+  /* Main Workspace */
+  .pf-tv-main {
+    padding: 14px 12px !important;
+    overflow-y: visible !important;
+    height: auto !important;
+  }
+
+  .pf-tv-feed-wrapper {
+    height: auto !important;
+    overflow-y: visible !important;
+  }
+
+  /* Hide flat 4-column desktop table header on phone screens */
+  .pf-tv-table-header {
+    display: none !important;
+  }
+
+  .pf-tv-list-container {
+    overflow-y: visible !important;
+    height: auto !important;
+    gap: 10px !important;
+  }
+
+  /* Transform transaction row into a card layout */
+  .pf-tv-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 14px 14px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Card Top Row: Order code & Paid amount */
+  .pf-tv-card-top {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+
+  .pf-tv-card-customer-col {
+    width: 100% !important;
+  }
+
+  .pf-tv-card-customer-name {
+    font-size: 17px !important;
+  }
+
+  .pf-tv-card-fish-col {
+    width: 100% !important;
+  }
+
+  .pf-tv-card-amount-col {
+    display: none !important; /* already shown in top row on mobile */
+  }
+
+  .pf-tv-card-mobile-amount {
+    display: inline-block !important;
+    font-size: 18px !important;
+    font-weight: 900 !important;
+    color: #15803D !important;
+  }
+
+  /* Empty state card */
+  .pf-tv-empty-card {
+    padding: 28px 16px !important;
+    margin: 16px auto !important;
+    border-radius: 14px !important;
+    max-width: 100% !important;
+  }
+
+  .pf-tv-empty-title {
+    font-size: 18px !important;
+  }
+
+  .pf-tv-empty-subtitle {
+    font-size: 13px !important;
+    margin-bottom: 16px !important;
+  }
+}

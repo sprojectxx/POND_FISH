@@ -69,30 +69,46 @@ export default function WorkerLoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#0B1120',
+        background: '#F0F5FA',
         padding: '24px',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
       }}
     >
       <div
         style={{
           width: '100%',
           maxWidth: '420px',
-          background: '#0F172A',
-          border: '1px solid #1E293B',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
           borderRadius: '16px',
-          padding: '36px 32px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+          padding: '40px 36px',
+          boxShadow: '0 10px 30px rgba(15, 44, 89, 0.08)',
         }}
       >
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div style={{ fontSize: '40px', marginBottom: '8px' }}>🐟</div>
-          <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#F8FAFC', margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
-            PONDFISH WORKER PORTAL
-          </h1>
-          <p style={{ fontSize: '13px', color: '#94A3B8', margin: 0 }}>
-            Store Counter & Order Fulfillment Terminal
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '34px', fontWeight: '900', letterSpacing: '-0.06em', lineHeight: 1 }}>
+              <span style={{ color: '#0f2c59' }}>Pond</span>
+              <span style={{ color: '#2670b7' }}>Fish</span>
+            </span>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: '800',
+                background: '#E0F2FE',
+                color: '#0369A1',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              WORKER
+            </span>
+          </div>
+          <p style={{ fontSize: '13px', color: '#64748B', margin: 0, fontWeight: '500' }}>
+            Store Counter &amp; Order Fulfillment Terminal
           </p>
         </div>
 
@@ -100,14 +116,15 @@ export default function WorkerLoginPage() {
         {error && (
           <div
             style={{
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
+              background: '#FEF2F2',
+              border: '1px solid #FECACA',
               borderRadius: '10px',
               padding: '12px 14px',
               marginBottom: '20px',
-              color: '#F87171',
+              color: '#DC2626',
               fontSize: '13px',
               lineHeight: 1.4,
+              fontWeight: '500',
             }}
           >
             {error}
@@ -117,11 +134,11 @@ export default function WorkerLoginPage() {
         {/* Login Form */}
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#CBD5E1', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0F2C59', marginBottom: '6px' }}>
               Worker Mobile Number
             </label>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <span style={{ position: 'absolute', left: '12px', color: '#64748B', fontSize: '13px', fontWeight: '600' }}>
+              <span style={{ position: 'absolute', left: '14px', color: '#64748B', fontSize: '13px', fontWeight: '600' }}>
                 +91
               </span>
               <input
@@ -132,11 +149,11 @@ export default function WorkerLoginPage() {
                 maxLength={10}
                 style={{
                   width: '100%',
-                  padding: '12px 14px 12px 48px',
-                  background: '#1E293B',
-                  border: '1px solid #334155',
+                  padding: '12px 14px 12px 50px',
+                  background: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
                   borderRadius: '10px',
-                  color: '#F8FAFC',
+                  color: '#0F2C59',
                   fontSize: '14px',
                   outline: 'none',
                   boxSizing: 'border-box',
@@ -147,7 +164,7 @@ export default function WorkerLoginPage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#CBD5E1', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0F2C59', marginBottom: '6px' }}>
               Password
             </label>
             <div style={{ position: 'relative' }}>
@@ -158,11 +175,11 @@ export default function WorkerLoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '12px 48px 12px 14px',
-                  background: '#1E293B',
-                  border: '1px solid #334155',
+                  padding: '12px 54px 12px 14px',
+                  background: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
                   borderRadius: '10px',
-                  color: '#F8FAFC',
+                  color: '#0F2C59',
                   fontSize: '14px',
                   outline: 'none',
                   boxSizing: 'border-box',
@@ -179,9 +196,9 @@ export default function WorkerLoginPage() {
                   transform: 'translateY(-50%)',
                   background: 'none',
                   border: 'none',
-                  color: '#94A3B8',
-                  fontSize: '12px',
-                  fontWeight: '700',
+                  color: '#1E56A0',
+                  fontSize: '11px',
+                  fontWeight: '800',
                   cursor: 'pointer',
                   padding: '4px 6px',
                 }}
@@ -197,7 +214,7 @@ export default function WorkerLoginPage() {
             style={{
               marginTop: '6px',
               padding: '14px',
-              background: '#0284C7',
+              background: '#1E56A0',
               border: 'none',
               borderRadius: '10px',
               color: '#FFFFFF',
@@ -206,6 +223,7 @@ export default function WorkerLoginPage() {
               cursor: submitting ? 'not-allowed' : 'pointer',
               opacity: submitting ? 0.7 : 1,
               transition: 'background 0.2s',
+              boxShadow: '0 4px 12px rgba(30, 86, 160, 0.2)',
             }}
           >
             {submitting ? 'Signing in...' : 'Sign In to Store Terminal →'}

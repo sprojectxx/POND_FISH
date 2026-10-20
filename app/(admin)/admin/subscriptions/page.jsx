@@ -272,13 +272,13 @@ export default function AdminCustomerSubscriptionsPage() {
   const isAdjustNegative = adjustDirection === 'DEDUCT' && adjustAmountNum > currentCreditNum;
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: '1440px', margin: '0 auto', color: '#F8FAFC' }}>
+    <div style={{ padding: '32px 40px', maxWidth: '1440px', margin: '0 auto', color: '#0F2C59' }}>
       {/* Page Title */}
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '26px', fontWeight: '700', margin: '0 0 6px 0', letterSpacing: '-0.02em', color: '#F8FAFC' }}>
-          👑 Customer Subscription Management
+        <h1 style={{ fontSize: '26px', fontWeight: '700', margin: '0 0 6px 0', letterSpacing: '-0.02em', color: '#0F2C59' }}>
+          Customer Subscription Management
         </h1>
-        <p style={{ margin: 0, fontSize: '14px', color: '#94A3B8' }}>
+        <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
           ADMIN-09 — Customer search, active subscription review, admin-assisted cash & Razorpay purchase, and traceable credit ledger
         </p>
       </div>
@@ -297,7 +297,7 @@ export default function AdminCustomerSubscriptionsPage() {
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <span>⚠️ {errorMsg}</span>
+          <span>{errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer', fontSize: '16px' }}>×</button>
         </div>
       )}
@@ -315,26 +315,26 @@ export default function AdminCustomerSubscriptionsPage() {
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <span>✅ {successMsg}</span>
+          <span>{successMsg}</span>
           <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer', fontSize: '16px' }}>×</button>
         </div>
       )}
 
       {/* Main 2-Column Split: Customer Search List (Left) & Customer Subscription Details (Right) */}
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '24px', alignItems: 'start' }}>
-        
+
         {/* Left Column: Customer Search & Selection */}
         <div style={{
-          background: '#1E293B',
+          background: '#FFFFFF',
           borderRadius: '12px',
-          border: '1px solid #334155',
+          border: '1px solid #E2E8F0',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           maxHeight: 'calc(100vh - 220px)',
         }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid #334155', background: '#0F172A' }}>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#94A3B8', marginBottom: '8px', letterSpacing: '0.04em' }}>
+          <div style={{ padding: '16px', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#64748B', marginBottom: '8px', letterSpacing: '0.04em' }}>
               Search Customer (Name or Mobile)
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -348,10 +348,10 @@ export default function AdminCustomerSubscriptionsPage() {
                 style={{
                   flex: 1,
                   padding: '9px 12px',
-                  background: '#1E293B',
-                  border: '1px solid #334155',
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '6px',
-                  color: '#F8FAFC',
+                  color: '#0F2C59',
                   fontSize: '13px',
                   outline: 'none',
                 }}
@@ -370,18 +370,18 @@ export default function AdminCustomerSubscriptionsPage() {
                   cursor: 'pointer',
                 }}
               >
-                🔍
+
               </button>
             </div>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
             {searching ? (
-              <div style={{ padding: '40px 16px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+              <div style={{ padding: '40px 16px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
                 Searching customers...
               </div>
             ) : searchResults.length === 0 ? (
-              <div style={{ padding: '40px 16px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+              <div style={{ padding: '40px 16px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
                 No customers found.
               </div>
             ) : (
@@ -428,7 +428,7 @@ export default function AdminCustomerSubscriptionsPage() {
                         {cust.status}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94A3B8' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748B' }}>
                       <span>📱 {cust.mobileNumber}</span>
                       <span style={{ color: cust.creditBalance > 0 ? '#10B981' : '#94A3B8', fontWeight: '600' }}>
                         ₹{Number(cust.creditBalance).toFixed(0)} credit
@@ -444,14 +444,14 @@ export default function AdminCustomerSubscriptionsPage() {
         {/* Right Column: Customer Details & Subscription Workflows */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {loadingDetails ? (
-            <div style={{ background: '#1E293B', borderRadius: '12px', padding: '80px', textAlign: 'center', color: '#94A3B8', border: '1px solid #334155' }}>
-              <div style={{ fontSize: '28px', marginBottom: '8px' }}>⏳</div>
+            <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '80px', textAlign: 'center', color: '#64748B', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '28px', marginBottom: '8px' }}></div>
               <div>Loading Customer Subscription Profile...</div>
             </div>
           ) : !customerDetails ? (
-            <div style={{ background: '#1E293B', borderRadius: '12px', padding: '80px', textAlign: 'center', color: '#94A3B8', border: '1px solid #334155' }}>
+            <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '80px', textAlign: 'center', color: '#64748B', border: '1px solid #E2E8F0' }}>
               <div style={{ fontSize: '32px', marginBottom: '8px' }}>👈</div>
-              <div style={{ fontSize: '16px', fontWeight: '600', color: '#E2E8F0', marginBottom: '4px' }}>
+              <div style={{ fontSize: '16px', fontWeight: '600', color: '#0F2C59', marginBottom: '4px' }}>
                 Select a Customer
               </div>
               <div style={{ fontSize: '13px' }}>
@@ -462,15 +462,15 @@ export default function AdminCustomerSubscriptionsPage() {
             <>
               {/* Customer Hero Card */}
               <div style={{
-                background: '#1E293B',
+                background: '#FFFFFF',
                 borderRadius: '14px',
-                border: '1px solid #334155',
+                border: '1px solid #E2E8F0',
                 padding: '24px',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                      <h2 style={{ fontSize: '20px', fontWeight: '700', margin: 0, color: '#F8FAFC' }}>
+                      <h2 style={{ fontSize: '20px', fontWeight: '700', margin: 0, color: '#0F2C59' }}>
                         {customerDetails.customer.name}
                       </h2>
                       <span style={{
@@ -491,8 +491,8 @@ export default function AdminCustomerSubscriptionsPage() {
                         {customerDetails.activeSubscription?.status || 'NO ACTIVE PLAN'}
                       </span>
                     </div>
-                    <div style={{ fontSize: '13px', color: '#94A3B8' }}>
-                      📱 {customerDetails.customer.mobileNumber} {customerDetails.customer.area ? `• 📍 ${customerDetails.customer.area}` : ''}
+                    <div style={{ fontSize: '13px', color: '#64748B' }}>
+                      📱 {customerDetails.customer.mobileNumber} {customerDetails.customer.area ? `• ${customerDetails.customer.area}` : ''}
                     </div>
                   </div>
 
@@ -523,9 +523,9 @@ export default function AdminCustomerSubscriptionsPage() {
                       id="btn-adjust-credit"
                       onClick={openAdjustModal}
                       style={{
-                        background: '#0F172A',
-                        color: '#38BDF8',
-                        border: '1px solid #334155',
+                        background: '#F8FAFC',
+                        color: '#1E56A0',
+                        border: '1px solid #E2E8F0',
                         padding: '10px 16px',
                         borderRadius: '8px',
                         fontSize: '13px',
@@ -545,8 +545,8 @@ export default function AdminCustomerSubscriptionsPage() {
                 {/* Subscription Key Metrics Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
                   {/* Metric 1: Current Subscription Credit */}
-                  <div style={{ background: '#0F172A', padding: '16px', borderRadius: '10px', border: '1px solid #334155' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94A3B8', fontWeight: '700', marginBottom: '6px' }}>
+                  <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: '700', marginBottom: '6px' }}>
                       Current Credit
                     </div>
                     <div style={{ fontSize: '24px', fontWeight: '800', color: '#10B981' }}>
@@ -558,11 +558,11 @@ export default function AdminCustomerSubscriptionsPage() {
                   </div>
 
                   {/* Metric 2: Active Plan */}
-                  <div style={{ background: '#0F172A', padding: '16px', borderRadius: '10px', border: '1px solid #334155' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94A3B8', fontWeight: '700', marginBottom: '6px' }}>
+                  <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: '700', marginBottom: '6px' }}>
                       Active Plan
                     </div>
-                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#38BDF8' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#1E56A0' }}>
                       {customerDetails.activeSubscription?.planTitle || 'None'}
                     </div>
                     <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
@@ -571,11 +571,11 @@ export default function AdminCustomerSubscriptionsPage() {
                   </div>
 
                   {/* Metric 3: Weekly Quota */}
-                  <div style={{ background: '#0F172A', padding: '16px', borderRadius: '10px', border: '1px solid #334155' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94A3B8', fontWeight: '700', marginBottom: '6px' }}>
+                  <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: '700', marginBottom: '6px' }}>
                       Weekly Allowance
                     </div>
-                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#F8FAFC' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#0F2C59' }}>
                       {customerDetails.activeSubscription ? `${customerDetails.activeSubscription.weeklyQtyUsed || 0} / ${customerDetails.activeSubscription.weeklyQtyLimitKg || 0} kg` : '0 kg'}
                     </div>
                     <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
@@ -584,11 +584,11 @@ export default function AdminCustomerSubscriptionsPage() {
                   </div>
 
                   {/* Metric 4: Expiry */}
-                  <div style={{ background: '#0F172A', padding: '16px', borderRadius: '10px', border: '1px solid #334155' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94A3B8', fontWeight: '700', marginBottom: '6px' }}>
+                  <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: '700', marginBottom: '6px' }}>
                       Expiry Date
                     </div>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#E2E8F0', marginTop: '4px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#0F2C59', marginTop: '4px' }}>
                       {customerDetails.activeSubscription?.expiresAt
                         ? new Date(customerDetails.activeSubscription.expiresAt).toLocaleDateString('en-IN', {
                             day: 'numeric',
@@ -604,25 +604,25 @@ export default function AdminCustomerSubscriptionsPage() {
                 </div>
 
                 {/* Secondary Financial Summary Badges */}
-                <div style={{ display: 'flex', gap: '20px', marginTop: '16px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '12px', color: '#94A3B8' }}>
-                  <span>💳 Total Purchased: <strong style={{ color: '#F8FAFC' }}>₹{customerDetails.metrics?.totalPurchasedCredit || 0}</strong></span>
-                  <span>📉 Total Used: <strong style={{ color: '#F8FAFC' }}>₹{customerDetails.metrics?.totalUsedCredit || 0}</strong></span>
-                  <span>🔄 Total Restored: <strong style={{ color: '#F8FAFC' }}>₹{customerDetails.metrics?.totalRestoredCredit || 0}</strong></span>
-                  <span>⚖️ Adjustments: <strong style={{ color: '#F8FAFC' }}>₹{customerDetails.metrics?.totalAdjustedCredit || 0}</strong></span>
+                <div style={{ display: 'flex', gap: '20px', marginTop: '16px', borderTop: '1px solid #E2E8F0', paddingTop: '14px', fontSize: '12px', color: '#64748B' }}>
+                  <span>Total Purchased: <strong style={{ color: '#0F2C59' }}>₹{customerDetails.metrics?.totalPurchasedCredit || 0}</strong></span>
+                  <span>Total Used: <strong style={{ color: '#0F2C59' }}>₹{customerDetails.metrics?.totalUsedCredit || 0}</strong></span>
+                  <span>Total Restored: <strong style={{ color: '#0F2C59' }}>₹{customerDetails.metrics?.totalRestoredCredit || 0}</strong></span>
+                  <span>Adjustments: <strong style={{ color: '#0F2C59' }}>₹{customerDetails.metrics?.totalAdjustedCredit || 0}</strong></span>
                 </div>
               </div>
 
               {/* Sub-Navigation Tabs: History vs Ledger */}
-              <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #334155', paddingBottom: '2px' }}>
+              <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #E2E8F0', paddingBottom: '2px' }}>
                 <button
                   id="tab-history"
                   onClick={() => handleTabChange('HISTORY')}
                   style={{
-                    background: activeTab === 'HISTORY' ? '#0F172A' : 'transparent',
-                    color: activeTab === 'HISTORY' ? '#38BDF8' : '#94A3B8',
+                    background: activeTab === 'HISTORY' ? '#FFFFFF' : 'transparent',
+                    color: activeTab === 'HISTORY' ? '#1E56A0' : '#64748B',
                     border: '1px solid',
-                    borderColor: activeTab === 'HISTORY' ? '#334155' : 'transparent',
-                    borderBottomColor: activeTab === 'HISTORY' ? '#0F172A' : 'transparent',
+                    borderColor: activeTab === 'HISTORY' ? '#E2E8F0' : 'transparent',
+                    borderBottomColor: activeTab === 'HISTORY' ? '#FFFFFF' : 'transparent',
                     padding: '10px 18px',
                     borderRadius: '8px 8px 0 0',
                     fontSize: '13px',
@@ -630,17 +630,17 @@ export default function AdminCustomerSubscriptionsPage() {
                     cursor: 'pointer',
                   }}
                 >
-                  📜 Purchase & Plan History
+                  Purchase & Plan History
                 </button>
                 <button
                   id="tab-ledger"
                   onClick={() => handleTabChange('LEDGER')}
                   style={{
-                    background: activeTab === 'LEDGER' ? '#0F172A' : 'transparent',
-                    color: activeTab === 'LEDGER' ? '#38BDF8' : '#94A3B8',
+                    background: activeTab === 'LEDGER' ? '#FFFFFF' : 'transparent',
+                    color: activeTab === 'LEDGER' ? '#1E56A0' : '#64748B',
                     border: '1px solid',
-                    borderColor: activeTab === 'LEDGER' ? '#334155' : 'transparent',
-                    borderBottomColor: activeTab === 'LEDGER' ? '#0F172A' : 'transparent',
+                    borderColor: activeTab === 'LEDGER' ? '#E2E8F0' : 'transparent',
+                    borderBottomColor: activeTab === 'LEDGER' ? '#FFFFFF' : 'transparent',
                     padding: '10px 18px',
                     borderRadius: '8px 8px 0 0',
                     fontSize: '13px',
@@ -648,30 +648,30 @@ export default function AdminCustomerSubscriptionsPage() {
                     cursor: 'pointer',
                   }}
                 >
-                  📊 Credit Movement Ledger
+                  Credit Movement Ledger
                 </button>
               </div>
 
               {/* TAB 1: Subscription History */}
               {activeTab === 'HISTORY' && (
-                <div style={{ background: '#1E293B', borderRadius: '12px', border: '1px solid #334155', overflow: 'hidden' }}>
-                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #334155', background: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#F8FAFC' }}>
+                <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#0F2C59' }}>
                       Subscription Purchase & Activation History
                     </span>
-                    <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+                    <span style={{ fontSize: '12px', color: '#64748B' }}>
                       {customerDetails.subscriptions?.length || 0} Records
                     </span>
                   </div>
 
                   {(!customerDetails.subscriptions || customerDetails.subscriptions.length === 0) ? (
-                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
                       No subscriptions have been purchased yet for this customer.
                     </div>
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                       <thead>
-                        <tr style={{ background: '#0B1120', borderBottom: '1px solid #334155', color: '#94A3B8', fontSize: '11px', textTransform: 'uppercase' }}>
+                        <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '11px', textTransform: 'uppercase' }}>
                           <th style={{ padding: '12px 18px' }}>Created Date</th>
                           <th style={{ padding: '12px 18px' }}>Plan</th>
                           <th style={{ padding: '12px 18px' }}>Price</th>
@@ -682,8 +682,8 @@ export default function AdminCustomerSubscriptionsPage() {
                       </thead>
                       <tbody>
                         {customerDetails.subscriptions.map((sub, idx) => (
-                          <tr key={sub.id} style={{ borderBottom: idx < customerDetails.subscriptions.length - 1 ? '1px solid #334155' : 'none' }}>
-                            <td style={{ padding: '14px 18px', color: '#E2E8F0' }}>
+                          <tr key={sub.id} style={{ borderBottom: idx < customerDetails.subscriptions.length - 1 ? '1px solid #E2E8F0' : 'none' }}>
+                            <td style={{ padding: '14px 18px', color: '#0F2C59' }}>
                               {new Date(sub.created_at).toLocaleString('en-IN', {
                                 day: 'numeric',
                                 month: 'short',
@@ -692,16 +692,16 @@ export default function AdminCustomerSubscriptionsPage() {
                                 minute: '2-digit',
                               })}
                             </td>
-                            <td style={{ padding: '14px 18px', fontWeight: '600', color: '#38BDF8' }}>
+                            <td style={{ padding: '14px 18px', fontWeight: '600', color: '#1E56A0' }}>
                               {sub.plan_title || 'Custom Plan'}
                             </td>
-                            <td style={{ padding: '14px 18px', color: '#F8FAFC' }}>
+                            <td style={{ padding: '14px 18px', color: '#0F2C59' }}>
                               ₹{Number(sub.plan_price || 0).toLocaleString('en-IN')}
                             </td>
                             <td style={{ padding: '14px 18px', color: '#10B981', fontWeight: '600' }}>
                               ₹{Number(sub.plan_credit_amount || 0).toLocaleString('en-IN')}
                             </td>
-                            <td style={{ padding: '14px 18px', color: '#94A3B8' }}>
+                            <td style={{ padding: '14px 18px', color: '#64748B' }}>
                               {new Date(sub.expires_at).toLocaleDateString('en-IN', {
                                 day: 'numeric',
                                 month: 'short',
@@ -731,31 +731,31 @@ export default function AdminCustomerSubscriptionsPage() {
 
               {/* TAB 2: Credit Movement Ledger */}
               {activeTab === 'LEDGER' && (
-                <div style={{ background: '#1E293B', borderRadius: '12px', border: '1px solid #334155', overflow: 'hidden' }}>
-                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #334155', background: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#F8FAFC' }}>
+                <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#0F2C59' }}>
                       Authoritative Credit Ledger (Opening, Movement, Closing)
                     </span>
                     <button
                       onClick={() => fetchLedger(selectedCustomerId)}
-                      style={{ background: 'none', border: 'none', color: '#38BDF8', fontSize: '12px', cursor: 'pointer' }}
+                      style={{ background: 'none', border: 'none', color: '#1E56A0', fontSize: '12px', cursor: 'pointer' }}
                     >
-                      🔄 Refresh Ledger
+                      Refresh Ledger
                     </button>
                   </div>
 
                   {loadingLedger ? (
-                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
                       Loading ledger entries...
                     </div>
                   ) : ledgerEntries.length === 0 ? (
-                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
                       No ledger transactions found for this customer.
                     </div>
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                       <thead>
-                        <tr style={{ background: '#0B1120', borderBottom: '1px solid #334155', color: '#94A3B8', fontSize: '11px', textTransform: 'uppercase' }}>
+                        <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '11px', textTransform: 'uppercase' }}>
                           <th style={{ padding: '12px 16px' }}>Timestamp</th>
                           <th style={{ padding: '12px 16px' }}>Movement Type</th>
                           <th style={{ padding: '12px 16px' }}>Opening</th>
@@ -770,7 +770,7 @@ export default function AdminCustomerSubscriptionsPage() {
                           const isDebit = entry.type === 'DEBIT_BOOKING' || entry.type === 'DEBIT_BILL';
                           return (
                             <tr key={entry.id} style={{ borderBottom: idx < ledgerEntries.length - 1 ? '1px solid #334155' : 'none' }}>
-                              <td style={{ padding: '14px 16px', color: '#E2E8F0' }}>
+                              <td style={{ padding: '14px 16px', color: '#0F2C59' }}>
                                 {new Date(entry.createdAt).toLocaleString('en-IN', {
                                   day: 'numeric',
                                   month: 'short',
@@ -804,7 +804,7 @@ export default function AdminCustomerSubscriptionsPage() {
                                   {entry.type}
                                 </span>
                               </td>
-                              <td style={{ padding: '14px 16px', color: '#94A3B8' }}>
+                              <td style={{ padding: '14px 16px', color: '#64748B' }}>
                                 {entry.openingBalance !== null ? `₹${entry.openingBalance.toFixed(2)}` : '—'}
                               </td>
                               <td style={{
@@ -814,10 +814,10 @@ export default function AdminCustomerSubscriptionsPage() {
                               }}>
                                 {isCredit ? `+₹${entry.amount.toFixed(2)}` : isDebit ? `-₹${entry.amount.toFixed(2)}` : `±₹${entry.amount.toFixed(2)}`}
                               </td>
-                              <td style={{ padding: '14px 16px', fontWeight: '700', color: '#F8FAFC' }}>
+                              <td style={{ padding: '14px 16px', fontWeight: '700', color: '#0F2C59' }}>
                                 ₹{entry.closingBalance.toFixed(2)}
                               </td>
-                              <td style={{ padding: '14px 16px', color: '#94A3B8', fontSize: '12px' }}>
+                              <td style={{ padding: '14px 16px', color: '#64748B', fontSize: '12px' }}>
                                 {entry.reference}
                               </td>
                             </tr>
@@ -850,9 +850,9 @@ export default function AdminCustomerSubscriptionsPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             borderRadius: '16px',
-            border: '1px solid #334155',
+            border: '1px solid #E2E8F0',
             width: '100%',
             maxWidth: '560px',
             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
@@ -860,18 +860,18 @@ export default function AdminCustomerSubscriptionsPage() {
           }}>
             <div style={{
               padding: '20px 24px',
-              borderBottom: '1px solid #334155',
+              borderBottom: '1px solid #E2E8F0',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              background: '#0F172A',
+              background: '#F8FAFC',
             }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: '#F8FAFC' }}>
-                👑 Add Subscription to Customer
+              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: '#0F2C59' }}>
+                Add Subscription to Customer
               </h2>
               <button
                 onClick={() => setIsPurchaseModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '20px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '20px', cursor: 'pointer' }}
               >
                 ×
               </button>
@@ -879,20 +879,20 @@ export default function AdminCustomerSubscriptionsPage() {
 
             <form onSubmit={handlePurchaseSubmit} style={{ padding: '24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                
+
                 {/* 1. Customer Summary */}
-                <div style={{ background: '#0F172A', padding: '12px 16px', borderRadius: '8px', border: '1px solid #334155' }}>
-                  <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94A3B8', fontWeight: '700' }}>
+                <div style={{ background: '#F8FAFC', padding: '12px 16px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: '700' }}>
                     Customer
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: '600', color: '#F8FAFC', marginTop: '2px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: '600', color: '#0F2C59', marginTop: '2px' }}>
                     {customerDetails?.customer?.name} ({customerDetails?.customer?.mobileNumber})
                   </div>
                 </div>
 
                 {/* 2. Select Plan */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '8px', textTransform: 'uppercase' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748B', marginBottom: '8px', textTransform: 'uppercase' }}>
                     Select Subscription Plan *
                   </label>
                   <select
@@ -902,10 +902,10 @@ export default function AdminCustomerSubscriptionsPage() {
                     style={{
                       width: '100%',
                       padding: '11px 14px',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '8px',
-                      color: '#F8FAFC',
+                      color: '#0F2C59',
                       fontSize: '14px',
                       outline: 'none',
                     }}
@@ -931,27 +931,27 @@ export default function AdminCustomerSubscriptionsPage() {
                     fontSize: '13px',
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#94A3B8' }}>Authoritative Price:</span>
-                      <strong style={{ color: '#F8FAFC' }}>₹{Number(selectedPlanObj.price).toLocaleString('en-IN')}</strong>
+                      <span style={{ color: '#64748B' }}>Authoritative Price:</span>
+                      <strong style={{ color: '#0F2C59' }}>₹{Number(selectedPlanObj.price).toLocaleString('en-IN')}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#94A3B8' }}>Credit Added:</span>
+                      <span style={{ color: '#64748B' }}>Credit Added:</span>
                       <strong style={{ color: '#10B981' }}>+₹{Number(selectedPlanObj.credit_amount).toLocaleString('en-IN')}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(2, 132, 199, 0.2)', paddingTop: '6px' }}>
-                      <span style={{ color: '#94A3B8' }}>Existing Credit:</span>
-                      <span style={{ color: '#E2E8F0' }}>₹{currentCreditNum.toFixed(2)}</span>
+                      <span style={{ color: '#64748B' }}>Existing Credit:</span>
+                      <span style={{ color: '#0F2C59' }}>₹{currentCreditNum.toFixed(2)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#38BDF8', fontWeight: '700' }}>New Credit Balance:</span>
-                      <strong style={{ color: '#38BDF8', fontSize: '15px' }}>₹{newCreditPreview.toFixed(2)}</strong>
+                      <span style={{ color: '#1E56A0', fontWeight: '700' }}>New Credit Balance:</span>
+                      <strong style={{ color: '#1E56A0', fontSize: '15px' }}>₹{newCreditPreview.toFixed(2)}</strong>
                     </div>
                   </div>
                 )}
 
                 {/* 4. Select Payment Source (CASH vs RAZORPAY) */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '8px', textTransform: 'uppercase' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748B', marginBottom: '8px', textTransform: 'uppercase' }}>
                     Payment Source *
                   </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -963,8 +963,8 @@ export default function AdminCustomerSubscriptionsPage() {
                         padding: '12px',
                         borderRadius: '8px',
                         border: '1px solid',
-                        borderColor: paymentSource === 'CASH' ? '#10B981' : '#334155',
-                        background: paymentSource === 'CASH' ? 'rgba(16, 185, 129, 0.15)' : '#0F172A',
+                        borderColor: paymentSource === 'CASH' ? '#10B981' : '#E2E8F0',
+                        background: paymentSource === 'CASH' ? '#ECFDF5' : '#F8FAFC',
                         color: paymentSource === 'CASH' ? '#10B981' : '#94A3B8',
                         fontWeight: '700',
                         fontSize: '13px',
@@ -981,15 +981,15 @@ export default function AdminCustomerSubscriptionsPage() {
                         padding: '12px',
                         borderRadius: '8px',
                         border: '1px solid',
-                        borderColor: paymentSource === 'RAZORPAY' ? '#0284C7' : '#334155',
-                        background: paymentSource === 'RAZORPAY' ? 'rgba(2, 132, 199, 0.15)' : '#0F172A',
+                        borderColor: paymentSource === 'RAZORPAY' ? '#0284C7' : '#E2E8F0',
+                        background: paymentSource === 'RAZORPAY' ? '#EFF6FF' : '#F8FAFC',
                         color: paymentSource === 'RAZORPAY' ? '#38BDF8' : '#94A3B8',
                         fontWeight: '700',
                         fontSize: '13px',
                         cursor: 'pointer',
                       }}
                     >
-                      💳 Razorpay Online
+                      Razorpay Online
                     </button>
                   </div>
                 </div>
@@ -1021,7 +1021,7 @@ export default function AdminCustomerSubscriptionsPage() {
                 {paymentSource === 'RAZORPAY' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>
+                      <label style={{ display: 'block', fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>
                         Razorpay Order ID *
                       </label>
                       <input
@@ -1033,17 +1033,15 @@ export default function AdminCustomerSubscriptionsPage() {
                         style={{
                           width: '100%',
                           padding: '8px 12px',
-                          background: '#0F172A',
-                          border: '1px solid #334155',
+                          background: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
                           borderRadius: '6px',
-                          color: '#F8FAFC',
-                          fontSize: '13px',
-                          boxSizing: 'border-box',
+                          color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                         }}
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>
+                      <label style={{ display: 'block', fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>
                         Razorpay Payment ID *
                       </label>
                       <input
@@ -1055,17 +1053,15 @@ export default function AdminCustomerSubscriptionsPage() {
                         style={{
                           width: '100%',
                           padding: '8px 12px',
-                          background: '#0F172A',
-                          border: '1px solid #334155',
+                          background: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
                           borderRadius: '6px',
-                          color: '#F8FAFC',
-                          fontSize: '13px',
-                          boxSizing: 'border-box',
+                          color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                         }}
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>
+                      <label style={{ display: 'block', fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>
                         Razorpay Signature *
                       </label>
                       <input
@@ -1077,12 +1073,10 @@ export default function AdminCustomerSubscriptionsPage() {
                         style={{
                           width: '100%',
                           padding: '8px 12px',
-                          background: '#0F172A',
-                          border: '1px solid #334155',
+                          background: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
                           borderRadius: '6px',
-                          color: '#F8FAFC',
-                          fontSize: '13px',
-                          boxSizing: 'border-box',
+                          color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                         }}
                       />
                     </div>
@@ -1091,14 +1085,14 @@ export default function AdminCustomerSubscriptionsPage() {
               </div>
 
               {/* Modal Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #334155', paddingTop: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #E2E8F0', paddingTop: '18px' }}>
                 <button
                   type="button"
                   onClick={() => setIsPurchaseModalOpen(false)}
                   style={{
-                    background: '#0F172A',
-                    color: '#94A3B8',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    color: '#64748B',
+                    border: '1px solid #E2E8F0',
                     padding: '10px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
@@ -1149,9 +1143,9 @@ export default function AdminCustomerSubscriptionsPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             borderRadius: '16px',
-            border: '1px solid #334155',
+            border: '1px solid #E2E8F0',
             width: '100%',
             maxWidth: '520px',
             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
@@ -1159,18 +1153,18 @@ export default function AdminCustomerSubscriptionsPage() {
           }}>
             <div style={{
               padding: '20px 24px',
-              borderBottom: '1px solid #334155',
+              borderBottom: '1px solid #E2E8F0',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              background: '#0F172A',
+              background: '#F8FAFC',
             }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: '#F8FAFC' }}>
-                ⚖️ Manual Credit Adjustment
+              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: '#0F2C59' }}>
+                Manual Credit Adjustment
               </h2>
               <button
                 onClick={() => setIsAdjustModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '20px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '20px', cursor: 'pointer' }}
               >
                 ×
               </button>
@@ -1178,10 +1172,10 @@ export default function AdminCustomerSubscriptionsPage() {
 
             <form onSubmit={handleAdjustSubmit} style={{ padding: '24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                
+
                 {/* Direction Selector: ADD or DEDUCT */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '8px', textTransform: 'uppercase' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748B', marginBottom: '8px', textTransform: 'uppercase' }}>
                     Adjustment Direction *
                   </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -1193,8 +1187,8 @@ export default function AdminCustomerSubscriptionsPage() {
                         padding: '10px',
                         borderRadius: '8px',
                         border: '1px solid',
-                        borderColor: adjustDirection === 'ADD' ? '#10B981' : '#334155',
-                        background: adjustDirection === 'ADD' ? 'rgba(16, 185, 129, 0.15)' : '#0F172A',
+                        borderColor: adjustDirection === 'ADD' ? '#10B981' : '#E2E8F0',
+                        background: adjustDirection === 'ADD' ? '#ECFDF5' : '#F8FAFC',
                         color: adjustDirection === 'ADD' ? '#10B981' : '#94A3B8',
                         fontWeight: '700',
                         fontSize: '13px',
@@ -1211,8 +1205,8 @@ export default function AdminCustomerSubscriptionsPage() {
                         padding: '10px',
                         borderRadius: '8px',
                         border: '1px solid',
-                        borderColor: adjustDirection === 'DEDUCT' ? '#EF4444' : '#334155',
-                        background: adjustDirection === 'DEDUCT' ? 'rgba(239, 68, 68, 0.15)' : '#0F172A',
+                        borderColor: adjustDirection === 'DEDUCT' ? '#EF4444' : '#E2E8F0',
+                        background: adjustDirection === 'DEDUCT' ? '#FEF2F2' : '#F8FAFC',
                         color: adjustDirection === 'DEDUCT' ? '#EF4444' : '#94A3B8',
                         fontWeight: '700',
                         fontSize: '13px',
@@ -1226,7 +1220,7 @@ export default function AdminCustomerSubscriptionsPage() {
 
                 {/* Amount Input */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '6px', textTransform: 'uppercase' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>
                     Amount (₹) *
                   </label>
                   <input
@@ -1240,10 +1234,10 @@ export default function AdminCustomerSubscriptionsPage() {
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '8px',
-                      color: '#F8FAFC',
+                      color: '#0F2C59',
                       fontSize: '14px',
                       outline: 'none',
                       boxSizing: 'border-box',
@@ -1253,7 +1247,7 @@ export default function AdminCustomerSubscriptionsPage() {
 
                 {/* Mandatory Reason Field */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#94A3B8', marginBottom: '6px', textTransform: 'uppercase' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748B', marginBottom: '6px', textTransform: 'uppercase' }}>
                     Reason for Adjustment (Mandatory) *
                   </label>
                   <textarea
@@ -1266,10 +1260,10 @@ export default function AdminCustomerSubscriptionsPage() {
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '8px',
-                      color: '#F8FAFC',
+                      color: '#0F2C59',
                       fontSize: '13px',
                       outline: 'none',
                       boxSizing: 'border-box',
@@ -1281,8 +1275,8 @@ export default function AdminCustomerSubscriptionsPage() {
 
                 {/* Calculation Summary Preview (Section 78) */}
                 <div style={{
-                  background: '#0F172A',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '8px',
                   padding: '14px 16px',
                   fontSize: '13px',
@@ -1291,24 +1285,24 @@ export default function AdminCustomerSubscriptionsPage() {
                   gap: '6px',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#94A3B8' }}>Current Credit:</span>
-                    <span style={{ color: '#F8FAFC' }}>₹{currentCreditNum.toFixed(2)}</span>
+                    <span style={{ color: '#64748B' }}>Current Credit:</span>
+                    <span style={{ color: '#0F2C59' }}>₹{currentCreditNum.toFixed(2)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#94A3B8' }}>Adjustment:</span>
+                    <span style={{ color: '#64748B' }}>Adjustment:</span>
                     <strong style={{ color: adjustDirection === 'ADD' ? '#10B981' : '#EF4444' }}>
                       {adjustDirection === 'ADD' ? `+₹${adjustAmountNum.toFixed(2)}` : `-₹${adjustAmountNum.toFixed(2)}`}
                     </strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #334155', paddingTop: '6px' }}>
-                    <span style={{ color: '#38BDF8', fontWeight: '700' }}>New Credit Balance:</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E2E8F0', paddingTop: '6px' }}>
+                    <span style={{ color: '#1E56A0', fontWeight: '700' }}>New Credit Balance:</span>
                     <strong style={{ color: isAdjustNegative ? '#EF4444' : '#38BDF8', fontSize: '15px' }}>
                       ₹{adjustResultingPreview.toFixed(2)}
                     </strong>
                   </div>
                   {isAdjustNegative && (
                     <div style={{ color: '#EF4444', fontSize: '11px', marginTop: '4px' }}>
-                      ⚠️ Adjustment would result in a negative credit balance! Reductions cannot exceed current credit.
+                      Adjustment would result in a negative credit balance! Reductions cannot exceed current credit.
                     </div>
                   )}
                 </div>
@@ -1322,21 +1316,21 @@ export default function AdminCustomerSubscriptionsPage() {
                     onChange={(e) => setConfirmedAdjust(e.target.checked)}
                     style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                   />
-                  <label htmlFor="checkbox-confirm-adjust" style={{ fontSize: '13px', color: '#E2E8F0', cursor: 'pointer' }}>
+                  <label htmlFor="checkbox-confirm-adjust" style={{ fontSize: '13px', color: '#0F2C59', cursor: 'pointer' }}>
                     Confirm administrative credit adjustment of {adjustDirection === 'ADD' ? `+₹${adjustAmountNum}` : `-₹${adjustAmountNum}`}
                   </label>
                 </div>
               </div>
 
               {/* Modal Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #334155', paddingTop: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #E2E8F0', paddingTop: '18px' }}>
                 <button
                   type="button"
                   onClick={() => setIsAdjustModalOpen(false)}
                   style={{
-                    background: '#0F172A',
-                    color: '#94A3B8',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    color: '#64748B',
+                    border: '1px solid #E2E8F0',
                     padding: '10px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',

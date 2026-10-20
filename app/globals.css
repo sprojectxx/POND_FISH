@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+
 /* PondFish Design System Tokens - Vanilla CSS */
 /* Traceability: Documentation/PondFish_Design_System_Brand_Style_Guide_v1.md */
 
@@ -23,19 +25,19 @@
   --pf-info: #0284C7;
 
   /* Neutrals & Surfaces */
-  --pf-bg-main: #0B1120;
-  --pf-bg-surface: #1E293B;
-  --pf-bg-card: #0F172A;
+  --pf-bg-main: #F8FAFC;
+  --pf-bg-surface: #FFFFFF;
+  --pf-bg-card: #FFFFFF;
   --pf-bg-light: #F8FAFC;
   --pf-surface-light: #FFFFFF;
-  --pf-border: #334155;
+  --pf-border: #E2E8F0;
   --pf-border-light: #E2E8F0;
 
   /* Typography Colors */
-  --pf-text-primary: #F8FAFC;
-  --pf-text-secondary: #94A3B8;
+  --pf-text-primary: #0F2C59;
+  --pf-text-secondary: #425B73;
   --pf-text-muted: #64748B;
-  --pf-text-dark: #0F172A;
+  --pf-text-dark: #0F2C59;
   --pf-text-dark-muted: #475569;
 
   /* Spacing Tokens */
@@ -53,7 +55,7 @@
   --pf-radius-full: 9999px;
 
   /* Font Families */
-  --pf-font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --pf-font-main: var(--font-jakarta), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --pf-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -63,8 +65,16 @@
   padding: 0;
 }
 
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: 'Plus Jakarta Sans', var(--font-jakarta), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
 body {
-  font-family: var(--pf-font-main);
   background-color: var(--pf-bg-main);
   color: var(--pf-text-primary);
   min-height: 100vh;

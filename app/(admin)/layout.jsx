@@ -8,8 +8,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { usePathname } from 'next/navigation';
+import './admin.css';
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
@@ -17,6 +18,27 @@ export default function AdminLayout({ children }) {
 
   const [adminUser, setAdminUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    try {
+      const saved = localStorage.getItem('pondfish_admin_sidebar_collapsed');
+      if (saved === 'true') setSidebarCollapsed(true);
+    } catch {}
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('pondfish_admin_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (isLoginPage) {
@@ -30,11 +52,11 @@ export default function AdminLayout({ children }) {
       try {
         const res = await fetch('/api/v1/admin/auth/me', {
           headers: {
-            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
           },
         });
 
-        if (res.status === 401) {
+        if (!res.ok || res.status === 401 || res.status === 403) {
           if (typeof window !== 'undefined') {
             localStorage.removeItem('pondfish_admin_user');
             window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
@@ -48,6 +70,12 @@ export default function AdminLayout({ children }) {
           if (typeof window !== 'undefined') {
             localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
           }
+        } else {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('pondfish_admin_user');
+            window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
+          }
+          return;
         }
       } catch (err) {
         // Fail closed: transient network errors must not grant authentication based on cached metadata
@@ -67,7 +95,26 @@ export default function AdminLayout({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [isLoginPage]);
+  }, [pathname, isLoginPage]);
+
+  // Handle ESC key and scroll lock for mobile drawer
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleKeyDown);
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [mobileMenuOpen]);
+
+  const closeMenu = () => setMobileMenuOpen(false);
 
   const handleLogout = async () => {
     try {
@@ -98,400 +145,421 @@ export default function AdminLayout({ children }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#0B1120',
-        color: '#94A3B8',
+        background: '#F0F5FA',
+        color: '#0F2C59',
         fontFamily: 'Inter, system-ui, sans-serif',
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔒</div>
-          <div style={{ fontSize: '14px', fontWeight: '500' }}>Verifying Administrator Credentials...</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#E0F2FE', color: '#1E56A0', marginBottom: '16px' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <div style={{ fontSize: '16px', fontWeight: '800', color: '#0F2C59', marginBottom: '4px' }}>Verifying Administrator Credentials...</div>
+          <div style={{ fontSize: '13px', color: '#64748B' }}>Connecting to secure enterprise session</div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', background: '#0B1120', fontFamily: 'Inter, system-ui, sans-serif' }}>
-      {/* Sidebar Navigation */}
-      <aside style={{ width: '260px', background: '#1E293B', borderRight: '1px solid #334155', padding: '24px 16px', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px' }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
-            background: '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            flexShrink: 0,
-            padding: '2px',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)'
-          }}>
-            <img
-              src="/logo.png"
-              alt="PondFish"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
-          </div>
-          <span style={{ fontSize: '17px', fontWeight: '700', color: '#38BDF8', letterSpacing: '-0.02em' }}>
-            PONDFISH ADMIN
-          </span>
+  const getNavLinkStyle = (isActive) => ({
+    color: isActive ? '#FFFFFF' : '#CBD5E1',
+    background: isActive ? '#1E56A0' : 'transparent',
+    textDecoration: 'none',
+    padding: '9px 12px',
+    borderRadius: '8px',
+    fontWeight: isActive ? '700' : '500',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '13px',
+    transition: 'all 0.15s ease',
+  });
+
+  const renderNavItems = (onLinkClick) => (
+    <>
+      <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', margin: '8px 8px 4px', fontWeight: '700' }}>
+        Operations
+      </div>
+      <a
+        href="/admin"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin')}
+      >
+        Executive Dashboard
+      </a>
+      <a
+        id="nav-admin-bookings"
+        href="/admin/bookings"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/bookings'))}
+      >
+        Bookings
+      </a>
+      <a
+        id="nav-admin-transactions"
+        href="/admin/transactions"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/transactions'))}
+      >
+        Transactions
+      </a>
+      <a
+        id="nav-admin-notifications"
+        href="/admin/notifications"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/notifications'))}
+      >
+        Notifications
+      </a>
+      <a
+        href="/admin/journeys"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/journeys'))}
+      >
+        GPS Truck Journey
+      </a>
+      <a
+        href="/admin/settings"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/settings')}
+      >
+        Business Settings
+      </a>
+      <a
+        href="/admin/reports"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/reports' || pathname === '/admin/exports')}
+      >
+        Reports & Exports
+      </a>
+
+      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
+        Catalog & Sales
+      </div>
+      <a
+        id="nav-admin-fish"
+        href="/admin/fish"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/fish')}
+      >
+        Fish Management
+      </a>
+      <a
+        id="nav-admin-categories"
+        href="/admin/categories"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/categories')}
+      >
+        Categories
+      </a>
+      <a
+        id="nav-admin-discounts"
+        href="/admin/discounts"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/discounts')}
+      >
+        Discounts
+      </a>
+
+      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
+        Subscriptions
+      </div>
+      <a
+        id="nav-admin-subscription-plans"
+        href="/admin/subscriptions/plans"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/subscriptions/plans')}
+      >
+        Subscription Plans
+      </a>
+      <a
+        id="nav-admin-customer-subscriptions"
+        href="/admin/subscriptions"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/subscriptions')}
+      >
+        Customer Subscriptions
+      </a>
+
+      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
+        People & Teams
+      </div>
+      <a
+        id="nav-admin-customers"
+        href="/admin/customers"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/customers')}
+      >
+        Customers
+      </a>
+      <a
+        id="nav-admin-workers"
+        href="/admin/workers"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/workers')}
+      >
+        Workers
+      </a>
+
+      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
+        Governance
+      </div>
+      <a
+        href="/admin/audit"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/audit' || pathname === '/admin/audit-logs')}
+      >
+        Audit Trail
+      </a>
+      <a
+        href="/admin/exceptions"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/exceptions')}
+      >
+        Exceptions Center
+      </a>
+      <a
+        id="nav-admin-security"
+        href="/admin/security"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/security')}
+      >
+        Admin Security
+      </a>
+
+      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
+        Account
+      </div>
+      <a
+        id="nav-admin-profile"
+        href="/admin/profile"
+        onClick={onLinkClick}
+        style={getNavLinkStyle(pathname === '/admin/profile')}
+      >
+        Profile & Identity
+      </a>
+      <button
+        id="nav-admin-logout"
+        onClick={() => {
+          if (onLinkClick) onLinkClick();
+          handleLogout();
+        }}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: '#F87171',
+          textAlign: 'left',
+          padding: '9px 12px',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontWeight: '600',
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        <span>Sign Out</span>
+      </button>
+    </>
+  );
+
+  const renderUserCard = () => (
+    <div style={{
+      marginTop: 'auto',
+      paddingTop: '16px',
+      borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+    }}>
+      <div style={{
+        width: '34px',
+        height: '34px',
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, #1E56A0, #0284C7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '14px',
+        color: '#FFFFFF',
+        fontWeight: '800',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+      }}>
+        {adminUser?.name?.charAt(0) || 'A'}
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{ fontSize: '12px', fontWeight: '700', color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {adminUser?.name || 'Administrator'}
         </div>
+        <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {adminUser?.email || 'admin@pondfish.in'}
+        </div>
+      </div>
+    </div>
+  );
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: '#94A3B8', flex: 1, overflowY: 'auto' }}>
-          <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', margin: '8px 8px 4px' }}>
-            Operations
-          </div>
-          <Link
-            href="/admin"
-            style={{
-              color: pathname === '/admin' ? '#38BDF8' : '#F8FAFC',
-              background: pathname === '/admin' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontWeight: pathname === '/admin' ? '600' : '400',
-            }}
-          >
-            📊 Executive Dashboard
-          </Link>
-          <Link
-            id="nav-admin-bookings"
-            href="/admin/bookings"
-            style={{
-              color: pathname?.startsWith('/admin/bookings') ? '#38BDF8' : '#94A3B8',
-              background: pathname?.startsWith('/admin/bookings') ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontWeight: pathname?.startsWith('/admin/bookings') ? '600' : '400',
-            }}
-          >
-            📦 Bookings
-          </Link>
-          <Link
-            id="nav-admin-transactions"
-            href="/admin/transactions"
-            style={{
-              color: pathname?.startsWith('/admin/transactions') ? '#38BDF8' : '#94A3B8',
-              background: pathname?.startsWith('/admin/transactions') ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontWeight: pathname?.startsWith('/admin/transactions') ? '600' : '400',
-            }}
-          >
-            💳 Transactions
-          </Link>
-          <Link
-            id="nav-admin-notifications"
-            href="/admin/notifications"
-            style={{
-              color: pathname?.startsWith('/admin/notifications') ? '#38BDF8' : '#94A3B8',
-              background: pathname?.startsWith('/admin/notifications') ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontWeight: pathname?.startsWith('/admin/notifications') ? '600' : '400',
-            }}
-          >
-            🔔 Notifications
-          </Link>
-          <Link
-            href="/admin/journeys"
-            style={{
-              color: pathname?.startsWith('/admin/journeys') ? '#38BDF8' : '#94A3B8',
-              background: pathname?.startsWith('/admin/journeys') ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            🚛 GPS Truck Journey
-          </Link>
-          <Link
-            href="/admin/settings"
-            style={{
-              color: pathname === '/admin/settings' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/settings' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            ⚙️ Business Settings
-          </Link>
-          <Link
-            href="/admin/reports"
-            style={{
-              color: pathname === '/admin/reports' || pathname === '/admin/exports' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/reports' || pathname === '/admin/exports' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            📈 Reports & Exports
-          </Link>
-
-          <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
-            Catalog & Sales
-          </div>
-          <Link
-            id="nav-admin-fish"
-            href="/admin/fish"
-            style={{
-              color: pathname === '/admin/fish' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/fish' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            🐟 Fish Management
-          </Link>
-          <Link
-            id="nav-admin-categories"
-            href="/admin/categories"
-            style={{
-              color: pathname === '/admin/categories' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/categories' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            📁 Categories
-          </Link>
-          <Link
-            id="nav-admin-discounts"
-            href="/admin/discounts"
-            style={{
-              color: pathname === '/admin/discounts' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/discounts' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            🏷️ Discounts
-          </Link>
-
-          <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
-            Subscriptions
-          </div>
-          <Link
-            id="nav-admin-subscription-plans"
-            href="/admin/subscriptions/plans"
-            style={{
-              color: pathname === '/admin/subscriptions/plans' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/subscriptions/plans' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            💳 Subscription Plans
-          </Link>
-          <Link
-            id="nav-admin-customer-subscriptions"
-            href="/admin/subscriptions"
-            style={{
-              color: pathname === '/admin/subscriptions' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/subscriptions' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            👑 Customer Subscriptions
-          </Link>
-
-          <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
-            People & Teams
-          </div>
-          <Link
-            id="nav-admin-customers"
-            href="/admin/customers"
-            style={{
-              color: pathname === '/admin/customers' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/customers' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            👥 Customers
-          </Link>
-          <Link
-            id="nav-admin-workers"
-            href="/admin/workers"
-            style={{
-              color: pathname === '/admin/workers' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/workers' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            👷 Workers
-          </Link>
-
-          <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
-            Governance
-          </div>
-          <Link
-            href="/admin/audit"
-            style={{
-              color: pathname === '/admin/audit' || pathname === '/admin/audit-logs' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/audit' || pathname === '/admin/audit-logs' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            📋 Audit Trail
-          </Link>
-          <Link
-            href="/admin/exceptions"
-            style={{
-              color: pathname === '/admin/exceptions' ? '#38BDF8' : '#94A3B8',
-              background: pathname === '/admin/exceptions' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-            }}
-          >
-            ⚠️ Exceptions Center
-          </Link>
-          <Link
-            id="nav-admin-security"
-            href="/admin/security"
-            style={{
-              color: pathname === '/admin/security' ? '#38BDF8' : '#F8FAFC',
-              background: pathname === '/admin/security' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontWeight: pathname === '/admin/security' ? '600' : '400',
-            }}
-          >
-            🛡️ Admin Security
-          </Link>
-
-          <div style={{ margin: '14px 0 4px', borderTop: '1px solid #334155', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', paddingLeft: '8px' }}>
-            Account
-          </div>
-          <Link
-            id="nav-admin-profile"
-            href="/admin/profile"
-            style={{
-              color: pathname === '/admin/profile' ? '#38BDF8' : '#F8FAFC',
-              background: pathname === '/admin/profile' ? '#0F172A' : 'transparent',
-              textDecoration: 'none',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontWeight: pathname === '/admin/profile' ? '600' : '400',
-            }}
-          >
-            👤 Profile & Identity
-          </Link>
-          <button
-            id="nav-admin-logout"
-            onClick={handleLogout}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#EF4444',
-              textAlign: 'left',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '13px',
+  return (
+    <div className="pf-admin-shell">
+      {/* Desktop Sidebar Navigation */}
+      <aside className={`pf-admin-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', paddingLeft: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: '#FFFFFF',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            🚪 Sign Out
-          </button>
-        </nav>
-
-        {/* User Mini Card at bottom of sidebar */}
-        <div style={{
-          marginTop: 'auto',
-          paddingTop: '16px',
-          borderTop: '1px solid #334155',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-        }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            background: '#0284C7',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '14px',
-            color: '#FFFFFF',
-            fontWeight: 'bold',
-          }}>
-            {adminUser?.name?.charAt(0) || 'A'}
-          </div>
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#F8FAFC', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {adminUser?.name || 'Administrator'}
-            </div>
-            <div style={{ fontSize: '11px', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {adminUser?.email || 'admin@pondfish.in'}
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {/* Top Header */}
-        <header style={{
-          padding: '14px 32px',
-          background: '#0F172A',
-          borderBottom: '1px solid #334155',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '13px', color: '#64748B' }}>PondFish Enterprise Operations</span>
-            <span style={{ fontSize: '11px', color: '#334155' }}>|</span>
-            <span style={{
-              fontSize: '11px',
-              fontWeight: '600',
-              color: '#10B981',
-              background: '#064E3B',
-              padding: '2px 8px',
-              borderRadius: '10px',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              padding: '2px',
             }}>
-              ● ACTIVE SESSION
+              <img
+                src="/logo.png"
+                alt="PondFish"
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+            </div>
+            <span style={{ fontSize: '22px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '-0.06em', lineHeight: 1 }}>
+              Pond<span style={{ color: '#38BDF8' }}>Fish</span>
+            </span>
+            <span style={{ fontSize: '10px', fontWeight: '800', background: 'rgba(56, 189, 248, 0.2)', color: '#38BDF8', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Admin
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ fontSize: '13px', color: '#CBD5E1' }}>
-              {adminUser ? `${adminUser.name} (${adminUser.email})` : 'Administrator'}
+          <button
+            type="button"
+            className="pf-admin-sidebar-collapse-btn"
+            onClick={toggleSidebar}
+            title="Minimize Sidebar"
+            aria-label="Minimize Sidebar"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </div>
+
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#CBD5E1', flex: 1, overflowY: 'auto' }}>
+          {renderNavItems()}
+        </nav>
+
+        {/* User Mini Card at bottom of sidebar */}
+        {renderUserCard()}
+      </aside>
+
+      {/* Main Content Area */}
+      <div className={`pf-admin-content-wrapper ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+        {/* Top Header */}
+        <header className="pf-admin-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Hamburger Button on mobile */}
+            <button
+              type="button"
+              className="pf-admin-hamburger"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle admin navigation"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0F2C59" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+
+            {/* Desktop Sidebar Toggle / Minimize Button */}
+            <button
+              type="button"
+              className="pf-admin-desktop-sidebar-toggle"
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? "Expand Sidebar" : "Minimize Sidebar"}
+              aria-label={sidebarCollapsed ? "Expand Sidebar" : "Minimize Sidebar"}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+                {sidebarCollapsed ? (
+                  <path d="M13 15l3-3-3-3" />
+                ) : (
+                  <path d="M16 15l-3-3 3-3" />
+                )}
+              </svg>
+              <span>{sidebarCollapsed ? 'Expand Menu' : 'Minimize'}</span>
+            </button>
+
+            {/* Logo on header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                background: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                padding: '2px',
+                border: '1px solid #E2E8F0',
+                boxShadow: '0 1px 3px rgba(15, 44, 89, 0.08)'
+              }}>
+                <img
+                  src="/logo.png"
+                  alt="PondFish"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              </div>
+              <span style={{ fontSize: '18px', fontWeight: '900', color: '#0F2C59', letterSpacing: '-0.06em', lineHeight: 1 }}>
+                Pond<span style={{ color: '#2670B7' }}>Fish</span>
+              </span>
+              <span style={{ fontSize: '9px', fontWeight: '800', background: '#E0F2FE', color: '#0369A1', padding: '2px 5px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                Admin
+              </span>
+            </div>
+
+            <span className="pf-admin-header-subtitle" style={{ fontSize: '13px', color: '#64748B', fontWeight: '600' }}>
+              | Operations
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="pf-admin-session-badge" style={{
+              fontSize: '11px',
+              fontWeight: '800',
+              color: '#166534',
+              background: '#DCFCE7',
+              padding: '3px 10px',
+              borderRadius: '12px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+            }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16A34A', display: 'inline-block' }}></span>
+              ACTIVE
+            </span>
+
+            <span className="pf-admin-header-userinfo" style={{ fontSize: '13px', color: '#0F2C59', fontWeight: '600' }}>
+              {adminUser ? `${adminUser.name}` : 'Administrator'}
             </span>
             <button
               onClick={handleLogout}
               style={{
-                background: '#334155',
-                border: 'none',
-                color: '#F8FAFC',
-                padding: '6px 12px',
-                borderRadius: '6px',
+                background: '#FFFFFF',
+                border: '1px solid #CBD5E1',
+                color: '#DC2626',
+                padding: '5px 12px',
+                borderRadius: '8px',
                 fontSize: '12px',
-                fontWeight: '500',
+                fontWeight: '700',
                 cursor: 'pointer',
               }}
             >
@@ -501,10 +569,63 @@ export default function AdminLayout({ children }) {
         </header>
 
         {/* Page Content */}
-        <main style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
+        <main className="pf-admin-main">
           {children}
         </main>
       </div>
+
+      {/* Mobile Drawer Backdrop & Drawer mounted to body */}
+      {mounted && mobileMenuOpen && createPortal(
+        <div className="pf-admin-mobile-overlay" onClick={closeMenu}>
+          <div className="pf-admin-mobile-drawer" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingLeft: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '6px',
+                  background: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  padding: '2px',
+                }}>
+                  <img
+                    src="/logo.png"
+                    alt="PondFish"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                </div>
+                <span style={{ fontSize: '18px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '-0.02em' }}>
+                  Pond<span style={{ color: '#38BDF8' }}>Fish</span>
+                </span>
+                <span style={{ fontSize: '10px', fontWeight: '800', background: 'rgba(56, 189, 248, 0.2)', color: '#38BDF8', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                  Admin
+                </span>
+              </div>
+              <button
+                type="button"
+                className="pf-admin-mobile-close-btn"
+                onClick={closeMenu}
+                aria-label="Close admin menu"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#CBD5E1', flex: 1, overflowY: 'auto' }}>
+              {renderNavItems(closeMenu)}
+            </nav>
+
+            {renderUserCard()}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

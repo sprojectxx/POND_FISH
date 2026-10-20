@@ -12,13 +12,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
 const STATUS_CONFIG = {
-  DRAFT: { label: 'Draft', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#475569' },
+  DRAFT: { label: 'Draft', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#CBD5E1' },
   SCHEDULED: { label: 'Scheduled', bg: 'rgba(99, 102, 241, 0.15)', text: '#818CF8', border: '#4F46E5' },
   SENDING: { label: 'Sending...', bg: 'rgba(245, 158, 11, 0.15)', text: '#FBBF24', border: '#D97706' },
   SENT: { label: 'Sent', bg: 'rgba(16, 185, 129, 0.15)', text: '#34D399', border: '#059669' },
   PARTIALLY_FAILED: { label: 'Partially Failed', bg: 'rgba(249, 115, 22, 0.15)', text: '#FB923C', border: '#EA580C' },
   FAILED: { label: 'Failed', bg: 'rgba(239, 68, 68, 0.15)', text: '#F87171', border: '#DC2626' },
-  CANCELLED: { label: 'Cancelled', bg: 'rgba(100, 116, 139, 0.2)', text: '#64748B', border: '#334155' },
+  CANCELLED: { label: 'Cancelled', bg: 'rgba(100, 116, 139, 0.2)', text: '#64748B', border: '#E2E8F0' },
 };
 
 function formatDate(val) {
@@ -445,13 +445,13 @@ export default function AdminNotificationsPage() {
   };
 
   return (
-    <div style={{ padding: '24px 32px', color: '#F8FAFC', maxWidth: '1440px', margin: '0 auto' }}>
+    <div style={{ padding: '24px 32px', color: '#0F2C59', maxWidth: '1440px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <h1 style={{ fontSize: '24px', fontWeight: '700', letterSpacing: '-0.02em', margin: 0 }}>
-              🔔 Notifications & Broadcast Management
+              Notifications & Broadcast Management
             </h1>
             <span
               style={{
@@ -459,7 +459,7 @@ export default function AdminNotificationsPage() {
                 padding: '2px 8px',
                 borderRadius: '9999px',
                 background: 'rgba(56, 189, 248, 0.1)',
-                color: '#38BDF8',
+                color: '#1E56A0',
                 border: '1px solid rgba(56, 189, 248, 0.3)',
                 fontWeight: '600',
               }}
@@ -467,7 +467,7 @@ export default function AdminNotificationsPage() {
               ADMIN-15 / Sections 131–137
             </span>
           </div>
-          <p style={{ fontSize: '13px', color: '#94A3B8', marginTop: '4px', marginBottom: 0 }}>
+          <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', marginBottom: 0 }}>
             Complete lifecycle management: Drafts, scheduling, pre-dispatch edits & cancellations, push tracking, and delivery auditing.
           </p>
         </div>
@@ -480,9 +480,9 @@ export default function AdminNotificationsPage() {
             style={{
               padding: '8px 14px',
               borderRadius: '8px',
-              background: '#1E293B',
-              color: '#F8FAFC',
-              border: '1px solid #334155',
+              background: '#FFFFFF',
+              color: '#0F2C59',
+              border: '1px solid #E2E8F0',
               fontSize: '13px',
               fontWeight: '500',
               cursor: 'pointer',
@@ -491,7 +491,7 @@ export default function AdminNotificationsPage() {
               gap: '6px',
             }}
           >
-            <span>🔄</span> Refresh
+            <span></span> Refresh
           </button>
           <button
             id="btn-compose-notification"
@@ -525,40 +525,40 @@ export default function AdminNotificationsPage() {
           marginBottom: '24px',
         }}
       >
-        <div style={{ background: '#1E293B', borderRadius: '12px', padding: '16px 20px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#94A3B8' }}>Total Broadcasts</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#F8FAFC', marginTop: '6px' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Total Broadcasts</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#0F2C59', marginTop: '6px' }}>
             {broadcastCounts.total_count}
           </div>
           <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>All campaigns & drafts</div>
         </div>
 
-        <div style={{ background: '#1E293B', borderRadius: '12px', padding: '16px 20px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#94A3B8' }}>Scheduled Queued</div>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Scheduled Queued</div>
           <div style={{ fontSize: '24px', fontWeight: '700', color: '#818CF8', marginTop: '6px' }}>
             {broadcastCounts.scheduled_count}
           </div>
           <div style={{ fontSize: '11px', color: '#818CF8', marginTop: '4px' }}>Awaiting target time</div>
         </div>
 
-        <div style={{ background: '#1E293B', borderRadius: '12px', padding: '16px 20px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#94A3B8' }}>Drafts</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#94A3B8', marginTop: '6px' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Drafts</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#64748B', marginTop: '6px' }}>
             {broadcastCounts.draft_count}
           </div>
           <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>Editable pre-dispatch</div>
         </div>
 
-        <div style={{ background: '#1E293B', borderRadius: '12px', padding: '16px 20px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#94A3B8' }}>Successfully Sent</div>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Successfully Sent</div>
           <div style={{ fontSize: '24px', fontWeight: '700', color: '#34D399', marginTop: '6px' }}>
             {broadcastCounts.sent_count}
           </div>
           <div style={{ fontSize: '11px', color: '#34D399', marginTop: '4px' }}>100% delivered</div>
         </div>
 
-        <div style={{ background: '#1E293B', borderRadius: '12px', padding: '16px 20px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#94A3B8' }}>Failures / Partial</div>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Failures / Partial</div>
           <div
             style={{
               fontSize: '24px',
@@ -591,7 +591,7 @@ export default function AdminNotificationsPage() {
             alignItems: 'center',
           }}
         >
-          <span>✅ {successMsg}</span>
+          <span>{successMsg}</span>
           <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -611,13 +611,13 @@ export default function AdminNotificationsPage() {
             alignItems: 'center',
           }}
         >
-          <span>⚠️ {errorMsg}</span>
+          <span>{errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
         </div>
       )}
 
       {/* View Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #334155', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #E2E8F0', marginBottom: '20px' }}>
         <button
           id="tab-broadcasts"
           onClick={() => setActiveTab('broadcasts')}
@@ -658,11 +658,11 @@ export default function AdminNotificationsPage() {
           {/* Filters Bar */}
           <div
             style={{
-              background: '#1E293B',
+              background: '#FFFFFF',
               borderRadius: '12px',
               padding: '14px 18px',
               marginBottom: '20px',
-              border: '1px solid #334155',
+              border: '1px solid #E2E8F0',
               display: 'flex',
               gap: '12px',
               flexWrap: 'wrap',
@@ -682,9 +682,9 @@ export default function AdminNotificationsPage() {
                   width: '100%',
                   padding: '8px 12px',
                   borderRadius: '6px',
-                  background: '#0F172A',
-                  color: '#F8FAFC',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  color: '#0F2C59',
+                  border: '1px solid #E2E8F0',
                   fontSize: '13px',
                   outline: 'none',
                 }}
@@ -701,9 +701,9 @@ export default function AdminNotificationsPage() {
                   width: '100%',
                   padding: '8px 12px',
                   borderRadius: '6px',
-                  background: '#0F172A',
-                  color: '#F8FAFC',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  color: '#0F2C59',
+                  border: '1px solid #E2E8F0',
                   fontSize: '13px',
                   outline: 'none',
                   cursor: 'pointer',
@@ -740,9 +740,9 @@ export default function AdminNotificationsPage() {
           {/* Broadcasts Table */}
           <div
             style={{
-              background: '#1E293B',
+              background: '#FFFFFF',
               borderRadius: '12px',
-              border: '1px solid #334155',
+              border: '1px solid #E2E8F0',
               overflow: 'hidden',
               marginBottom: '20px',
             }}
@@ -750,7 +750,7 @@ export default function AdminNotificationsPage() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                 <thead>
-                  <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+                  <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
                     <th style={{ padding: '12px 16px', fontWeight: '600' }}>Broadcast Details</th>
                     <th style={{ padding: '12px 16px', fontWeight: '600' }}>Audience & Channels</th>
                     <th style={{ padding: '12px 16px', fontWeight: '600' }}>Lifecycle State</th>
@@ -762,13 +762,13 @@ export default function AdminNotificationsPage() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: '#94A3B8' }}>
+                      <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
                         Loading campaigns...
                       </td>
                     </tr>
                   ) : broadcasts.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: '#94A3B8' }}>
+                      <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
                         No broadcasts found in this status. Click "Compose Notification" to create a draft or campaign.
                       </td>
                     </tr>
@@ -781,19 +781,19 @@ export default function AdminNotificationsPage() {
                         <tr
                           key={b.id}
                           style={{
-                            borderBottom: '1px solid #334155',
+                            borderBottom: '1px solid #E2E8F0',
                             transition: 'background 0.15s ease',
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = '#0F172A')}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
                           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                         >
                           {/* Title & Message */}
                           <td style={{ padding: '14px 16px', verticalAlign: 'top', maxWidth: '300px' }}>
-                            <div style={{ fontWeight: '600', color: '#F8FAFC', marginBottom: '2px' }}>{b.title}</div>
+                            <div style={{ fontWeight: '600', color: '#0F2C59', marginBottom: '2px' }}>{b.title}</div>
                             <div
                               style={{
                                 fontSize: '12px',
-                                color: '#94A3B8',
+                                color: '#64748B',
                                 display: '-webkit-box',
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: 'vertical',
@@ -809,10 +809,10 @@ export default function AdminNotificationsPage() {
 
                           {/* Audience & Channels */}
                           <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
-                            <div style={{ fontWeight: '600', color: '#38BDF8', fontSize: '12px' }}>
+                            <div style={{ fontWeight: '600', color: '#1E56A0', fontSize: '12px' }}>
                               {b.audience_type}
                             </div>
-                            <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
                               {(b.channels || []).join(' + ')}
                             </div>
                           </td>
@@ -840,12 +840,12 @@ export default function AdminNotificationsPage() {
                             {b.status === 'SCHEDULED' ? (
                               <div>
                                 <span style={{ color: '#818CF8', fontWeight: '500' }}>⏰ Scheduled for:</span>
-                                <div style={{ color: '#F8FAFC', marginTop: '2px' }}>{formatDate(b.scheduled_at)}</div>
+                                <div style={{ color: '#0F2C59', marginTop: '2px' }}>{formatDate(b.scheduled_at)}</div>
                               </div>
                             ) : b.sent_at ? (
                               <div>
                                 <span style={{ color: '#34D399', fontWeight: '500' }}>🚀 Dispatched at:</span>
-                                <div style={{ color: '#F8FAFC', marginTop: '2px' }}>{formatDate(b.sent_at)}</div>
+                                <div style={{ color: '#0F2C59', marginTop: '2px' }}>{formatDate(b.sent_at)}</div>
                               </div>
                             ) : (
                               <span style={{ color: '#64748B' }}>Unscheduled Draft</span>
@@ -854,9 +854,9 @@ export default function AdminNotificationsPage() {
 
                           {/* Delivery Metrics */}
                           <td style={{ padding: '14px 16px', verticalAlign: 'top', fontSize: '12px' }}>
-                            <div>Recipients: <span style={{ color: '#F8FAFC', fontWeight: '600' }}>{b.recipient_count || 0}</span></div>
+                            <div>Recipients: <span style={{ color: '#0F2C59', fontWeight: '600' }}>{b.recipient_count || 0}</span></div>
                             {b.push_attempt_count > 0 && (
-                              <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                              <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
                                 Push: {b.push_success_count}/{b.push_attempt_count}
                               </div>
                             )}
@@ -873,9 +873,9 @@ export default function AdminNotificationsPage() {
                                     style={{
                                       padding: '5px 10px',
                                       borderRadius: '6px',
-                                      background: '#0F172A',
-                                      color: '#38BDF8',
-                                      border: '1px solid #334155',
+                                      background: '#F8FAFC',
+                                      color: '#1E56A0',
+                                      border: '1px solid #E2E8F0',
                                       fontSize: '11px',
                                       cursor: 'pointer',
                                     }}
@@ -932,13 +932,13 @@ export default function AdminNotificationsPage() {
             <div
               style={{
                 padding: '12px 18px',
-                background: '#0F172A',
-                borderTop: '1px solid #334155',
+                background: '#F8FAFC',
+                borderTop: '1px solid #E2E8F0',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 fontSize: '12px',
-                color: '#94A3B8',
+                color: '#64748B',
               }}
             >
               <div>
@@ -951,9 +951,9 @@ export default function AdminNotificationsPage() {
                   style={{
                     padding: '5px 12px',
                     borderRadius: '4px',
-                    background: '#1E293B',
-                    color: '#F8FAFC',
-                    border: '1px solid #334155',
+                    background: '#FFFFFF',
+                    color: '#0F2C59',
+                    border: '1px solid #E2E8F0',
                     cursor: broadcastPagination.page <= 1 ? 'not-allowed' : 'pointer',
                   }}
                 >
@@ -965,9 +965,9 @@ export default function AdminNotificationsPage() {
                   style={{
                     padding: '5px 12px',
                     borderRadius: '4px',
-                    background: '#1E293B',
-                    color: '#F8FAFC',
-                    border: '1px solid #334155',
+                    background: '#FFFFFF',
+                    color: '#0F2C59',
+                    border: '1px solid #E2E8F0',
                     cursor: broadcastPagination.page >= broadcastPagination.totalPages ? 'not-allowed' : 'pointer',
                   }}
                 >
@@ -981,11 +981,11 @@ export default function AdminNotificationsPage() {
 
       {/* TAB 2: Customer In-App Notification Log */}
       {activeTab === 'inbox' && (
-        <div style={{ background: '#1E293B', borderRadius: '12px', border: '1px solid #334155', overflow: 'hidden' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
-                <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
                   <th style={{ padding: '12px 16px' }}>Date</th>
                   <th style={{ padding: '12px 16px' }}>Recipient</th>
                   <th style={{ padding: '12px 16px' }}>Title & Content</th>
@@ -996,18 +996,18 @@ export default function AdminNotificationsPage() {
               </thead>
               <tbody>
                 {inboxNotifications.map((item) => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #334155' }}>
-                    <td style={{ padding: '12px 16px', color: '#94A3B8', fontSize: '12px' }}>{formatDate(item.createdAt)}</td>
+                  <tr key={item.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                    <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '12px' }}>{formatDate(item.createdAt)}</td>
                     <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: '600', color: '#F8FAFC' }}>{item.customerName}</div>
+                      <div style={{ fontWeight: '600', color: '#0F2C59' }}>{item.customerName}</div>
                       <div style={{ fontSize: '11px', color: '#64748B' }}>{item.customerPhone}</div>
                     </td>
                     <td style={{ padding: '12px 16px', maxWidth: '350px' }}>
-                      <div style={{ fontWeight: '600', color: '#F8FAFC' }}>{item.title}</div>
-                      <div style={{ fontSize: '12px', color: '#94A3B8' }}>{item.message}</div>
+                      <div style={{ fontWeight: '600', color: '#0F2C59' }}>{item.title}</div>
+                      <div style={{ fontSize: '12px', color: '#64748B' }}>{item.message}</div>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: '#0F172A', color: '#38BDF8' }}>
+                      <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: '#F8FAFC', color: '#1E56A0' }}>
                         {item.type}
                       </span>
                     </td>
@@ -1019,7 +1019,7 @@ export default function AdminNotificationsPage() {
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       <Link
                         href={`/admin/notifications/${item.id}`}
-                        style={{ color: '#38BDF8', fontSize: '12px', textDecoration: 'none' }}
+                        style={{ color: '#1E56A0', fontSize: '12px', textDecoration: 'none' }}
                       >
                         Details ➔
                       </Link>
@@ -1050,9 +1050,9 @@ export default function AdminNotificationsPage() {
         >
           <div
             style={{
-              background: '#1E293B',
+              background: '#FFFFFF',
               borderRadius: '16px',
-              border: '1px solid #334155',
+              border: '1px solid #E2E8F0',
               width: '100%',
               maxWidth: '680px',
               maxHeight: '92vh',
@@ -1066,24 +1066,24 @@ export default function AdminNotificationsPage() {
             <div
               style={{
                 padding: '18px 24px',
-                borderBottom: '1px solid #334155',
+                borderBottom: '1px solid #E2E8F0',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
               }}
             >
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#F8FAFC', margin: 0 }}>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0F2C59', margin: 0 }}>
                   {editingBroadcastId ? '✏️ Edit Broadcast Campaign' : '✍️ Compose & Broadcast Notification'}
                 </h2>
-                <p style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px', marginBottom: 0 }}>
+                <p style={{ fontSize: '12px', color: '#64748B', marginTop: '2px', marginBottom: 0 }}>
                   Sections 131–137 • Targeted audience, scheduling, multi-channel push & audit trail.
                 </p>
               </div>
               <button
                 id="btn-composer-close"
                 onClick={() => setShowComposer(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: '20px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: '20px', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -1110,22 +1110,22 @@ export default function AdminNotificationsPage() {
 
               {/* Title */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#CBD5E1', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#425B73', marginBottom: '6px' }}>
                   Title <span style={{ color: '#EF4444' }}>*</span>
                 </label>
                 <input
                   id="input-notif-title"
                   type="text"
-                  placeholder="e.g. Fresh Seer Fish Just Arrived! 🐟"
+                  placeholder="e.g. Fresh Seer Fish Just Arrived! "
                   value={composerForm.title}
                   onChange={(e) => setComposerForm({ ...composerForm, title: e.target.value })}
                   style={{
                     width: '100%',
                     padding: '9px 12px',
                     borderRadius: '8px',
-                    background: '#0F172A',
-                    color: '#F8FAFC',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    color: '#0F2C59',
+                    border: '1px solid #E2E8F0',
                     fontSize: '13px',
                     outline: 'none',
                   }}
@@ -1134,7 +1134,7 @@ export default function AdminNotificationsPage() {
 
               {/* Message */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#CBD5E1', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#425B73', marginBottom: '6px' }}>
                   Message Body <span style={{ color: '#EF4444' }}>*</span>
                 </label>
                 <textarea
@@ -1147,9 +1147,9 @@ export default function AdminNotificationsPage() {
                     width: '100%',
                     padding: '9px 12px',
                     borderRadius: '8px',
-                    background: '#0F172A',
-                    color: '#F8FAFC',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    color: '#0F2C59',
+                    border: '1px solid #E2E8F0',
                     fontSize: '13px',
                     outline: 'none',
                     resize: 'vertical',
@@ -1161,7 +1161,7 @@ export default function AdminNotificationsPage() {
               {/* Category & Deep Link */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#CBD5E1', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#425B73', marginBottom: '6px' }}>
                     Category
                   </label>
                   <select
@@ -1172,9 +1172,9 @@ export default function AdminNotificationsPage() {
                       width: '100%',
                       padding: '9px 12px',
                       borderRadius: '8px',
-                      background: '#0F172A',
-                      color: '#F8FAFC',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      color: '#0F2C59',
+                      border: '1px solid #E2E8F0',
                       fontSize: '13px',
                       outline: 'none',
                     }}
@@ -1187,7 +1187,7 @@ export default function AdminNotificationsPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#CBD5E1', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#425B73', marginBottom: '6px' }}>
                     Optional Deep Link
                   </label>
                   <input
@@ -1200,9 +1200,9 @@ export default function AdminNotificationsPage() {
                       width: '100%',
                       padding: '9px 12px',
                       borderRadius: '8px',
-                      background: '#0F172A',
-                      color: '#F8FAFC',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      color: '#0F2C59',
+                      border: '1px solid #E2E8F0',
                       fontSize: '13px',
                       outline: 'none',
                     }}
@@ -1211,8 +1211,8 @@ export default function AdminNotificationsPage() {
               </div>
 
               {/* Target Audience */}
-              <div style={{ background: '#0F172A', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#38BDF8', marginBottom: '8px' }}>
+              <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#1E56A0', marginBottom: '8px' }}>
                   🎯 Target Audience
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginBottom: '10px' }}>
@@ -1231,7 +1231,7 @@ export default function AdminNotificationsPage() {
                         padding: '7px 10px',
                         borderRadius: '6px',
                         border: composerForm.audienceType === aud.id ? '1px solid #38BDF8' : '1px solid #334155',
-                        background: composerForm.audienceType === aud.id ? 'rgba(56, 189, 248, 0.15)' : '#1E293B',
+                        background: composerForm.audienceType === aud.id ? 'rgba(56, 189, 248, 0.15)' : '#F8FAFC',
                         color: composerForm.audienceType === aud.id ? '#38BDF8' : '#94A3B8',
                         fontSize: '12px',
                         fontWeight: '500',
@@ -1253,9 +1253,9 @@ export default function AdminNotificationsPage() {
                         width: '100%',
                         padding: '8px 10px',
                         borderRadius: '6px',
-                        background: '#1E293B',
-                        color: '#F8FAFC',
-                        border: '1px solid #334155',
+                        background: '#FFFFFF',
+                        color: '#0F2C59',
+                        border: '1px solid #E2E8F0',
                         fontSize: '12px',
                       }}
                     >
@@ -1279,9 +1279,9 @@ export default function AdminNotificationsPage() {
                         width: '100%',
                         padding: '8px 10px',
                         borderRadius: '6px',
-                        background: '#1E293B',
-                        color: '#F8FAFC',
-                        border: '1px solid #334155',
+                        background: '#FFFFFF',
+                        color: '#0F2C59',
+                        border: '1px solid #E2E8F0',
                         fontSize: '12px',
                         fontFamily: 'monospace',
                       }}
@@ -1296,15 +1296,15 @@ export default function AdminNotificationsPage() {
                     marginTop: '10px',
                     padding: '8px 12px',
                     borderRadius: '6px',
-                    background: '#1E293B',
-                    border: '1px solid #334155',
+                    background: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
                     fontSize: '12px',
                     display: 'flex',
                     justifyContent: 'space-between',
                   }}
                 >
-                  <span style={{ color: '#94A3B8' }}>Estimated Audience Scope:</span>
-                  <span style={{ color: '#38BDF8', fontWeight: '700' }}>
+                  <span style={{ color: '#64748B' }}>Estimated Audience Scope:</span>
+                  <span style={{ color: '#1E56A0', fontWeight: '700' }}>
                     {previewLoading ? 'Calculating...' : `${audiencePreview?.estimatedRecipients || 0} recipient(s)`}
                   </span>
                 </div>
@@ -1312,7 +1312,7 @@ export default function AdminNotificationsPage() {
 
               {/* Delivery Channels */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#CBD5E1', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#425B73', marginBottom: '6px' }}>
                   Delivery Channels
                 </label>
                 <div style={{ display: 'flex', gap: '20px' }}>
@@ -1332,14 +1332,14 @@ export default function AdminNotificationsPage() {
                       checked={composerForm.channels.includes('PUSH')}
                       onChange={() => handleChannelToggle('PUSH')}
                     />
-                    <span>🔔 Push Notification (Firebase FCM)</span>
+                    <span>Push Notification (Firebase FCM)</span>
                   </label>
                 </div>
               </div>
 
               {/* Dispatch Mode: Send Now vs Schedule for Later */}
               {!editingBroadcastId && (
-                <div style={{ background: '#0F172A', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
+                <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#818CF8', marginBottom: '8px' }}>
                     ⏰ Dispatch Timing
                   </label>
@@ -1369,7 +1369,7 @@ export default function AdminNotificationsPage() {
 
                   {composerForm.dispatchMode === 'SCHEDULE' && (
                     <div style={{ marginTop: '8px' }}>
-                      <label style={{ display: 'block', fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>
+                      <label style={{ display: 'block', fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>
                         Scheduled Date & Time (IST):
                       </label>
                       <input
@@ -1382,9 +1382,9 @@ export default function AdminNotificationsPage() {
                           width: '100%',
                           padding: '8px 10px',
                           borderRadius: '6px',
-                          background: '#1E293B',
-                          color: '#F8FAFC',
-                          border: '1px solid #334155',
+                          background: '#FFFFFF',
+                          color: '#0F2C59',
+                          border: '1px solid #E2E8F0',
                           fontSize: '12px',
                         }}
                       />
@@ -1398,7 +1398,7 @@ export default function AdminNotificationsPage() {
                 style={{
                   marginTop: '10px',
                   paddingTop: '16px',
-                  borderTop: '1px solid #334155',
+                  borderTop: '1px solid #E2E8F0',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -1414,9 +1414,9 @@ export default function AdminNotificationsPage() {
                       style={{
                         padding: '8px 14px',
                         borderRadius: '6px',
-                        background: '#0F172A',
-                        color: '#94A3B8',
-                        border: '1px solid #334155',
+                        background: '#F8FAFC',
+                        color: '#64748B',
+                        border: '1px solid #E2E8F0',
                         fontSize: '12px',
                         fontWeight: '500',
                         cursor: 'pointer',
@@ -1437,8 +1437,8 @@ export default function AdminNotificationsPage() {
                       padding: '8px 14px',
                       borderRadius: '6px',
                       background: 'transparent',
-                      color: '#94A3B8',
-                      border: '1px solid #334155',
+                      color: '#64748B',
+                      border: '1px solid #E2E8F0',
                       fontSize: '12px',
                       cursor: 'pointer',
                     }}

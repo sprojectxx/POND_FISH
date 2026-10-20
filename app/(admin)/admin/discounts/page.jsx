@@ -182,10 +182,10 @@ export default function AdminDiscountsPage() {
   };
 
   const computedStatus = (d) => {
-    if (d.active === false) return { label: 'DISABLED', color: '#64748B', bg: '#1E293B' };
+    if (d.active === false) return { label: 'DISABLED', color: '#64748B', bg: '#F1F5F9' };
     const now = new Date();
     if (d.starts_at && new Date(d.starts_at) > now) {
-      return { label: 'SCHEDULED', color: '#38BDF8', bg: 'rgba(56, 189, 248, 0.15)' };
+      return { label: 'SCHEDULED', color: '#1E56A0', bg: 'rgba(56, 189, 248, 0.15)' };
     }
     if (d.expires_at && new Date(d.expires_at) < now) {
       return { label: 'EXPIRED', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)' };
@@ -210,7 +210,7 @@ export default function AdminDiscountsPage() {
   const activeCount = discounts.filter((d) => computedStatus(d).label === 'ACTIVE').length;
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#F8FAFC' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#0F2C59' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -230,7 +230,7 @@ export default function AdminDiscountsPage() {
               ADMIN-07
             </span>
           </div>
-          <p style={{ margin: '6px 0 0', color: '#94A3B8', fontSize: '14px' }}>
+          <p style={{ margin: '6px 0 0', color: '#64748B', fontSize: '14px' }}>
             Authoritative promotional codes, percentage off, flat discounts, and validity schedules.
           </p>
         </div>
@@ -239,9 +239,9 @@ export default function AdminDiscountsPage() {
           <button
             onClick={fetchData}
             style={{
-              background: '#1E293B',
-              border: '1px solid #334155',
-              color: '#CBD5E1',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#425B73',
               padding: '10px 16px',
               borderRadius: '8px',
               fontSize: '13px',
@@ -286,7 +286,7 @@ export default function AdminDiscountsPage() {
           display: 'flex',
           justifyContent: 'space-between',
         }}>
-          <span>⚠️ {errorMsg}</span>
+          <span>{errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -310,17 +310,17 @@ export default function AdminDiscountsPage() {
 
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>TOTAL CAMPAIGNS</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#F8FAFC', marginTop: '4px' }}>{discounts.length}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TOTAL CAMPAIGNS</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#0F2C59', marginTop: '4px' }}>{discounts.length}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>LIVE ACTIVE CODES</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>LIVE ACTIVE CODES</div>
           <div style={{ fontSize: '26px', fontWeight: '700', color: '#10B981', marginTop: '4px' }}>{activeCount}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>STOREWIDE DISCOUNTS</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#38BDF8', marginTop: '4px' }}>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>STOREWIDE DISCOUNTS</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#1E56A0', marginTop: '4px' }}>
             {discounts.filter((d) => !d.fish_id).length}
           </div>
         </div>
@@ -328,10 +328,10 @@ export default function AdminDiscountsPage() {
 
       {/* Search & Filter Bar */}
       <div style={{
-        background: '#1E293B',
+        background: '#FFFFFF',
         padding: '16px 20px',
         borderRadius: '10px',
-        border: '1px solid #334155',
+        border: '1px solid #E2E8F0',
         marginBottom: '24px',
         display: 'flex',
         gap: '16px',
@@ -345,13 +345,11 @@ export default function AdminDiscountsPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{
               width: '100%',
-              background: '#0F172A',
-              border: '1px solid #334155',
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
               borderRadius: '6px',
               padding: '10px 14px',
-              color: '#F8FAFC',
-              fontSize: '13px',
-              boxSizing: 'border-box',
+              color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
             }}
           />
         </div>
@@ -360,11 +358,11 @@ export default function AdminDiscountsPage() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #334155',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
             borderRadius: '6px',
             padding: '10px 14px',
-            color: '#F8FAFC',
+            color: '#0F2C59',
             fontSize: '13px',
           }}
         >
@@ -377,10 +375,10 @@ export default function AdminDiscountsPage() {
       </div>
 
       {/* Discounts Table */}
-      <div style={{ background: '#1E293B', borderRadius: '10px', border: '1px solid #334155', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
-            <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Promo Code</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Target Applicability</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Benefit Value</th>
@@ -392,13 +390,13 @@ export default function AdminDiscountsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   Loading discounts...
                 </td>
               </tr>
             ) : filteredDiscounts.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   No promotional discounts found.
                 </td>
               </tr>
@@ -411,37 +409,37 @@ export default function AdminDiscountsPage() {
                   : `₹${Number(d.flat_discount_amount).toFixed(2)} FLAT`;
 
                 return (
-                  <tr key={d.id} style={{ borderBottom: '1px solid #334155' }}>
+                  <tr key={d.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                     <td style={{ padding: '14px 18px' }}>
                       <span style={{
                         fontFamily: 'monospace',
                         fontWeight: '700',
                         fontSize: '14px',
-                        color: '#38BDF8',
-                        background: '#0F172A',
+                        color: '#1E56A0',
+                        background: '#F8FAFC',
                         padding: '4px 8px',
                         borderRadius: '4px',
-                        border: '1px solid #334155'
+                        border: '1px solid #E2E8F0'
                       }}>
                         {d.discount_code}
                       </span>
                     </td>
 
-                    <td style={{ padding: '14px 18px', color: '#CBD5E1' }}>
+                    <td style={{ padding: '14px 18px', color: '#425B73' }}>
                       {d.fish_id ? (
                         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>🐟</span> {d.fish_name || 'Specific Fish'}
+                          <span></span> {d.fish_name || 'Specific Fish'}
                         </span>
                       ) : (
-                        <span style={{ color: '#10B981', fontWeight: '600' }}>🌐 All Catalog Fish (Storewide)</span>
+                        <span style={{ color: '#10B981', fontWeight: '600' }}>All Catalog Fish (Storewide)</span>
                       )}
                     </td>
 
-                    <td style={{ padding: '14px 18px', fontWeight: '700', color: '#F8FAFC' }}>
+                    <td style={{ padding: '14px 18px', fontWeight: '700', color: '#0F2C59' }}>
                       {displayValue}
                     </td>
 
-                    <td style={{ padding: '14px 18px', color: '#94A3B8', fontSize: '12px' }}>
+                    <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '12px' }}>
                       <div>
                         {d.starts_at ? new Date(d.starts_at).toLocaleDateString() : 'Immediate'} →{' '}
                         {d.expires_at ? new Date(d.expires_at).toLocaleDateString() : 'No Expiry'}
@@ -466,8 +464,8 @@ export default function AdminDiscountsPage() {
                         <button
                           onClick={() => handleToggleActive(d)}
                           style={{
-                            background: d.active !== false ? '#064E3B' : '#334155',
-                            border: `1px solid ${d.active !== false ? '#10B981' : '#475569'}`,
+                            background: d.active !== false ? '#064E3B' : '#E2E8F0',
+                            border: `1px solid ${d.active !== false ? '#10B981' : '#CBD5E1'}`,
                             color: d.active !== false ? '#6EE7B7' : '#94A3B8',
                             padding: '4px 8px',
                             borderRadius: '4px',
@@ -481,9 +479,9 @@ export default function AdminDiscountsPage() {
                         <button
                           onClick={() => openEditModal(d)}
                           style={{
-                            background: '#334155',
+                            background: '#F1F5F9',
                             border: 'none',
-                            color: '#F8FAFC',
+                            color: '#0F2C59',
                             padding: '6px 12px',
                             borderRadius: '6px',
                             fontSize: '12px',
@@ -521,7 +519,7 @@ export default function AdminDiscountsPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -530,8 +528,8 @@ export default function AdminDiscountsPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             width: '100%',
             maxWidth: '520px',
@@ -544,7 +542,7 @@ export default function AdminDiscountsPage() {
               </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '18px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -552,7 +550,7 @@ export default function AdminDiscountsPage() {
 
             <form onSubmit={handleSave}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Discount Code (Uppercase Alphanumeric) *
                 </label>
                 <input
@@ -563,11 +561,11 @@ export default function AdminDiscountsPage() {
                   placeholder="e.g. MONSOON15, FIRSTCATCH"
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#38BDF8',
+                    color: '#1E56A0',
                     fontFamily: 'monospace',
                     fontWeight: '700',
                     fontSize: '14px',
@@ -577,7 +575,7 @@ export default function AdminDiscountsPage() {
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Target Product
                 </label>
                 <select
@@ -585,13 +583,11 @@ export default function AdminDiscountsPage() {
                   onChange={(e) => setFormData({ ...formData, fish_id: e.target.value })}
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 >
                   <option value="">Storewide (Applies to all varieties)</option>
@@ -603,7 +599,7 @@ export default function AdminDiscountsPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Discount Type *
                   </label>
                   <select
@@ -611,13 +607,11 @@ export default function AdminDiscountsPage() {
                     onChange={(e) => setFormData({ ...formData, discount_type: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '8px 12px',
-                      color: '#F8FAFC',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
+                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                     }}
                   >
                     <option value="PERCENTAGE">Percentage (%)</option>
@@ -626,7 +620,7 @@ export default function AdminDiscountsPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Value {formData.discount_type === 'PERCENTAGE' ? '(1 - 100 %)' : '(₹)'} *
                   </label>
                   <input
@@ -640,13 +634,11 @@ export default function AdminDiscountsPage() {
                     placeholder={formData.discount_type === 'PERCENTAGE' ? '15' : '50.00'}
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '8px 12px',
-                      color: '#F8FAFC',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
+                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                     }}
                   />
                 </div>
@@ -654,7 +646,7 @@ export default function AdminDiscountsPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Starts At
                   </label>
                   <input
@@ -663,19 +655,17 @@ export default function AdminDiscountsPage() {
                     onChange={(e) => setFormData({ ...formData, starts_at: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '8px 12px',
-                      color: '#F8FAFC',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
+                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                     }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Expires At
                   </label>
                   <input
@@ -684,21 +674,19 @@ export default function AdminDiscountsPage() {
                     onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '8px 12px',
-                      color: '#F8FAFC',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
+                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                     }}
                   />
                 </div>
               </div>
 
               <div style={{
-                background: '#0F172A',
-                border: '1px solid #334155',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
                 borderRadius: '8px',
                 padding: '12px 14px',
                 marginBottom: '20px',
@@ -718,9 +706,9 @@ export default function AdminDiscountsPage() {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   style={{
-                    background: '#334155',
+                    background: '#F1F5F9',
                     border: 'none',
-                    color: '#CBD5E1',
+                    color: '#425B73',
                     padding: '8px 16px',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -756,7 +744,7 @@ export default function AdminDiscountsPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -765,7 +753,7 @@ export default function AdminDiscountsPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             border: '1px solid #EF4444',
             borderRadius: '12px',
             width: '100%',
@@ -775,16 +763,16 @@ export default function AdminDiscountsPage() {
             <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: '#FCA5A5' }}>
               Confirm Deletion: {deleteTarget.discount_code}
             </h3>
-            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#CBD5E1', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#425B73', lineHeight: '1.5' }}>
               Are you sure you want to permanently delete this discount campaign? Customers will no longer be able to apply this code during checkout.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 onClick={() => setDeleteTarget(null)}
                 style={{
-                  background: '#334155',
+                  background: '#F1F5F9',
                   border: 'none',
-                  color: '#CBD5E1',
+                  color: '#425B73',
                   padding: '8px 16px',
                   borderRadius: '6px',
                   fontSize: '13px',

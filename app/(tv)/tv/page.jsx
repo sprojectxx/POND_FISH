@@ -15,6 +15,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '@/lib/supabase-client';
 
 export default function TVPortalPage() {
   const [transactions, setTransactions] = useState([]);
@@ -145,8 +146,42 @@ export default function TVPortalPage() {
     }
   }, []);
 
-  // Real-time WebSocket connection setup
+  // Handle new incoming transaction with deduplication and highlight
+  const handleIncomingTransaction = useCallback(
+    (newTx) => {
+      if (!newTx || !newTx.id) return;
+
+      // Strict deduplication: ignore if already displayed
+      if (seenTxnIdsRef.current.has(newTx.id)) {
+        return;
+      }
+
+      seenTxnIdsRef.current.add(newTx.id);
+
+      // Prepend new transaction
+      setTransactions((prev) => [newTx, ...prev]);
+
+      // Add highlight state
+      setNewTxnIds((prev) => new Set(prev).add(newTx.id));
+
+      // Trigger notification sound
+      playCounterChime();
+
+      // Clear highlight after 8 seconds
+      setTimeout(() => {
+        setNewTxnIds((prev) => {
+          const next = new Set(prev);
+          next.delete(newTx.id);
+          return next;
+        });
+      }, 8000);
+    },
+    [playCounterChime]
+  );
+
+  // Real-time WebSocket connection setup (Local Dev / Fallback)
   const connectWebSocket = useCallback(() => {
+    if (typeof window === 'undefined') return;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       return;
     }
@@ -160,7 +195,6 @@ export default function TVPortalPage() {
 
       ws.onopen = () => {
         setConnectionStatus('CONNECTED');
-        // Synchronize on connect / reconnect to catch any transactions processed while disconnected
         fetchRecentTransactions();
       };
 
@@ -168,32 +202,7 @@ export default function TVPortalPage() {
         try {
           const msg = JSON.parse(event.data);
           if (msg.event === 'successful_transaction' && msg.data) {
-            const newTx = msg.data;
-
-            // Strict deduplication: ignore if already displayed
-            if (seenTxnIdsRef.current.has(newTx.id)) {
-              return;
-            }
-
-            seenTxnIdsRef.current.add(newTx.id);
-
-            // Prepend new transaction
-            setTransactions((prev) => [newTx, ...prev]);
-
-            // Add highlight state
-            setNewTxnIds((prev) => new Set(prev).add(newTx.id));
-
-            // Trigger notification sound
-            playCounterChime();
-
-            // Clear highlight after 8 seconds
-            setTimeout(() => {
-              setNewTxnIds((prev) => {
-                const next = new Set(prev);
-                next.delete(newTx.id);
-                return next;
-              });
-            }, 8000);
+            handleIncomingTransaction(msg.data);
           }
         } catch {
           // Ignore malformed payloads
@@ -201,30 +210,65 @@ export default function TVPortalPage() {
       };
 
       ws.onclose = () => {
-        setConnectionStatus('RECONNECTING');
-        // Exponential backoff reconnect
         reconnectTimeoutRef.current = setTimeout(() => {
           connectWebSocket();
-        }, 3000);
+        }, 5000);
       };
 
       ws.onerror = () => {
-        setConnectionStatus('OFFLINE');
+        // Silent error; Supabase Realtime manages production connections
       };
     } catch {
-      setConnectionStatus('RECONNECTING');
       reconnectTimeoutRef.current = setTimeout(() => {
         connectWebSocket();
       }, 5000);
     }
-  }, [fetchRecentTransactions, playCounterChime]);
+  }, [fetchRecentTransactions, handleIncomingTransaction]);
 
-  // Mount lifecycle: hydrate and connect
+  // Mount lifecycle: hydrate and connect both Supabase Realtime & Fallback
   useEffect(() => {
     fetchRecentTransactions();
+
+    // 1. Supabase Realtime Channel Subscription (Production & Vercel)
+    let channel = null;
+    try {
+      channel = supabase
+        .channel('tv-live-feed')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'transactions' },
+          () => {
+            fetchRecentTransactions();
+          }
+        )
+        .on(
+          'broadcast',
+          { event: 'successful_transaction' },
+          (payload) => {
+            const data = payload?.payload || payload?.data;
+            if (data) {
+              handleIncomingTransaction(data);
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setConnectionStatus('CONNECTED');
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            setConnectionStatus('RECONNECTING');
+          }
+        });
+    } catch (err) {
+      console.warn('[TV PORTAL] Supabase Realtime connection fallback:', err.message);
+    }
+
+    // 2. Connect local WebSocket fallback
     connectWebSocket();
 
     return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
       if (wsRef.current) {
         wsRef.current.close();
       }
@@ -232,69 +276,116 @@ export default function TVPortalPage() {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [fetchRecentTransactions, connectWebSocket]);
+  }, [fetchRecentTransactions, connectWebSocket, handleIncomingTransaction]);
 
   return (
-    <div style={styles.container}>
+    <div className="pf-tv-shell" style={styles.container}>
       {/* 1. Global Header Bar */}
-      <header style={styles.header}>
-        <div style={styles.brandGroup}>
-          <div style={styles.logoBadge}>🐟</div>
-          <div>
-            <div style={styles.brandTitle}>
-              POND<span style={{ color: '#38BDF8' }}>FISH</span> FRESH COUNTER
+      <header className="pf-tv-header" style={styles.header}>
+        <div className="pf-tv-header-left" style={styles.brandGroup}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={styles.logoBadge}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0" />
+                <path d="M2 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0" />
+                <path d="M2 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0" />
+              </svg>
             </div>
-            <div style={styles.brandSubtitle}>
-              Bangalore Flagship Store • Live Checkout & Handover Display
+            <div>
+              <div className="pf-tv-brand-title" style={styles.brandTitle}>
+                POND<span style={{ color: '#1E56A0' }}>FISH</span> FRESH COUNTER
+              </div>
+              <div className="pf-tv-brand-subtitle" style={styles.brandSubtitle}>
+                Live Checkout & Handover Display
+              </div>
             </div>
           </div>
         </div>
 
         {/* Header Right: Clock + Sound + Connection Indicator */}
-        <div style={styles.headerRight}>
+        <div className="pf-tv-header-right" style={styles.headerRight}>
           {/* Audio Chime Button */}
           {!audioReady ? (
-            <button style={styles.audioPromptBtn} onClick={handleEnableAudio}>
-              🔔 Click to Enable Sound Alerts
+            <button className="pf-tv-action-btn" style={styles.audioPromptBtn} onClick={handleEnableAudio}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+              Enable Chimes
             </button>
           ) : (
             <button
+              className="pf-tv-action-btn"
               style={styles.soundToggleBtn}
               onClick={() => setSoundEnabled((prev) => !prev)}
               title="Toggle transaction chime sound"
             >
-              {soundEnabled ? '🔔 Sound ON' : '🔕 Sound OFF'}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                {soundEnabled && <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
+                {!soundEnabled && <line x1="23" y1="9" x2="17" y2="15" />}
+                {!soundEnabled && <line x1="17" y1="9" x2="23" y2="15" />}
+              </svg>
+              {soundEnabled ? 'Sound ON' : 'Muted'}
             </button>
           )}
 
           {/* Date & Time */}
-          <div style={styles.clockBox}>
-            <div style={styles.clockTime}>{currentTime || '--:--:--'}</div>
-            <div style={styles.clockDate}>{currentDate}</div>
+          <div className="pf-tv-clock-box" style={styles.clockBox}>
+            <div className="pf-tv-clock-time" style={styles.clockTime}>{currentTime || '--:--:--'}</div>
+            <div className="pf-tv-clock-date" style={styles.clockDate}>{currentDate}</div>
           </div>
 
           {/* Connection Status Badge */}
-          <div style={styles.statusBadge}>
+          <div
+            className="pf-tv-status-badge"
+            style={{
+              ...styles.statusBadge,
+              backgroundColor:
+                connectionStatus === 'CONNECTED'
+                  ? '#DCFCE7'
+                  : connectionStatus === 'RECONNECTING'
+                  ? '#FEF3C7'
+                  : '#FEE2E2',
+              borderColor:
+                connectionStatus === 'CONNECTED'
+                  ? '#BBF7D0'
+                  : connectionStatus === 'RECONNECTING'
+                  ? '#FDE68A'
+                  : '#FECACA',
+            }}
+          >
             <span
               style={{
                 ...styles.statusDot,
                 backgroundColor:
                   connectionStatus === 'CONNECTED'
-                    ? '#22C55E'
+                    ? '#15803D'
                     : connectionStatus === 'RECONNECTING'
-                    ? '#FACC15'
-                    : '#EF4444',
+                    ? '#D97706'
+                    : '#DC2626',
                 boxShadow:
                   connectionStatus === 'CONNECTED'
-                    ? '0 0 12px #22C55E'
+                    ? '0 0 8px rgba(21, 128, 61, 0.5)'
                     : 'none',
               }}
             />
-            <span style={styles.statusText}>
+            <span
+              className="pf-tv-status-text"
+              style={{
+                ...styles.statusText,
+                color:
+                  connectionStatus === 'CONNECTED'
+                    ? '#166534'
+                    : connectionStatus === 'RECONNECTING'
+                    ? '#B45309'
+                    : '#991B1B',
+              }}
+            >
               {connectionStatus === 'CONNECTED'
-                ? 'LIVE FEED ACTIVE'
+                ? 'LIVE FEED'
                 : connectionStatus === 'RECONNECTING'
-                ? 'RECONNECTING...'
+                ? 'RECONNECTING'
                 : 'OFFLINE'}
             </span>
           </div>
@@ -302,7 +393,7 @@ export default function TVPortalPage() {
       </header>
 
       {/* 2. Main Content Area */}
-      <main style={styles.main}>
+      <main className="pf-tv-main" style={styles.main}>
         {/* Loading State */}
         {loading && (
           <div style={styles.skeletonContainer}>
@@ -314,12 +405,18 @@ export default function TVPortalPage() {
 
         {/* Empty State (TV-05) */}
         {!loading && transactions.length === 0 && (
-          <div style={styles.emptyContainer}>
-            <div style={styles.emptyIcon}>🐟</div>
-            <h2 style={styles.emptyTitle}>
+          <div className="pf-tv-empty-card" style={styles.emptyContainer}>
+            <div style={styles.emptyIcon}>
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+            </div>
+            <h2 className="pf-tv-empty-title" style={styles.emptyTitle}>
               Awaiting Next Completed Counter Checkout
             </h2>
-            <p style={styles.emptySubtitle}>
+            <p className="pf-tv-empty-subtitle" style={styles.emptySubtitle}>
               Realtime WebSocket feed will broadcast confirmed store transactions immediately.
             </p>
             <div style={styles.emptyPill}>
@@ -330,9 +427,9 @@ export default function TVPortalPage() {
 
         {/* Populated Transaction Feed (TV-01, TV-02, TV-03) */}
         {!loading && transactions.length > 0 && (
-          <div style={styles.feedWrapper}>
+          <div className="pf-tv-feed-wrapper" style={styles.feedWrapper}>
             {/* Table / Card Header */}
-            <div style={styles.tableHeader}>
+            <div className="pf-tv-table-header" style={styles.tableHeader}>
               <div style={{ flex: '0 0 160px' }}>ORDER / TIME</div>
               <div style={{ flex: '1 1 240px' }}>CUSTOMER</div>
               <div style={{ flex: '2 1 400px' }}>FRESH FISH & WEIGHT</div>
@@ -340,35 +437,44 @@ export default function TVPortalPage() {
             </div>
 
             {/* Scrollable Feed List */}
-            <div style={styles.listContainer}>
+            <div className="pf-tv-list-container" style={styles.listContainer}>
               {transactions.map((tx) => {
                 const isNew = newTxnIds.has(tx.id);
                 return (
                   <div
                     key={tx.id}
+                    className="pf-tv-card"
                     style={{
                       ...styles.transactionCard,
                       ...(isNew ? styles.newCardHighlight : {}),
                     }}
                   >
-                    {/* Column 1: Order / Time */}
-                    <div style={{ flex: '0 0 160px' }}>
-                      <div style={styles.orderPill}>
-                        {tx.billNumber || tx.transactionNumber}
+                    {/* Top Row: Order / Time + Mobile Amount */}
+                    <div className="pf-tv-card-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: '0 0 160px' }}>
+                      <div>
+                        <div style={styles.orderPill}>
+                          {tx.billNumber || tx.transactionNumber}
+                        </div>
+                        <div style={styles.orderTime}>{tx.time}</div>
                       </div>
-                      <div style={styles.orderTime}>{tx.time}</div>
+                      <div className="pf-tv-card-mobile-amount" style={{ display: 'none', textAlign: 'right' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '900', color: '#15803D' }}>
+                          ₹{Number(tx.paidAmount).toLocaleString('en-IN')}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#166534', fontWeight: '700' }}>Verified Paid</div>
+                      </div>
                     </div>
 
                     {/* Column 2: Customer Name */}
-                    <div style={{ flex: '1 1 240px' }}>
-                      <div style={styles.customerName}>{tx.customerName}</div>
+                    <div className="pf-tv-card-customer-col" style={{ flex: '1 1 240px' }}>
+                      <div className="pf-tv-card-customer-name" style={styles.customerName}>{tx.customerName}</div>
                       {isNew && (
                         <span style={styles.newBadge}>JUST COMPLETED</span>
                       )}
                     </div>
 
                     {/* Column 3: Fish Items & Kilograms */}
-                    <div style={{ flex: '2 1 400px' }}>
+                    <div className="pf-tv-card-fish-col" style={{ flex: '2 1 400px' }}>
                       <div style={styles.itemsWrapper}>
                         {tx.items && tx.items.length > 0 ? (
                           tx.items.map((item, idx) => (
@@ -387,8 +493,8 @@ export default function TVPortalPage() {
                       </div>
                     </div>
 
-                    {/* Column 4: Paid Amount */}
-                    <div style={{ flex: '0 0 180px', textAlign: 'right' }}>
+                    {/* Column 4: Desktop Paid Amount */}
+                    <div className="pf-tv-card-amount-col" style={{ flex: '0 0 180px', textAlign: 'right' }}>
                       <div style={styles.amountValue}>
                         ₹{Number(tx.paidAmount).toLocaleString('en-IN')}
                       </div>
@@ -423,16 +529,17 @@ const styles = {
     flexDirection: 'column',
     height: '100vh',
     width: '100vw',
-    backgroundColor: '#020617',
-    color: '#F8FAFC',
+    backgroundColor: '#F0F5FA',
+    color: '#0F2C59',
     overflow: 'hidden',
     userSelect: 'none',
   },
   header: {
-    height: '90px',
+    height: '84px',
     padding: '0 36px',
-    backgroundColor: '#0F172A',
-    borderBottom: '2px solid #1E293B',
+    backgroundColor: '#FFFFFF',
+    borderBottom: '1px solid #E2E8F0',
+    boxShadow: '0 2px 10px rgba(15, 44, 89, 0.04)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -444,27 +551,26 @@ const styles = {
     gap: '16px',
   },
   logoBadge: {
-    width: '54px',
-    height: '54px',
+    width: '52px',
+    height: '52px',
     borderRadius: '12px',
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-    border: '1.5px solid #0284C7',
+    backgroundColor: '#E8F1F5',
+    border: '1.5px solid #CBD5E1',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '28px',
   },
   brandTitle: {
-    fontSize: '28px',
+    fontSize: '26px',
     fontWeight: '900',
-    letterSpacing: '1px',
-    color: '#F8FAFC',
+    letterSpacing: '-0.02em',
+    color: '#0F2C59',
     lineHeight: '1.1',
   },
   brandSubtitle: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: '500',
-    color: '#94A3B8',
+    color: '#64748B',
     marginTop: '3px',
   },
   headerRight: {
@@ -473,33 +579,33 @@ const styles = {
     gap: '24px',
   },
   audioPromptBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#0284C7',
+    padding: '9px 18px',
+    backgroundColor: '#1E56A0',
     color: '#FFFFFF',
     border: 'none',
     borderRadius: '8px',
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: '700',
     cursor: 'pointer',
-    animation: 'pulse 2s infinite',
+    boxShadow: '0 4px 12px rgba(30, 86, 160, 0.25)',
   },
   soundToggleBtn: {
-    padding: '6px 14px',
-    backgroundColor: '#1E293B',
-    color: '#94A3B8',
-    border: '1px solid #334155',
+    padding: '8px 16px',
+    backgroundColor: '#F8FAFC',
+    color: '#0F2C59',
+    border: '1px solid #CBD5E1',
     borderRadius: '8px',
     fontSize: '13px',
-    fontWeight: '600',
+    fontWeight: '700',
     cursor: 'pointer',
   },
   clockBox: {
     textAlign: 'right',
   },
   clockTime: {
-    fontSize: '24px',
+    fontSize: '22px',
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: '#0F2C59',
     fontVariantNumeric: 'tabular-nums',
   },
   clockDate: {
@@ -513,21 +619,19 @@ const styles = {
     alignItems: 'center',
     gap: '10px',
     padding: '8px 16px',
-    backgroundColor: '#1E293B',
     borderRadius: '24px',
-    border: '1px solid #334155',
+    border: '1px solid',
   },
   statusDot: {
-    width: '12px',
-    height: '12px',
+    width: '10px',
+    height: '10px',
     borderRadius: '50%',
     display: 'inline-block',
   },
   statusText: {
-    fontSize: '15px',
+    fontSize: '13px',
     fontWeight: '800',
-    letterSpacing: '0.5px',
-    color: '#F8FAFC',
+    letterSpacing: '0.04em',
   },
   main: {
     flex: 1,
@@ -543,10 +647,10 @@ const styles = {
     marginTop: '20px',
   },
   skeletonRow: {
-    height: '90px',
-    backgroundColor: '#1E293B',
-    borderRadius: '12px',
-    opacity: 0.6,
+    height: '84px',
+    backgroundColor: '#E2E8F0',
+    borderRadius: '14px',
+    opacity: 0.7,
   },
   emptyContainer: {
     flex: 1,
@@ -555,33 +659,38 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     textAlign: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: '20px',
+    border: '1px solid #E2E8F0',
+    boxShadow: '0 8px 24px rgba(15, 44, 89, 0.04)',
+    maxWidth: '740px',
+    margin: '40px auto',
+    padding: '50px 36px',
   },
   emptyIcon: {
-    fontSize: '64px',
     marginBottom: '16px',
-    opacity: 0.8,
   },
   emptyTitle: {
-    fontSize: '32px',
+    fontSize: '26px',
     fontWeight: '800',
-    color: '#94A3B8',
-    marginBottom: '12px',
+    color: '#0F2C59',
+    marginBottom: '10px',
   },
   emptySubtitle: {
-    fontSize: '18px',
+    fontSize: '15px',
     color: '#64748B',
-    maxWidth: '600px',
+    maxWidth: '560px',
     marginBottom: '24px',
-    lineHeight: '1.5',
+    lineHeight: '1.6',
   },
   emptyPill: {
     padding: '8px 20px',
-    backgroundColor: '#1E293B',
-    border: '1px solid #334155',
+    backgroundColor: '#ECFDF5',
+    border: '1px solid #A7F3D0',
     borderRadius: '20px',
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#38BDF8',
+    fontSize: '13px',
+    fontWeight: '700',
+    color: '#159C57',
   },
   feedWrapper: {
     display: 'flex',
@@ -592,14 +701,14 @@ const styles = {
   tableHeader: {
     display: 'flex',
     alignItems: 'center',
-    padding: '12px 24px',
-    backgroundColor: '#0F172A',
-    borderRadius: '8px 8px 0 0',
-    fontSize: '13px',
+    padding: '14px 24px',
+    backgroundColor: '#E8F1F5',
+    borderRadius: '12px 12px 0 0',
+    fontSize: '12px',
     fontWeight: '800',
-    letterSpacing: '0.8px',
-    color: '#64748B',
-    borderBottom: '1px solid #1E293B',
+    letterSpacing: '0.06em',
+    color: '#0F2C59',
+    borderBottom: '1px solid #CBD5E1',
   },
   listContainer: {
     flex: 1,
@@ -612,48 +721,50 @@ const styles = {
   transactionCard: {
     display: 'flex',
     alignItems: 'center',
-    padding: '20px 24px',
-    backgroundColor: '#0F172A',
-    border: '1.5px solid #1E293B',
-    borderRadius: '12px',
-    transition: 'all 0.4s ease',
+    padding: '18px 24px',
+    backgroundColor: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    borderRadius: '14px',
+    boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
+    transition: 'all 0.3s ease',
   },
   newCardHighlight: {
-    borderColor: '#22C55E',
-    backgroundColor: 'rgba(34, 197, 94, 0.08)',
-    boxShadow: '0 0 20px rgba(34, 197, 94, 0.25)',
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+    boxShadow: '0 8px 24px rgba(16, 185, 129, 0.16)',
     transform: 'scale(1.01)',
   },
   orderPill: {
     display: 'inline-block',
-    padding: '4px 10px',
-    backgroundColor: '#1E293B',
-    border: '1px solid #334155',
+    padding: '5px 12px',
+    backgroundColor: '#E0F2FE',
+    border: '1px solid #BAE6FD',
     borderRadius: '6px',
-    fontSize: '15px',
+    fontSize: '14px',
     fontWeight: '800',
-    color: '#38BDF8',
+    color: '#0369A1',
     fontFamily: 'monospace',
   },
   orderTime: {
-    fontSize: '13px',
+    fontSize: '12px',
     color: '#64748B',
-    marginTop: '6px',
+    marginTop: '4px',
     fontWeight: '600',
   },
   customerName: {
-    fontSize: '24px',
+    fontSize: '22px',
     fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: '0.2px',
+    color: '#0F2C59',
+    letterSpacing: '-0.01em',
   },
   newBadge: {
     display: 'inline-block',
-    padding: '2px 8px',
-    backgroundColor: '#22C55E',
-    color: '#000000',
+    padding: '3px 8px',
+    backgroundColor: '#DCFCE7',
+    color: '#166534',
+    border: '1px solid #BBF7D0',
     borderRadius: '4px',
-    fontSize: '11px',
+    fontSize: '10px',
     fontWeight: '900',
     marginTop: '4px',
   },
@@ -667,38 +778,38 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     padding: '6px 14px',
-    backgroundColor: '#1E293B',
+    backgroundColor: '#F8FAFC',
     borderRadius: '8px',
-    border: '1px solid #334155',
+    border: '1px solid #E2E8F0',
   },
   itemFish: {
-    fontSize: '18px',
+    fontSize: '16px',
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: '#0F2C59',
   },
   itemWeight: {
-    fontSize: '16px',
+    fontSize: '15px',
     fontWeight: '800',
-    color: '#38BDF8',
+    color: '#1E56A0',
   },
   amountValue: {
-    fontSize: '32px',
+    fontSize: '28px',
     fontWeight: '900',
-    color: '#22C55E',
+    color: '#047857',
     fontVariantNumeric: 'tabular-nums',
   },
   amountLabel: {
-    fontSize: '12px',
+    fontSize: '11px',
     color: '#64748B',
     fontWeight: '700',
     textTransform: 'uppercase',
     marginTop: '2px',
   },
   footer: {
-    height: '42px',
+    height: '46px',
     padding: '0 36px',
-    backgroundColor: '#0F172A',
-    borderTop: '1px solid #1E293B',
+    backgroundColor: '#FFFFFF',
+    borderTop: '1px solid #E2E8F0',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -713,6 +824,6 @@ const styles = {
     gap: '12px',
   },
   footerRight: {
-    color: '#94A3B8',
+    color: '#64748B',
   },
 };

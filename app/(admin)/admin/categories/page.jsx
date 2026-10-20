@@ -156,7 +156,7 @@ export default function AdminCategoriesPage() {
   const totalFishAssigned = categories.reduce((sum, c) => sum + Number(c.fish_count || 0), 0);
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#F8FAFC' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#0F2C59' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -176,7 +176,7 @@ export default function AdminCategoriesPage() {
               ADMIN-06
             </span>
           </div>
-          <p style={{ margin: '6px 0 0', color: '#94A3B8', fontSize: '14px' }}>
+          <p style={{ margin: '6px 0 0', color: '#64748B', fontSize: '14px' }}>
             Organize fish varieties into public catalog groupings with display ordering and visibility controls.
           </p>
         </div>
@@ -185,9 +185,9 @@ export default function AdminCategoriesPage() {
           <button
             onClick={fetchCategories}
             style={{
-              background: '#1E293B',
-              border: '1px solid #334155',
-              color: '#CBD5E1',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#425B73',
               padding: '10px 16px',
               borderRadius: '8px',
               fontSize: '13px',
@@ -232,7 +232,7 @@ export default function AdminCategoriesPage() {
           display: 'flex',
           justifyContent: 'space-between',
         }}>
-          <span>⚠️ {errorMsg}</span>
+          <span>{errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -256,27 +256,27 @@ export default function AdminCategoriesPage() {
 
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>TOTAL CATEGORIES</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#F8FAFC', marginTop: '4px' }}>{categories.length}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TOTAL CATEGORIES</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#0F2C59', marginTop: '4px' }}>{categories.length}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>ACTIVE GROUPS</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>ACTIVE GROUPS</div>
           <div style={{ fontSize: '26px', fontWeight: '700', color: '#10B981', marginTop: '4px' }}>
             {categories.filter((c) => c.active !== false).length}
           </div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>TOTAL FISH SPECIES</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#38BDF8', marginTop: '4px' }}>{totalFishAssigned}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TOTAL FISH SPECIES</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#1E56A0', marginTop: '4px' }}>{totalFishAssigned}</div>
         </div>
       </div>
 
       {/* Category Table */}
-      <div style={{ background: '#1E293B', borderRadius: '10px', border: '1px solid #334155', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
-            <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Category Name</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Description</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Assigned Fish</th>
@@ -288,15 +288,15 @@ export default function AdminCategoriesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   Loading category list...
                 </td>
               </tr>
             ) : categories.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="6" style={{ padding: '48px 24px', textAlign: 'center', color: '#64748B' }}>
                   <div style={{ fontSize: '32px', marginBottom: '12px' }}>📁</div>
-                  <div style={{ fontSize: '16px', fontWeight: '600', color: '#F8FAFC', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '600', color: '#0F2C59', marginBottom: '6px' }}>
                     No categories created yet.
                   </div>
                   <p style={{ margin: '0 0 16px', color: '#64748B' }}>
@@ -321,32 +321,32 @@ export default function AdminCategoriesPage() {
               </tr>
             ) : (
               categories.map((cat) => (
-                <tr key={cat.id} style={{ borderBottom: '1px solid #334155' }}>
-                  <td style={{ padding: '14px 18px', fontWeight: '600', color: '#F8FAFC' }}>
+                <tr key={cat.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                  <td style={{ padding: '14px 18px', fontWeight: '600', color: '#0F2C59' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ color: '#38BDF8' }}>📁</span>
+                      <span style={{ color: '#1E56A0' }}>📁</span>
                       <span>{cat.name}</span>
                     </div>
                   </td>
 
-                  <td style={{ padding: '14px 18px', color: '#94A3B8', maxWidth: '300px' }}>
+                  <td style={{ padding: '14px 18px', color: '#64748B', maxWidth: '300px' }}>
                     {cat.description || <span style={{ color: '#64748B', fontStyle: 'italic' }}>No description</span>}
                   </td>
 
                   <td style={{ padding: '14px 18px' }}>
                     <span style={{
-                      background: '#0F172A',
-                      color: '#CBD5E1',
+                      background: '#F8FAFC',
+                      color: '#425B73',
                       padding: '3px 10px',
                       borderRadius: '12px',
-                      border: '1px solid #334155',
+                      border: '1px solid #E2E8F0',
                       fontWeight: '600',
                     }}>
                       {cat.fish_count || 0} varieties
                     </span>
                   </td>
 
-                  <td style={{ padding: '14px 18px', color: '#F8FAFC', fontWeight: '600' }}>
+                  <td style={{ padding: '14px 18px', color: '#0F2C59', fontWeight: '600' }}>
                     #{cat.display_order ?? 1}
                   </td>
 
@@ -354,8 +354,8 @@ export default function AdminCategoriesPage() {
                     <button
                       onClick={() => handleToggleActive(cat)}
                       style={{
-                        background: cat.active !== false ? '#064E3B' : '#334155',
-                        border: `1px solid ${cat.active !== false ? '#10B981' : '#475569'}`,
+                        background: cat.active !== false ? '#064E3B' : '#E2E8F0',
+                        border: `1px solid ${cat.active !== false ? '#10B981' : '#CBD5E1'}`,
                         color: cat.active !== false ? '#6EE7B7' : '#94A3B8',
                         padding: '4px 10px',
                         borderRadius: '12px',
@@ -373,9 +373,9 @@ export default function AdminCategoriesPage() {
                       <button
                         onClick={() => openEditModal(cat)}
                         style={{
-                          background: '#334155',
+                          background: '#F1F5F9',
                           border: 'none',
-                          color: '#F8FAFC',
+                          color: '#0F2C59',
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '12px',
@@ -412,7 +412,7 @@ export default function AdminCategoriesPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -421,8 +421,8 @@ export default function AdminCategoriesPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             width: '100%',
             maxWidth: '480px',
@@ -435,7 +435,7 @@ export default function AdminCategoriesPage() {
               </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '18px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -443,7 +443,7 @@ export default function AdminCategoriesPage() {
 
             <form onSubmit={handleSave}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Category Name *
                 </label>
                 <input
@@ -454,19 +454,17 @@ export default function AdminCategoriesPage() {
                   placeholder="e.g. Freshwater Fish, Marine Exotics"
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Display Order *
                 </label>
                 <input
@@ -477,19 +475,17 @@ export default function AdminCategoriesPage() {
                   onChange={(e) => setFormData({ ...formData, display_order: e.target.value })}
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Description
                 </label>
                 <textarea
@@ -499,20 +495,18 @@ export default function AdminCategoriesPage() {
                   placeholder="Primary sweet water river and lake varieties."
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{
-                background: '#0F172A',
-                border: '1px solid #334155',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
                 borderRadius: '8px',
                 padding: '12px 14px',
                 marginBottom: '20px',
@@ -532,9 +526,9 @@ export default function AdminCategoriesPage() {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   style={{
-                    background: '#334155',
+                    background: '#F1F5F9',
                     border: 'none',
-                    color: '#CBD5E1',
+                    color: '#425B73',
                     padding: '8px 16px',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -570,7 +564,7 @@ export default function AdminCategoriesPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -579,7 +573,7 @@ export default function AdminCategoriesPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             border: '1px solid #EF4444',
             borderRadius: '12px',
             width: '100%',
@@ -589,16 +583,16 @@ export default function AdminCategoriesPage() {
             <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: '#FCA5A5' }}>
               Confirm Deletion: {deleteTarget.name}
             </h3>
-            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#CBD5E1', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#425B73', lineHeight: '1.5' }}>
               Are you sure you want to delete this category? If there are fish varieties assigned to this category ({deleteTarget.fish_count || 0} assigned), deletion will be rejected to protect catalog structure.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 onClick={() => setDeleteTarget(null)}
                 style={{
-                  background: '#334155',
+                  background: '#F1F5F9',
                   border: 'none',
-                  color: '#CBD5E1',
+                  color: '#425B73',
                   padding: '8px 16px',
                   borderRadius: '6px',
                   fontSize: '13px',

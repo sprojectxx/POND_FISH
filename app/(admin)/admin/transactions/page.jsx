@@ -15,13 +15,13 @@ const STATUS_CONFIG = {
   COMPLETED: { label: 'Successful', bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981', border: '#059669' },
   PENDING: { label: 'Pending', bg: 'rgba(245, 158, 11, 0.15)', text: '#F59E0B', border: '#D97706' },
   FAILED: { label: 'Failed', bg: 'rgba(239, 68, 68, 0.15)', text: '#EF4444', border: '#DC2626' },
-  CANCELLED: { label: 'Cancelled', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#475569' },
+  CANCELLED: { label: 'Cancelled', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#CBD5E1' },
   REFUNDED: { label: 'Refunded / Restored', bg: 'rgba(168, 85, 247, 0.15)', text: '#A855F7', border: '#7E22CE' },
 };
 
 const PAYMENT_METHOD_LABELS = {
   CASH: { label: 'Cash Counter', icon: '💵', color: '#10B981' },
-  RAZORPAY: { label: 'Razorpay UPI/Card', icon: '💳', color: '#38BDF8' },
+  RAZORPAY: { label: 'Razorpay UPI/Card', icon: '', color: '#1E56A0' },
   SUBSCRIPTION_ONLY: { label: 'Subscription Only', icon: '👑', color: '#F59E0B' },
 };
 
@@ -133,17 +133,17 @@ export default function AdminTransactionsPage() {
   };
 
   return (
-    <div style={{ padding: '32px', color: '#F8FAFC', maxWidth: '1600px', margin: '0 auto' }}>
+    <div style={{ padding: '32px', color: '#0F2C59', maxWidth: '1600px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-            <span style={{ fontSize: '28px' }}>💳</span>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#F8FAFC', margin: 0, letterSpacing: '-0.02em' }}>
+            <span style={{ fontSize: '28px' }}></span>
+            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0F2C59', margin: 0, letterSpacing: '-0.02em' }}>
               Transaction Management (ADMIN-13)
             </h1>
           </div>
-          <p style={{ color: '#94A3B8', fontSize: '14px', margin: 0 }}>
+          <p style={{ color: '#64748B', fontSize: '14px', margin: 0 }}>
             Authoritative financial records, customer attribution, physical bill verification, AI discrepancy inspection, and restitution governance.
           </p>
         </div>
@@ -155,9 +155,9 @@ export default function AdminTransactionsPage() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            background: '#1E293B',
-            color: '#38BDF8',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            color: '#1E56A0',
+            border: '1px solid #E2E8F0',
             padding: '10px 16px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -165,17 +165,17 @@ export default function AdminTransactionsPage() {
             cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          <span>🔄</span> {loading ? 'Refreshing...' : 'Refresh Records'}
+          <span></span> {loading ? 'Refreshing...' : 'Refresh Records'}
         </button>
       </div>
 
       {/* KPI Overview Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-        <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
             Total Transactions
           </div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#F8FAFC' }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#0F2C59' }}>
             {counts.all || 0}
           </div>
           <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
@@ -183,7 +183,7 @@ export default function AdminTransactionsPage() {
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', padding: '16px' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', padding: '16px' }}>
           <div style={{ fontSize: '12px', color: '#10B981', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
             Successful / Completed
           </div>
@@ -195,7 +195,7 @@ export default function AdminTransactionsPage() {
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '16px' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '16px' }}>
           <div style={{ fontSize: '12px', color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
             Pending Processing
           </div>
@@ -207,7 +207,7 @@ export default function AdminTransactionsPage() {
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '10px', padding: '16px' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '10px', padding: '16px' }}>
           <div style={{ fontSize: '12px', color: '#A855F7', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
             Refunded / Restored
           </div>
@@ -219,21 +219,21 @@ export default function AdminTransactionsPage() {
           </div>
         </div>
 
-        <div style={{ background: '#1E293B', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+        <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '10px', padding: '16px', boxShadow: '0 2px 8px rgba(220, 38, 38, 0.04)' }}>
+          <div style={{ fontSize: '12px', color: '#DC2626', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
             Cancelled / Failed
           </div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#EF4444' }}>
+          <div style={{ fontSize: '24px', fontWeight: '800', color: '#DC2626' }}>
             {(counts.cancelled || 0) + (counts.failed || 0)}
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
+          <div style={{ fontSize: '12px', color: '#991B1B', marginTop: '4px' }}>
             Exceptions recorded
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
         <form onSubmit={handleSearchSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Search Input */}
@@ -246,9 +246,9 @@ export default function AdminTransactionsPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 style={{
                   width: '100%',
-                  background: '#0F172A',
-                  border: '1px solid #334155',
-                  color: '#F8FAFC',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  color: '#0F2C59',
                   padding: '10px 14px',
                   borderRadius: '8px',
                   fontSize: '13px',
@@ -270,7 +270,7 @@ export default function AdminTransactionsPage() {
                 cursor: 'pointer',
               }}
             >
-              🔍 Search
+              Search
             </button>
 
             {(search || statusFilter !== 'ALL' || paymentMethodFilter !== 'ALL' || dateFrom || dateTo) && (
@@ -279,8 +279,8 @@ export default function AdminTransactionsPage() {
                 onClick={handleClearFilters}
                 style={{
                   background: 'transparent',
-                  color: '#94A3B8',
-                  border: '1px solid #475569',
+                  color: '#64748B',
+                  border: '1px solid #CBD5E1',
                   padding: '10px 16px',
                   borderRadius: '8px',
                   fontSize: '13px',
@@ -293,24 +293,31 @@ export default function AdminTransactionsPage() {
           </div>
 
           {/* Secondary Filter Row */}
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #334155' }}>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #E2E8F0' }}>
             {/* Status Tabs */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '12px', color: '#94A3B8', marginRight: '4px' }}>Status:</span>
+              <span style={{ fontSize: '12px', color: '#64748B', marginRight: '4px' }}>Status:</span>
               {['ALL', 'COMPLETED', 'PENDING', 'CANCELLED', 'REFUNDED', 'FAILED'].map((st) => (
                 <button
                   key={st}
                   type="button"
                   onClick={() => setStatusFilter(st)}
                   style={{
-                    background: statusFilter === st ? '#38BDF8' : '#0F172A',
-                    color: statusFilter === st ? '#0F172A' : '#94A3B8',
-                    border: '1px solid #334155',
+                    background: statusFilter === st
+                      ? (st === 'CANCELLED' || st === 'FAILED' ? '#DC2626' : '#1E56A0')
+                      : (st === 'CANCELLED' || st === 'FAILED' ? '#FEF2F2' : '#F8FAFC'),
+                    color: statusFilter === st
+                      ? '#FFFFFF'
+                      : (st === 'CANCELLED' || st === 'FAILED' ? '#DC2626' : '#425B73'),
+                    border: statusFilter === st
+                      ? (st === 'CANCELLED' || st === 'FAILED' ? '1px solid #DC2626' : '1px solid #1E56A0')
+                      : (st === 'CANCELLED' || st === 'FAILED' ? '1px solid #FECACA' : '1px solid #CBD5E1'),
                     padding: '6px 12px',
                     borderRadius: '6px',
                     fontSize: '12px',
-                    fontWeight: statusFilter === st ? '700' : '500',
+                    fontWeight: statusFilter === st ? '700' : '600',
                     cursor: 'pointer',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {st === 'ALL' ? 'All' : (STATUS_CONFIG[st]?.label || st)}
@@ -320,14 +327,14 @@ export default function AdminTransactionsPage() {
 
             {/* Payment Method Filter */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#94A3B8' }}>Payment:</span>
+              <span style={{ fontSize: '12px', color: '#64748B' }}>Payment:</span>
               <select
                 value={paymentMethodFilter}
                 onChange={(e) => setPaymentMethodFilter(e.target.value)}
                 style={{
-                  background: '#0F172A',
-                  color: '#F8FAFC',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  color: '#0F2C59',
+                  border: '1px solid #E2E8F0',
                   padding: '6px 12px',
                   borderRadius: '6px',
                   fontSize: '12px',
@@ -343,15 +350,15 @@ export default function AdminTransactionsPage() {
 
             {/* Date Range */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#94A3B8' }}>Date:</span>
+              <span style={{ fontSize: '12px', color: '#64748B' }}>Date:</span>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
                 style={{
-                  background: '#0F172A',
-                  color: '#F8FAFC',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  color: '#0F2C59',
+                  border: '1px solid #E2E8F0',
                   padding: '5px 8px',
                   borderRadius: '6px',
                   fontSize: '12px',
@@ -363,9 +370,9 @@ export default function AdminTransactionsPage() {
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
                 style={{
-                  background: '#0F172A',
-                  color: '#F8FAFC',
-                  border: '1px solid #334155',
+                  background: '#F8FAFC',
+                  color: '#0F2C59',
+                  border: '1px solid #E2E8F0',
                   padding: '5px 8px',
                   borderRadius: '6px',
                   fontSize: '12px',
@@ -379,16 +386,16 @@ export default function AdminTransactionsPage() {
       {/* Error Banner */}
       {errorMsg && (
         <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #EF4444', color: '#FCA5A5', padding: '14px 18px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px' }}>
-          ⚠️ {errorMsg}
+          {errorMsg}
         </div>
       )}
 
       {/* Transactions Data Table */}
-      <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '12px', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
-              <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
                 <th style={{ padding: '14px 16px', fontWeight: '600' }}>Transaction ID</th>
                 <th style={{ padding: '14px 16px', fontWeight: '600' }}>Bill ID</th>
                 <th style={{ padding: '14px 16px', fontWeight: '600' }}>Customer</th>
@@ -407,16 +414,16 @@ export default function AdminTransactionsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="13" style={{ padding: '48px', textAlign: 'center', color: '#94A3B8' }}>
-                    <div style={{ fontSize: '28px', marginBottom: '8px' }}>🔄</div>
+                  <td colSpan="13" style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
+                    <div style={{ fontSize: '28px', marginBottom: '8px' }}></div>
                     <div>Loading transactions...</div>
                   </td>
                 </tr>
               ) : transactions.length === 0 ? (
                 <tr>
-                  <td colSpan="13" style={{ padding: '64px', textAlign: 'center', color: '#94A3B8' }}>
+                  <td colSpan="13" style={{ padding: '64px', textAlign: 'center', color: '#64748B' }}>
                     <div style={{ fontSize: '36px', marginBottom: '12px' }}>🧾</div>
-                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#F8FAFC', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#0F2C59', marginBottom: '4px' }}>
                       No Transactions Found
                     </div>
                     <div style={{ fontSize: '13px', color: '#64748B' }}>
@@ -428,14 +435,14 @@ export default function AdminTransactionsPage() {
                 transactions.map((tx) => {
                   const statusMeta = STATUS_CONFIG[tx.status] || {
                     label: tx.status,
-                    bg: '#334155',
+                    bg: '#E2E8F0',
                     text: '#F8FAFC',
-                    border: '#475569',
+                    border: '#CBD5E1',
                   };
                   const paymentMeta = PAYMENT_METHOD_LABELS[tx.paymentMethod] || {
                     label: tx.paymentMethod,
-                    icon: '💳',
-                    color: '#94A3B8',
+                    icon: '',
+                    color: '#64748B',
                   };
 
                   const totalKg = (tx.items || []).reduce((acc, it) => acc + (parseFloat(it.quantityKg) || 0), 0);
@@ -444,7 +451,7 @@ export default function AdminTransactionsPage() {
                     <tr
                       key={tx.id}
                       style={{
-                        borderBottom: '1px solid #334155',
+                        borderBottom: '1px solid #E2E8F0',
                         transition: 'background 0.15s ease',
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(51, 65, 85, 0.4)')}
@@ -455,7 +462,7 @@ export default function AdminTransactionsPage() {
                         <Link
                           href={`/admin/transactions/${tx.id}`}
                           style={{
-                            color: '#38BDF8',
+                            color: '#1E56A0',
                             fontFamily: 'monospace',
                             fontWeight: '600',
                             textDecoration: 'none',
@@ -468,7 +475,7 @@ export default function AdminTransactionsPage() {
                       {/* Bill ID */}
                       <td style={{ padding: '14px 16px' }}>
                         {tx.billNumber ? (
-                          <span style={{ fontFamily: 'monospace', color: '#E2E8F0', background: '#0F172A', padding: '3px 8px', borderRadius: '4px' }}>
+                          <span style={{ fontFamily: 'monospace', color: '#E2E8F0', background: '#F8FAFC', padding: '3px 8px', borderRadius: '4px' }}>
                             {tx.billNumber}
                           </span>
                         ) : (
@@ -478,11 +485,11 @@ export default function AdminTransactionsPage() {
 
                       {/* Customer */}
                       <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontWeight: '600', color: '#F8FAFC' }}>
+                        <div style={{ fontWeight: '600', color: '#0F2C59' }}>
                           {tx.customerName}
                         </div>
                         {tx.customerPhone && (
-                          <div style={{ fontSize: '11px', color: '#94A3B8', fontFamily: 'monospace' }}>
+                          <div style={{ fontSize: '11px', color: '#64748B', fontFamily: 'monospace' }}>
                             {tx.customerPhone}
                           </div>
                         )}
@@ -493,12 +500,12 @@ export default function AdminTransactionsPage() {
                         {tx.items && tx.items.length > 0 ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             {tx.items.slice(0, 2).map((it, idx) => (
-                              <div key={idx} style={{ fontSize: '12px', color: '#CBD5E1' }}>
+                              <div key={idx} style={{ fontSize: '12px', color: '#425B73' }}>
                                 • {it.fishName} ({it.quantityKg} kg)
                               </div>
                             ))}
                             {tx.items.length > 2 && (
-                              <span style={{ fontSize: '11px', color: '#38BDF8' }}>
+                              <span style={{ fontSize: '11px', color: '#1E56A0' }}>
                                 +{tx.items.length - 2} more cuts
                               </span>
                             )}
@@ -509,12 +516,12 @@ export default function AdminTransactionsPage() {
                       </td>
 
                       {/* Quantity kg */}
-                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '600', color: '#F8FAFC' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '600', color: '#0F2C59' }}>
                         {totalKg > 0 ? `${totalKg.toFixed(2)} kg` : '—'}
                       </td>
 
                       {/* Bill Amount */}
-                      <td style={{ padding: '14px 16px', textAlign: 'right', color: '#CBD5E1' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'right', color: '#425B73' }}>
                         {formatCurrency(tx.totalBillAmount)}
                       </td>
 
@@ -535,7 +542,7 @@ export default function AdminTransactionsPage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px',
-                            background: '#0F172A',
+                            background: '#F8FAFC',
                             border: `1px solid ${paymentMeta.color}`,
                             color: paymentMeta.color,
                             padding: '3px 8px',
@@ -574,7 +581,7 @@ export default function AdminTransactionsPage() {
                       </td>
 
                       {/* Date/Time */}
-                      <td style={{ padding: '14px 16px', fontSize: '12px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '14px 16px', fontSize: '12px', color: '#64748B', whiteSpace: 'nowrap' }}>
                         {formatDate(tx.createdAt)}
                       </td>
 
@@ -585,8 +592,8 @@ export default function AdminTransactionsPage() {
                           href={`/admin/transactions/${tx.id}`}
                           style={{
                             display: 'inline-block',
-                            background: '#0F172A',
-                            color: '#38BDF8',
+                            background: '#F8FAFC',
+                            color: '#1E56A0',
                             border: '1px solid #38BDF8',
                             padding: '6px 12px',
                             borderRadius: '6px',
@@ -608,8 +615,8 @@ export default function AdminTransactionsPage() {
 
         {/* Pagination Bar */}
         {pagination.totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: '#0F172A', borderTop: '1px solid #334155' }}>
-            <div style={{ fontSize: '13px', color: '#94A3B8' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '13px', color: '#64748B' }}>
               Showing {transactions.length} of {pagination.total} records (Page {pagination.page} of {pagination.totalPages})
             </div>
 
@@ -618,7 +625,7 @@ export default function AdminTransactionsPage() {
                 disabled={pagination.page <= 1}
                 onClick={() => fetchTransactions(pagination.page - 1)}
                 style={{
-                  background: pagination.page <= 1 ? '#1E293B' : '#0284C7',
+                  background: pagination.page <= 1 ? '#F1F5F9' : '#1E56A0',
                   color: pagination.page <= 1 ? '#64748B' : '#FFFFFF',
                   border: 'none',
                   padding: '6px 14px',
@@ -635,7 +642,7 @@ export default function AdminTransactionsPage() {
                 disabled={pagination.page >= pagination.totalPages}
                 onClick={() => fetchTransactions(pagination.page + 1)}
                 style={{
-                  background: pagination.page >= pagination.totalPages ? '#1E293B' : '#0284C7',
+                  background: pagination.page >= pagination.totalPages ? '#F1F5F9' : '#1E56A0',
                   color: pagination.page >= pagination.totalPages ? '#64748B' : '#FFFFFF',
                   border: 'none',
                   padding: '6px 14px',

@@ -221,7 +221,7 @@ export default function AdminWorkersPage() {
   }, [workers]);
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#F8FAFC' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -241,7 +241,7 @@ export default function AdminWorkersPage() {
               ADMIN-11
             </span>
           </div>
-          <p style={{ margin: '6px 0 0', color: '#94A3B8', fontSize: '14px' }}>
+          <p style={{ margin: '6px 0 0', color: '#64748B', fontSize: '14px' }}>
             Manage worker credentials, access controls, fulfillment assignments, and operational accountability.
           </p>
         </div>
@@ -250,9 +250,9 @@ export default function AdminWorkersPage() {
           <button
             onClick={fetchWorkers}
             style={{
-              background: '#1E293B',
-              border: '1px solid #334155',
-              color: '#CBD5E1',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#425B73',
               padding: '10px 16px',
               borderRadius: '8px',
               fontSize: '13px',
@@ -297,7 +297,7 @@ export default function AdminWorkersPage() {
           display: 'flex',
           justifyContent: 'space-between',
         }}>
-          <span>⚠️ {errorMsg}</span>
+          <span>{errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -321,30 +321,30 @@ export default function AdminWorkersPage() {
 
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>TOTAL WORKERS</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#F8FAFC', marginTop: '4px' }}>{metrics.total}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TOTAL WORKERS</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#0F2C59', marginTop: '4px' }}>{metrics.total}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>ACTIVE FULFILLMENT STAFF</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>ACTIVE FULFILLMENT STAFF</div>
           <div style={{ fontSize: '26px', fontWeight: '700', color: '#10B981', marginTop: '4px' }}>{metrics.active}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>TODAY ORDERS FULFILLED</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#38BDF8', marginTop: '4px' }}>{metrics.todayOrders}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TODAY ORDERS FULFILLED</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#1E56A0', marginTop: '4px' }}>{metrics.todayOrders}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>MONTHLY FULFILLMENTS</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>MONTHLY FULFILLMENTS</div>
           <div style={{ fontSize: '26px', fontWeight: '700', color: '#F59E0B', marginTop: '4px' }}>{metrics.monthOrders}</div>
         </div>
       </div>
 
       {/* Search & Filters */}
       <div style={{
-        background: '#1E293B',
+        background: '#FFFFFF',
         padding: '16px 20px',
         borderRadius: '10px',
-        border: '1px solid #334155',
+        border: '1px solid #E2E8F0',
         marginBottom: '24px',
         display: 'flex',
         gap: '16px',
@@ -359,13 +359,11 @@ export default function AdminWorkersPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{
               width: '100%',
-              background: '#0F172A',
-              border: '1px solid #334155',
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
               borderRadius: '6px',
               padding: '10px 14px',
-              color: '#F8FAFC',
-              fontSize: '13px',
-              boxSizing: 'border-box',
+              color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
             }}
           />
         </div>
@@ -374,11 +372,11 @@ export default function AdminWorkersPage() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #334155',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
             borderRadius: '6px',
             padding: '10px 14px',
-            color: '#F8FAFC',
+            color: '#0F2C59',
             fontSize: '13px',
           }}
         >
@@ -389,10 +387,10 @@ export default function AdminWorkersPage() {
       </div>
 
       {/* Workers Table */}
-      <div style={{ background: '#1E293B', borderRadius: '10px', border: '1px solid #334155', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
-            <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Worker Name</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Mobile (Login ID)</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Access Status</th>
@@ -405,40 +403,40 @@ export default function AdminWorkersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   Loading staff accounts...
                 </td>
               </tr>
             ) : filteredWorkers.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   No worker accounts found.
                 </td>
               </tr>
             ) : (
               filteredWorkers.map((w) => (
-                <tr key={w.id} style={{ borderBottom: '1px solid #334155' }}>
+                <tr key={w.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                   <td style={{ padding: '14px 18px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div style={{
                         width: '32px',
                         height: '32px',
                         borderRadius: '50%',
-                        background: '#334155',
+                        background: '#F1F5F9',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '14px',
-                        color: '#F8FAFC',
+                        color: '#0F2C59',
                         fontWeight: '600',
                       }}>
                         {w.name ? w.name.charAt(0).toUpperCase() : 'W'}
                       </div>
-                      <span style={{ fontWeight: '600', color: '#F8FAFC' }}>{w.name}</span>
+                      <span style={{ fontWeight: '600', color: '#0F2C59' }}>{w.name}</span>
                     </div>
                   </td>
 
-                  <td style={{ padding: '14px 18px', fontFamily: 'monospace', color: '#38BDF8' }}>
+                  <td style={{ padding: '14px 18px', fontFamily: 'monospace', color: '#1E56A0' }}>
                     +91 {w.mobile_number}
                   </td>
 
@@ -470,15 +468,15 @@ export default function AdminWorkersPage() {
                     )}
                   </td>
 
-                  <td style={{ padding: '14px 18px', fontWeight: '600', color: '#F8FAFC' }}>
+                  <td style={{ padding: '14px 18px', fontWeight: '600', color: '#0F2C59' }}>
                     {w.today_orders || 0}
                   </td>
 
-                  <td style={{ padding: '14px 18px', color: '#CBD5E1' }}>
+                  <td style={{ padding: '14px 18px', color: '#425B73' }}>
                     {w.month_orders || 0}
                   </td>
 
-                  <td style={{ padding: '14px 18px', color: '#94A3B8', fontSize: '12px' }}>
+                  <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '12px' }}>
                     {new Date(w.created_at).toLocaleDateString()}
                   </td>
 
@@ -487,9 +485,9 @@ export default function AdminWorkersPage() {
                       <button
                         onClick={() => openEditModal(w)}
                         style={{
-                          background: '#334155',
+                          background: '#F1F5F9',
                           border: 'none',
-                          color: '#F8FAFC',
+                          color: '#0F2C59',
                           padding: '6px 12px',
                           borderRadius: '6px',
                           fontSize: '12px',
@@ -501,9 +499,9 @@ export default function AdminWorkersPage() {
                       <button
                         onClick={() => openResetModal(w)}
                         style={{
-                          background: '#0F172A',
-                          border: '1px solid #334155',
-                          color: '#38BDF8',
+                          background: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
+                          color: '#1E56A0',
                           padding: '6px 10px',
                           borderRadius: '6px',
                           fontSize: '12px',
@@ -540,7 +538,7 @@ export default function AdminWorkersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -549,8 +547,8 @@ export default function AdminWorkersPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             width: '100%',
             maxWidth: '480px',
@@ -563,7 +561,7 @@ export default function AdminWorkersPage() {
               </h2>
               <button
                 onClick={() => setIsCreateOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '18px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -571,7 +569,7 @@ export default function AdminWorkersPage() {
 
             <form onSubmit={handleCreate}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Full Worker Name *
                 </label>
                 <input
@@ -582,19 +580,17 @@ export default function AdminWorkersPage() {
                   placeholder="e.g. Ramesh Kumar"
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   10-Digit Mobile Number (Login ID) *
                 </label>
                 <input
@@ -607,19 +603,17 @@ export default function AdminWorkersPage() {
                   placeholder="9876543210"
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Initial Secret Password (min 6 chars) *
                 </label>
                 <input
@@ -631,20 +625,18 @@ export default function AdminWorkersPage() {
                   placeholder="••••••••"
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{
-                background: '#0F172A',
-                border: '1px solid #334155',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
                 borderRadius: '8px',
                 padding: '12px 14px',
                 marginBottom: '20px',
@@ -664,9 +656,9 @@ export default function AdminWorkersPage() {
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
                   style={{
-                    background: '#334155',
+                    background: '#F1F5F9',
                     border: 'none',
-                    color: '#CBD5E1',
+                    color: '#425B73',
                     padding: '8px 16px',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -702,7 +694,7 @@ export default function AdminWorkersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -711,8 +703,8 @@ export default function AdminWorkersPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             width: '100%',
             maxWidth: '480px',
@@ -725,7 +717,7 @@ export default function AdminWorkersPage() {
               </h2>
               <button
                 onClick={() => setEditingWorker(null)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '18px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -733,7 +725,7 @@ export default function AdminWorkersPage() {
 
             <form onSubmit={handleEdit}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Full Worker Name *
                 </label>
                 <input
@@ -743,19 +735,17 @@ export default function AdminWorkersPage() {
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   10-Digit Mobile Number *
                 </label>
                 <input
@@ -767,20 +757,18 @@ export default function AdminWorkersPage() {
                   onChange={(e) => setEditForm({ ...editForm, mobile_number: e.target.value.replace(/\D/g, '') })}
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{
-                background: '#0F172A',
-                border: '1px solid #334155',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
                 borderRadius: '8px',
                 padding: '12px 14px',
                 marginBottom: '20px',
@@ -800,9 +788,9 @@ export default function AdminWorkersPage() {
                   type="button"
                   onClick={() => setEditingWorker(null)}
                   style={{
-                    background: '#334155',
+                    background: '#F1F5F9',
                     border: 'none',
-                    color: '#CBD5E1',
+                    color: '#425B73',
                     padding: '8px 16px',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -838,7 +826,7 @@ export default function AdminWorkersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -847,7 +835,7 @@ export default function AdminWorkersPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             border: '1px solid #38BDF8',
             borderRadius: '12px',
             width: '100%',
@@ -855,16 +843,16 @@ export default function AdminWorkersPage() {
             padding: '24px',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
           }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px', color: '#F8FAFC' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px', color: '#0F2C59' }}>
               Reset Password: {resetWorker.name}
             </h2>
-            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94A3B8' }}>
+            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#64748B' }}>
               Set a new cryptographic password for worker mobile (+91 {resetWorker.mobile_number}).
             </p>
 
             <form onSubmit={handleResetPassword}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   New Password (min 6 characters) *
                 </label>
                 <input
@@ -876,19 +864,17 @@ export default function AdminWorkersPage() {
                   placeholder="••••••••"
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Confirm New Password *
                 </label>
                 <input
@@ -900,13 +886,11 @@ export default function AdminWorkersPage() {
                   placeholder="••••••••"
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
@@ -916,9 +900,9 @@ export default function AdminWorkersPage() {
                   type="button"
                   onClick={() => setResetWorker(null)}
                   style={{
-                    background: '#334155',
+                    background: '#F1F5F9',
                     border: 'none',
-                    color: '#CBD5E1',
+                    color: '#425B73',
                     padding: '8px 16px',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -954,7 +938,7 @@ export default function AdminWorkersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -963,7 +947,7 @@ export default function AdminWorkersPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             border: `1px solid ${toggleWorkerTarget.active !== false ? '#EF4444' : '#10B981'}`,
             borderRadius: '12px',
             width: '100%',
@@ -973,7 +957,7 @@ export default function AdminWorkersPage() {
             <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: toggleWorkerTarget.active !== false ? '#FCA5A5' : '#6EE7B7' }}>
               {toggleWorkerTarget.active !== false ? `Disable Account: ${toggleWorkerTarget.name}` : `Enable Account: ${toggleWorkerTarget.name}`}
             </h3>
-            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#CBD5E1', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#425B73', lineHeight: '1.5' }}>
               {toggleWorkerTarget.active !== false
                 ? `Disabling this account immediately prevents new logins to the worker fulfillment portal. All historical orders fulfilled by this worker remain intact for audit traceability.`
                 : `Enabling this account will restore access to fulfill pickup orders.`}
@@ -982,9 +966,9 @@ export default function AdminWorkersPage() {
               <button
                 onClick={() => setToggleWorkerTarget(null)}
                 style={{
-                  background: '#334155',
+                  background: '#F1F5F9',
                   border: 'none',
-                  color: '#CBD5E1',
+                  color: '#425B73',
                   padding: '8px 16px',
                   borderRadius: '6px',
                   fontSize: '13px',

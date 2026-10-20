@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
+import { FishIcon, ArrowRight } from '../components/Icons';
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState([]);
@@ -33,47 +34,50 @@ export default function CategoriesPage() {
   }, []);
 
   return (
-    <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '48px 24px', width: '100%' }}>
+    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '40px 24px 64px', width: '100%' }}>
       {/* 1. Header Section */}
-      <div style={{ marginBottom: '40px' }}>
-        <div style={{ fontSize: '13px', fontWeight: '700', color: '#0284C7', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
+      <div style={{ marginBottom: '36px' }}>
+        <div style={{ fontSize: '11px', fontWeight: '900', color: '#1e56a0', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: '8px' }}>
           Catalogue Categories
         </div>
-        <h1 style={{ fontSize: '36px', fontWeight: '900', color: '#F8FAFC', letterSpacing: '-0.5px', marginBottom: '12px' }}>
-          Explore by Variety & Origin
+        <h1 style={{ fontSize: '36px', fontWeight: '900', color: '#0f2c59', letterSpacing: '-0.5px', margin: '0 0 10px 0' }}>
+          Explore by Variety & Water Origin
         </h1>
-        <p style={{ fontSize: '16px', color: '#94A3B8', maxWidth: '680px', lineHeight: '1.6' }}>
-          Browse our sustainable freshwater lake fish, premium sea catch, and specialty river varieties transported daily under cold-chain standards to our Bangalore counter.
+        <p style={{ fontSize: '16px', color: '#64748b', maxWidth: '680px', lineHeight: '1.6', margin: 0 }}>
+          Browse our certified freshwater lake fish, premium sea catch, and specialty boneless cuts transported daily under 2°C–4°C cold-chain standards to our Bangalore retail counter.
         </p>
       </div>
 
       {/* 2. Content States */}
       {loading ? (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '24px'
-        }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gap: '24px',
+          }}
+        >
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
               style={{
-                background: '#0F172A',
-                border: '1px solid #1E293B',
-                borderRadius: '12px',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '16px',
                 padding: '28px',
                 height: '220px',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
               }}
             >
               <div>
-                <div style={{ width: '48px', height: '48px', borderRadius: '10px', background: '#1E293B', marginBottom: '16px' }}></div>
-                <div style={{ width: '60%', height: '20px', borderRadius: '4px', background: '#1E293B', marginBottom: '10px' }}></div>
-                <div style={{ width: '90%', height: '14px', borderRadius: '4px', background: '#1E293B' }}></div>
+                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f1f5f9', marginBottom: '16px' }} />
+                <div style={{ width: '60%', height: '20px', borderRadius: '4px', background: '#e2e8f0', marginBottom: '10px' }} />
+                <div style={{ width: '90%', height: '14px', borderRadius: '4px', background: '#f1f5f9' }} />
               </div>
-              <div style={{ width: '40%', height: '14px', borderRadius: '4px', background: '#1E293B' }}></div>
+              <div style={{ width: '40%', height: '14px', borderRadius: '4px', background: '#e2e8f0' }} />
             </div>
           ))}
         </div>
@@ -86,126 +90,83 @@ export default function CategoriesPage() {
       ) : categories.length === 0 ? (
         <EmptyState
           title="No Categories Configured"
-          message="There are currently no active fish categories published in the database. Please check back shortly or browse all available fish varieties directly."
-          actionText="Browse All Fish"
-          actionHref="/fish"
+          message="There are currently no active fish categories published. Check back shortly or browse all available fish varieties directly."
+          actionLabel="Browse All Fish"
+          onAction={() => { window.location.href = '/fish'; }}
         />
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '24px'
-        }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: '24px',
+          }}
+        >
           {categories.map((cat) => (
             <div
               key={cat.id}
               style={{
-                background: '#0F172A',
-                border: '1px solid #1E293B',
-                borderRadius: '12px',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '16px',
                 padding: '28px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                transition: 'transform 0.2s, border-color 0.2s',
+                boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
+                transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
               }}
             >
               <div>
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '10px',
-                  background: 'rgba(2, 132, 199, 0.15)',
-                  border: '1px solid rgba(2, 132, 199, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '22px',
-                  marginBottom: '18px'
-                }}>
-                  🐟
+                <div
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '12px',
+                    background: '#e0f2fe',
+                    border: '1px solid #bfdbfe',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#0284c7',
+                    marginBottom: '18px',
+                  }}
+                >
+                  <FishIcon size={24} color="#0284c7" />
                 </div>
-                <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#0f2c59', margin: '0 0 8px 0' }}>
                   {cat.name}
                 </h3>
-                <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: '1.6', marginBottom: '20px' }}>
+                <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.6', margin: '0 0 20px 0' }}>
                   {cat.description || 'Fresh daily harvest sourced from trusted local water bodies and regional cold chain partners.'}
                 </p>
               </div>
 
-              <Link
-                href={`/fish?category=${encodeURIComponent(cat.name)}`}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: '#38BDF8',
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  textDecoration: 'none'
-                }}
-              >
-                <span>Browse {cat.name}</span>
-                <span>&rarr;</span>
-              </Link>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: '#047857', background: '#ecfdf5', padding: '3px 8px', borderRadius: '6px' }}>
+                  {cat.fish_count != null ? `${cat.fish_count} Varieties Listed` : 'Fresh Daily'}
+                </span>
+
+                <Link
+                  href={`/fish?category=${encodeURIComponent(cat.id || cat.name)}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    color: '#1e56a0',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <span>Explore Catch</span>
+                  <ArrowRight size={14} color="#1e56a0" />
+                </Link>
+              </div>
             </div>
           ))}
         </div>
       )}
-
-      {/* 3. Bottom Information Banner */}
-      <div style={{
-        marginTop: '64px',
-        padding: '32px',
-        background: 'linear-gradient(180deg, #0F172A 0%, #070D19 100%)',
-        border: '1px solid #1E293B',
-        borderRadius: '12px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '24px'
-      }}>
-        <div style={{ maxWidth: '640px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#F8FAFC', marginBottom: '6px' }}>
-            Looking for something specific?
-          </h3>
-          <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: '1.5' }}>
-            Our Bangalore counter receives new stock every morning between 07:00 AM and 08:30 AM. Call our counter directly for special whole-fish requests.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <Link
-            href="/fish"
-            style={{
-              padding: '12px 24px',
-              background: '#0284C7',
-              color: '#FFFFFF',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '700',
-              textDecoration: 'none'
-            }}
-          >
-            Open Live Catalogue
-          </Link>
-          <Link
-            href="/contact"
-            style={{
-              padding: '12px 24px',
-              background: '#1E293B',
-              color: '#F8FAFC',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '700',
-              textDecoration: 'none',
-              border: '1px solid #334155'
-            }}
-          >
-            Contact Counter
-          </Link>
-        </div>
-      </div>
     </div>
   );
 }

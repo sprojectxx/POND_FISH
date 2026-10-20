@@ -1,17 +1,12 @@
 import Header from './components/Header';
 import Footer from './components/Footer';
+import './public.css';
 
 export default function PublicLayout({ children }) {
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      background: '#0B1120',
-      color: '#F8FAFC'
-    }}>
+    <div className="pf-public-page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Header />
-      <main style={{ flex: 1, width: '100%' }}>
+      <main style={{ flex: 1 }}>
         {children}
       </main>
       <Footer />

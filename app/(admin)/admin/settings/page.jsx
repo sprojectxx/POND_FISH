@@ -55,6 +55,12 @@ export default function AdminSettingsPage() {
       setLoading(true);
       setError(null);
       const res = await fetch('/api/v1/admin/settings');
+
+      if (res.status === 401) {
+        window.location.href = '/admin/login?redirect=/admin/settings';
+        return;
+      }
+
       const json = await res.json();
       if (!res.ok || !json.success) {
         throw new Error(json.error?.message || 'Failed to fetch settings');
@@ -97,6 +103,11 @@ export default function AdminSettingsPage() {
           confirmed: Boolean(confirmed),
         }),
       });
+
+      if (res.status === 401) {
+        window.location.href = '/admin/login?redirect=/admin/settings';
+        return;
+      }
 
       const json = await res.json();
       if (!res.ok || !json.success) {
@@ -144,35 +155,35 @@ export default function AdminSettingsPage() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#F8FAFC' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#0F2C59' }}>
       {/* Page Header */}
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 6px 0', color: '#F8FAFC' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 6px 0', color: '#0F2C59' }}>
           Business & Store Settings
         </h1>
-        <p style={{ margin: 0, fontSize: '14px', color: '#94A3B8' }}>
+        <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
           Centrally configure store operations, business hours, GPS destination, and lifecycle rules.
         </p>
       </div>
 
       {/* Notifications */}
       {successMsg && (
-        <div style={{ background: '#064E3B', border: '1px solid #059669', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#A7F3D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>✅ {successMsg}</span>
+        <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#159C57', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{successMsg}</span>
           <button onClick={() => setSuccessMsg(null)} style={{ background: 'transparent', border: 'none', color: '#A7F3D0', cursor: 'pointer' }}>✕</button>
         </div>
       )}
 
       {error && (
-        <div style={{ background: '#7F1D1D', border: '1px solid #DC2626', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#FECACA', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>⚠️ {error}</span>
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#DC2626', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{error}</span>
           <button onClick={() => setError(null)} style={{ background: 'transparent', border: 'none', color: '#FECACA', cursor: 'pointer' }}>✕</button>
         </div>
       )}
 
       {/* Audit Reason Global Input */}
-      <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '8px', border: '1px solid #334155', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <div style={{ fontSize: '13px', color: '#94A3B8', minWidth: '130px' }}>
+      <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ fontSize: '13px', color: '#64748B', minWidth: '130px' }}>
           Audit Reason (Optional):
         </div>
         <input
@@ -182,82 +193,82 @@ export default function AdminSettingsPage() {
           onChange={(e) => setAuditReason(e.target.value)}
           style={{
             flex: 1,
-            background: '#0B1120',
-            border: '1px solid #475569',
+            background: '#F8FAFC',
+            border: '1px solid #CBD5E1',
             borderRadius: '6px',
             padding: '8px 12px',
-            color: '#F8FAFC',
+            color: '#0F2C59',
             fontSize: '13px',
           }}
         />
       </div>
 
       {loading && !settings ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8' }}>
+        <div style={{ padding: '40px', textAlign: 'center', color: '#64748B' }}>
           Loading business configuration...
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', gap: '24px' }}>
           {/* 1. STORE INFO & BUSINESS HOURS */}
-          <div style={{ background: '#1E293B', padding: '24px', borderRadius: '8px', border: '1px solid #334155' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#38BDF8', margin: '0 0 16px 0' }}>
-              🏪 Store Info & Business Hours
+          <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1E56A0', margin: '0 0 16px 0' }}>
+              Store Info & Business Hours
             </h2>
             <form onSubmit={handleStoreInfoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Store Name</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Store Name</label>
                 <input
                   type="text"
                   required
                   value={storeInfo.name}
                   onChange={(e) => setStoreInfo({ ...storeInfo, name: e.target.value })}
-                  style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                  style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Address</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Address</label>
                 <input
                   type="text"
                   required
                   value={storeInfo.address}
                   onChange={(e) => setStoreInfo({ ...storeInfo, address: e.target.value })}
-                  style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                  style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Contact Phone</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Contact Phone</label>
                 <input
                   type="text"
                   required
                   value={storeInfo.phone}
                   onChange={(e) => setStoreInfo({ ...storeInfo, phone: e.target.value })}
-                  style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                  style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Opening Time</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Opening Time</label>
                   <input
                     type="text"
                     required
                     placeholder="06:00 AM"
                     value={storeInfo.openingTime}
                     onChange={(e) => setStoreInfo({ ...storeInfo, openingTime: e.target.value })}
-                    style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                    style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Closing Time</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Closing Time</label>
                   <input
                     type="text"
                     required
                     placeholder="09:00 PM"
                     value={storeInfo.closingTime}
                     onChange={(e) => setStoreInfo({ ...storeInfo, closingTime: e.target.value })}
-                    style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                    style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                   />
                 </div>
               </div>
@@ -268,7 +279,7 @@ export default function AdminSettingsPage() {
                   disabled={savingKey === 'store_info'}
                   style={{
                     background: '#38BDF8',
-                    color: '#0B1120',
+                    color: '#0F2C59',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '8px 16px',
@@ -283,58 +294,58 @@ export default function AdminSettingsPage() {
           </div>
 
           {/* 2. STORE DESTINATION & GEOFENCE */}
-          <div style={{ background: '#1E293B', padding: '24px', borderRadius: '8px', border: '1px solid #334155' }}>
+          <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#38BDF8', margin: 0 }}>
-                📍 Truck Destination & Geofence
+              <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1E56A0', margin: 0 }}>
+                Truck Destination & Geofence
               </h2>
               <span style={{ fontSize: '11px', background: '#78350F', color: '#FDE68A', padding: '3px 8px', borderRadius: '4px' }}>
                 Elevated Action
               </span>
             </div>
-            <p style={{ fontSize: '12px', color: '#94A3B8', margin: '0 0 16px 0' }}>
+            <p style={{ fontSize: '12px', color: '#64748B', margin: '0 0 16px 0' }}>
               Centrally configured store coordinate used as destination for truck tracking and automatic geofenced arrival.
             </p>
             <form onSubmit={handleDestinationSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Destination Name</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Destination Name</label>
                 <input
                   type="text"
                   required
                   value={destination.name}
                   onChange={(e) => setDestination({ ...destination, name: e.target.value })}
-                  style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                  style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Latitude (-90 to 90)</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Latitude (-90 to 90)</label>
                   <input
                     type="number"
                     step="0.000001"
                     required
                     value={destination.latitude}
                     onChange={(e) => setDestination({ ...destination, latitude: e.target.value })}
-                    style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                    style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Longitude (-180 to 180)</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Longitude (-180 to 180)</label>
                   <input
                     type="number"
                     step="0.000001"
                     required
                     value={destination.longitude}
                     onChange={(e) => setDestination({ ...destination, longitude: e.target.value })}
-                    style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                    style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                   />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Geofence Radius (meters)</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Geofence Radius (meters)</label>
                   <input
                     type="number"
                     min="50"
@@ -342,11 +353,11 @@ export default function AdminSettingsPage() {
                     required
                     value={destination.geofenceRadiusMeters}
                     onChange={(e) => setDestination({ ...destination, geofenceRadiusMeters: parseInt(e.target.value, 10) })}
-                    style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                    style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Post-Arrival Window (30–60 mins)</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Post-Arrival Window (30–60 mins)</label>
                   <input
                     type="number"
                     min="30"
@@ -354,7 +365,7 @@ export default function AdminSettingsPage() {
                     required
                     value={destination.postArrivalTrackingMinutes}
                     onChange={(e) => setDestination({ ...destination, postArrivalTrackingMinutes: parseInt(e.target.value, 10) })}
-                    style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                    style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                   />
                 </div>
               </div>
@@ -365,7 +376,7 @@ export default function AdminSettingsPage() {
                   disabled={savingKey === 'store_destination'}
                   style={{
                     background: '#F59E0B',
-                    color: '#0B1120',
+                    color: '#0F2C59',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '8px 16px',
@@ -380,40 +391,40 @@ export default function AdminSettingsPage() {
           </div>
 
           {/* 3. FLEET & TRUCK CONFIGURATION */}
-          <div style={{ background: '#1E293B', padding: '24px', borderRadius: '8px', border: '1px solid #334155' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#38BDF8', margin: '0 0 16px 0' }}>
+          <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1E56A0', margin: '0 0 16px 0' }}>
               🚛 Fleet & Vehicle Information
             </h2>
             <form onSubmit={handleTruckInfoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Default Truck Number</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Default Truck Number</label>
                 <input
                   type="text"
                   required
                   value={truckInfo.truckNumber}
                   onChange={(e) => setTruckInfo({ ...truckInfo, truckNumber: e.target.value })}
-                  style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                  style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Default Driver Name</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Default Driver Name</label>
                 <input
                   type="text"
                   required
                   value={truckInfo.driverName}
                   onChange={(e) => setTruckInfo({ ...truckInfo, driverName: e.target.value })}
-                  style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                  style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Coverage Area</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Coverage Area</label>
                 <input
                   type="text"
                   value={truckInfo.coverageArea}
                   onChange={(e) => setTruckInfo({ ...truckInfo, coverageArea: e.target.value })}
-                  style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                  style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                 />
               </div>
 
@@ -423,7 +434,7 @@ export default function AdminSettingsPage() {
                   disabled={savingKey === 'truck_info'}
                   style={{
                     background: '#38BDF8',
-                    color: '#0B1120',
+                    color: '#0F2C59',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '8px 16px',
@@ -438,13 +449,13 @@ export default function AdminSettingsPage() {
           </div>
 
           {/* 4. OPERATIONAL LIFECYCLE RULES */}
-          <div style={{ background: '#1E293B', padding: '24px', borderRadius: '8px', border: '1px solid #334155' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#38BDF8', margin: '0 0 16px 0' }}>
-              ⏱️ Operational Lifecycle Rules
+          <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1E56A0', margin: '0 0 16px 0' }}>
+              Operational Lifecycle Rules
             </h2>
             <form onSubmit={handleOperationalRulesSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Online Booking Expiry Window (Hours)
                 </label>
                 <input
@@ -454,7 +465,7 @@ export default function AdminSettingsPage() {
                   required
                   value={operationalRules.bookingExpiryHours}
                   onChange={(e) => setOperationalRules({ ...operationalRules, bookingExpiryHours: parseInt(e.target.value, 10) })}
-                  style={{ width: '100%', background: '#0B1120', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', color: '#F8FAFC' }}
+                  style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px 12px', color: '#0F2C59' }}
                 />
                 <span style={{ fontSize: '11px', color: '#64748B', marginTop: '4px', display: 'block' }}>
                   Standard PondFish authoritative rule is 48 hours before reserved stock is released.
@@ -467,7 +478,7 @@ export default function AdminSettingsPage() {
                   disabled={savingKey === 'operational_rules'}
                   style={{
                     background: '#38BDF8',
-                    color: '#0B1120',
+                    color: '#0F2C59',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '8px 16px',
@@ -485,23 +496,23 @@ export default function AdminSettingsPage() {
 
       {/* ELEVATED CONFIRMATION MODAL (Section 150 & 151) */}
       {showConfirmModal && pendingDestinationChange && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <div style={{ background: '#1E293B', border: '1px solid #F59E0B', borderRadius: '12px', padding: '28px', maxWidth: '520px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid #F59E0B', borderRadius: '12px', padding: '28px', maxWidth: '520px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#F59E0B', margin: '0 0 12px 0' }}>
-              ⚠️ Confirm Store Destination Change
+              Confirm Store Destination Change
             </h3>
             <p style={{ fontSize: '13px', color: '#E2E8F0', lineHeight: 1.5, margin: '0 0 16px 0' }}>
               Changing the store destination will affect future truck journeys and GPS geofenced arrival behavior.
             </p>
 
-            <div style={{ background: '#0F172A', padding: '14px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px' }}>
-              <div style={{ marginBottom: '8px', color: '#94A3B8' }}>
+            <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px' }}>
+              <div style={{ marginBottom: '8px', color: '#64748B' }}>
                 <strong>Old Destination:</strong> {settings?.store_destination?.name || 'Default Store'} ({settings?.store_destination?.latitude}, {settings?.store_destination?.longitude})
               </div>
-              <div style={{ color: '#F8FAFC' }}>
+              <div style={{ color: '#0F2C59' }}>
                 <strong>New Destination:</strong> {pendingDestinationChange.name} ({pendingDestinationChange.latitude}, {pendingDestinationChange.longitude})
               </div>
-              <div style={{ marginTop: '6px', fontSize: '11px', color: '#94A3B8' }}>
+              <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748B' }}>
                 Geofence Radius: {pendingDestinationChange.geofenceRadiusMeters}m | Window: {pendingDestinationChange.postArrivalTrackingMinutes} mins
               </div>
             </div>
@@ -509,13 +520,13 @@ export default function AdminSettingsPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button
                 onClick={() => { setShowConfirmModal(false); setPendingDestinationChange(null); }}
-                style={{ background: '#334155', color: '#F8FAFC', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                style={{ background: '#F1F5F9', color: '#0F2C59', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDestinationSave}
-                style={{ background: '#F59E0B', color: '#0B1120', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                style={{ background: '#F59E0B', color: '#0F2C59', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
               >
                 Confirm Change
               </button>

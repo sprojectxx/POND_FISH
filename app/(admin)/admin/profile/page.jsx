@@ -44,23 +44,23 @@ export default function AdminProfilePage() {
 
   if (loading) {
     return (
-      <div style={{ color: '#94A3B8', fontSize: '14px', padding: '24px' }}>
-        ⏳ Loading administrator profile...
+      <div style={{ color: '#64748B', fontSize: '14px', padding: '24px' }}>
+        Loading administrator profile...
       </div>
     );
   }
 
   return (
-    <div style={{ color: '#F8FAFC', maxWidth: '900px' }}>
+    <div style={{ color: '#0F2C59', maxWidth: '900px' }}>
       {/* Page Header */}
       <div style={{ marginBottom: '28px' }}>
-        <div style={{ fontSize: '12px', color: '#38BDF8', fontWeight: '600', textTransform: 'uppercase', marginBottom: '4px' }}>
+        <div style={{ fontSize: '12px', color: '#1E56A0', fontWeight: '600', textTransform: 'uppercase', marginBottom: '4px' }}>
           Account / Profile
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px 0' }}>
           Administrator Profile
         </h1>
-        <p style={{ fontSize: '14px', color: '#94A3B8', margin: 0 }}>
+        <p style={{ fontSize: '14px', color: '#64748B', margin: 0 }}>
           Operational profile details, verified credentials, and administrative activity footprint.
         </p>
       </div>
@@ -75,7 +75,7 @@ export default function AdminProfilePage() {
           marginBottom: '24px',
           fontSize: '14px',
         }}>
-          ⚠️ {error}
+          {error}
         </div>
       )}
 
@@ -83,8 +83,8 @@ export default function AdminProfilePage() {
         <>
           {/* Identity Card */}
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '28px',
             marginBottom: '28px',
@@ -104,7 +104,7 @@ export default function AdminProfilePage() {
               color: '#FFFFFF',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
             }}>
-              👤
+
             </div>
 
             <div style={{ flex: 1 }}>
@@ -118,7 +118,7 @@ export default function AdminProfilePage() {
                   textTransform: 'uppercase',
                   padding: '3px 8px',
                   borderRadius: '12px',
-                  background: profile.is_super_admin ? '#0369A1' : '#334155',
+                  background: profile.is_super_admin ? '#0369A1' : '#E2E8F0',
                   color: '#E0F2FE',
                 }}>
                   {profile.is_super_admin ? 'SUPER ADMIN' : 'STORE ADMIN'}
@@ -135,7 +135,7 @@ export default function AdminProfilePage() {
                   ACTIVE
                 </span>
               </div>
-              <div style={{ fontSize: '14px', color: '#94A3B8' }}>
+              <div style={{ fontSize: '14px', color: '#64748B' }}>
                 {profile.email}
               </div>
             </div>
@@ -145,8 +145,8 @@ export default function AdminProfilePage() {
                 href="/admin/security"
                 style={{
                   display: 'inline-block',
-                  background: '#334155',
-                  color: '#F8FAFC',
+                  background: '#F1F5F9',
+                  color: '#0F2C59',
                   textDecoration: 'none',
                   padding: '8px 14px',
                   borderRadius: '6px',
@@ -154,15 +154,15 @@ export default function AdminProfilePage() {
                   fontWeight: '500',
                 }}
               >
-                🛡️ Manage Credentials
+                Manage Credentials
               </a>
             </div>
           </div>
 
           {/* Account Details Metadata */}
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '24px',
             marginBottom: '28px',
@@ -177,29 +177,29 @@ export default function AdminProfilePage() {
               gap: '16px',
             }}>
               <div>
-                <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '2px' }}>Account ID</div>
-                <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#CBD5E1' }}>
+                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '2px' }}>Account ID</div>
+                <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#425B73' }}>
                   {profile.id}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '2px' }}>Role Authorization</div>
-                <div style={{ fontSize: '13px', color: '#CBD5E1' }}>
+                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '2px' }}>Role Authorization</div>
+                <div style={{ fontSize: '13px', color: '#425B73' }}>
                   {profile.role} (Unrestricted Operations)
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '2px' }}>Provisioned Date</div>
-                <div style={{ fontSize: '13px', color: '#CBD5E1' }}>
+                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '2px' }}>Provisioned Date</div>
+                <div style={{ fontSize: '13px', color: '#425B73' }}>
                   {profile.createdAt ? new Date(profile.createdAt).toLocaleString() : 'N/A'}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '2px' }}>Last Updated / Login</div>
-                <div style={{ fontSize: '13px', color: '#CBD5E1' }}>
+                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '2px' }}>Last Updated / Login</div>
+                <div style={{ fontSize: '13px', color: '#425B73' }}>
                   {profile.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'N/A'}
                 </div>
               </div>
@@ -208,15 +208,15 @@ export default function AdminProfilePage() {
 
           {/* Security Action Footprint */}
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '24px',
           }}>
             <h3 style={{ fontSize: '16px', fontWeight: '600', margin: '0 0 6px 0' }}>
               Recent Security Audit Footprint
             </h3>
-            <p style={{ fontSize: '13px', color: '#94A3B8', margin: '0 0 16px 0' }}>
+            <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 16px 0' }}>
               Immutable audit log of authentication and credential events related to this account.
             </p>
 
@@ -230,8 +230,8 @@ export default function AdminProfilePage() {
                   <div
                     key={log.id}
                     style={{
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '8px',
                       padding: '12px 16px',
                       display: 'flex',
@@ -249,7 +249,7 @@ export default function AdminProfilePage() {
                       }}>
                         {log.action}
                       </span>
-                      <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+                      <span style={{ fontSize: '12px', color: '#64748B' }}>
                         {log.metadata ? JSON.stringify(log.metadata) : ''}
                       </span>
                     </div>

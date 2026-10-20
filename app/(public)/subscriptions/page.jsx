@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
+import { Check, ArrowRight } from '../components/Icons';
 
 export default function SubscriptionsPage() {
   const [plans, setPlans] = useState([]);
@@ -262,16 +263,13 @@ export default function SubscriptionsPage() {
           contact: customerMobile || '',
         },
         theme: {
-          color: '#0284C7',
+          color: '#1e56a0',
         },
         handler: async function (response) {
-          // Razorpay payment success callback -> Trigger Server-Side HMAC Verification
           await verifySubscriptionPayment(response);
         },
         modal: {
           ondismiss: function () {
-            // Traceability: PW-04 Design Spec exact requirement:
-            // "Subscription payment was not completed. You can retry the payment."
             setPaymentError('Subscription payment was not completed. You can retry the payment.');
             setCurrentStep('FAILED');
           },
@@ -315,12 +313,10 @@ export default function SubscriptionsPage() {
         throw new Error(json.error?.message || 'Payment verification failed on server.');
       }
 
-      // Acceptance Criteria: Subscription is not shown as active before server-verified payment.
       setActivationResult(json.data);
       setCurrentStep('SUCCESS');
     } catch (err) {
       console.error('[SERVER VERIFICATION ERROR]', err.message);
-      // Fallback message per PW-04 spec
       setPaymentError(err.message || 'Subscription payment was not completed. You can retry the payment.');
       setCurrentStep('FAILED');
     } finally {
@@ -329,345 +325,214 @@ export default function SubscriptionsPage() {
   }
 
   return (
-    <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '48px 24px', width: '100%' }}>
-      {/* 1. Header Section */}
-      <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'rgba(2, 132, 199, 0.15)',
-          border: '1px solid rgba(2, 132, 199, 0.3)',
-          padding: '6px 14px',
-          borderRadius: '20px',
-          color: '#38BDF8',
-          fontSize: '12px',
-          fontWeight: '700',
-          textTransform: 'uppercase',
-          letterSpacing: '0.8px',
-          marginBottom: '16px'
-        }}>
-          💎 PondFish Subscription Memberships
-        </div>
-        <h1 style={{ fontSize: '38px', fontWeight: '900', color: '#F8FAFC', letterSpacing: '-0.5px', marginBottom: '16px' }}>
-          Fresh Catch Subscription Plans
-        </h1>
-        <p style={{ fontSize: '16px', color: '#94A3B8', maxWidth: '720px', margin: '0 auto', lineHeight: '1.6' }}>
-          Subscriptions convert your upfront plan fee into PondFish Store Credit to spend on daily fresh lake harvest, combined with a weekly quantity allowance to reserve prime morning catches.
-        </p>
-      </div>
-
-      {/* 2. Visual Direction Callout: Store Credit Concept (PW-04 Spec) */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(2, 132, 199, 0.15) 100%)',
-        border: '1px solid #0284C7',
-        borderRadius: '16px',
-        padding: '28px 32px',
-        marginBottom: '48px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '24px'
-      }}>
-        <div style={{ maxWidth: '640px' }}>
-          <div style={{ fontSize: '12px', fontWeight: '800', color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-            Store Credit & Weekly Allowance
-          </div>
-          <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
-            Upfront Plan Fees Become PondFish Store Credit
-          </h2>
-          <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: '1.6', margin: 0 }}>
-            Subscriptions convert your upfront plan fee into PondFish Store Credit to spend on daily fresh lake harvest, combined with a weekly quantity allowance to reserve prime morning catches before walk-ins open.
+    <div className="pf-subs-page">
+      <div className="pf-container">
+        {/* 1. Page Header Section */}
+        <div className="pf-subs-header">
+          <h1 className="pf-subs-title">
+            Fresh Catch Subscription Plans
+          </h1>
+          <p className="pf-subs-subtitle">
+            Subscriptions convert your upfront plan fee into PondFish Store Credit to spend on daily fresh lake harvest, combined with a weekly quantity allowance to reserve prime morning catches.
           </p>
         </div>
-        <div style={{
-          display: 'flex',
-          gap: '16px',
-          flexWrap: 'wrap'
-        }}>
-          <div style={{
-            background: '#0B1120',
-            border: '1px solid #1E293B',
-            borderRadius: '10px',
-            padding: '14px 20px',
-            textAlign: 'center',
-            minWidth: '140px'
-          }}>
-            <div style={{ fontSize: '20px', fontWeight: '900', color: '#22C55E' }}>Store Credit</div>
-            <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>Account Balance</div>
-          </div>
-          <div style={{
-            background: '#0B1120',
-            border: '1px solid #1E293B',
-            borderRadius: '10px',
-            padding: '14px 20px',
-            textAlign: 'center',
-            minWidth: '140px'
-          }}>
-            <div style={{ fontSize: '20px', fontWeight: '900', color: '#38BDF8' }}>Weekly Quota</div>
-            <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>Weight Allowance</div>
-          </div>
-        </div>
-      </div>
 
-      {/* 3. Subscription Plans Grid */}
-      {loading ? (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: '28px',
-          marginBottom: '56px'
-        }}>
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              style={{
-                background: '#0F172A',
-                border: '1px solid #1E293B',
-                borderRadius: '16px',
-                padding: '36px 32px',
-                height: '480px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between'
-              }}
-            >
-              <div>
-                <div style={{ width: '100px', height: '24px', borderRadius: '4px', background: '#1E293B', marginBottom: '20px' }}></div>
-                <div style={{ width: '60%', height: '36px', borderRadius: '4px', background: '#1E293B', marginBottom: '12px' }}></div>
-                <div style={{ width: '85%', height: '16px', borderRadius: '4px', background: '#1E293B', marginBottom: '28px' }}></div>
-                <div style={{ width: '100%', height: '60px', borderRadius: '8px', background: '#1E293B', marginBottom: '24px' }}></div>
-              </div>
-              <div style={{ width: '100%', height: '48px', borderRadius: '8px', background: '#1E293B' }}></div>
+        {/* 2. Visual Direction Callout: Store Credit Concept Banner */}
+        <div className="pf-subs-banner">
+          <div className="pf-subs-banner-copy">
+            <div className="pf-subs-banner-eyebrow">
+              Store Credit &amp; Weekly Allowance
             </div>
-          ))}
+            <h2 className="pf-subs-banner-title">
+              Upfront Plan Fees Become PondFish Store Credit
+            </h2>
+            <p className="pf-subs-banner-desc">
+              Subscriptions convert your upfront plan fee into PondFish Store Credit to spend on daily fresh lake harvest, combined with a weekly quantity allowance to reserve prime morning catches before walk-ins open.
+            </p>
+          </div>
+          <div className="pf-subs-banner-stats">
+            <div className="pf-subs-stat-card">
+              <div className="pf-subs-stat-val green">Store Credit</div>
+              <div className="pf-subs-stat-lbl">Account Balance</div>
+            </div>
+            <div className="pf-subs-stat-card">
+              <div className="pf-subs-stat-val blue">Weekly Quota</div>
+              <div className="pf-subs-stat-lbl">Weight Allowance</div>
+            </div>
+          </div>
         </div>
-      ) : error ? (
-        <ErrorState
-          title="Subscription Plans Unavailable"
-          message={error}
-          onRetry={fetchPlans}
-        />
-      ) : plans.length === 0 ? (
-        <EmptyState
-          title="No Subscription Plans Configured"
-          message="Subscription plans are currently undergoing seasonal review. Please visit our Bangalore counter for walk-in fresh catch rates."
-          actionText="Browse Fish Catalogue"
-          actionHref="/fish"
-        />
-      ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: '28px',
-          marginBottom: '64px'
-        }}>
-          {plans.map((plan) => (
-            <div
-              key={plan.id}
-              style={{
-                background: '#0F172A',
-                border: '1px solid #1E293B',
-                borderRadius: '16px',
-                padding: '36px 32px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                position: 'relative'
-              }}
-            >
-              <div>
-                {/* Plan Title */}
-                <h3 style={{ fontSize: '24px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
-                  {plan.title}
-                </h3>
 
-                {/* Price */}
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '20px' }}>
-                  <span style={{ fontSize: '38px', fontWeight: '900', color: '#F8FAFC' }}>
-                    ₹{plan.price.toLocaleString('en-IN')}
-                  </span>
-                  <span style={{ fontSize: '13px', color: '#94A3B8', fontWeight: '500' }}>
-                    / {plan.validityDays} days validity
-                  </span>
-                </div>
-
-                {/* Store Credit Box */}
-                <div style={{
-                  background: 'rgba(2, 132, 199, 0.1)',
-                  border: '1px solid rgba(2, 132, 199, 0.3)',
-                  borderRadius: '10px',
-                  padding: '16px',
-                  marginBottom: '24px'
-                }}>
-                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
-                    Monetary Store Credit
-                  </div>
-                  <div style={{ fontSize: '20px', fontWeight: '800', color: '#22C55E' }}>
-                    Get ₹{plan.creditAmount.toLocaleString('en-IN')} Store Credit
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '4px', lineHeight: '1.4' }}>
-                    Full monetary balance credited to your account balance to spend on fresh lake catch.
-                  </div>
-                </div>
-
-                {/* Weekly Limits & Key Features List */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '32px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                    <span style={{ color: '#38BDF8', fontSize: '16px' }}>⚖️</span>
-                    <div>
-                      <strong style={{ color: '#F8FAFC' }}>Weekly Reservation Quota:</strong>{' '}
-                      <span style={{ color: '#94A3B8' }}>Up to <strong style={{ color: '#38BDF8' }}>{plan.weeklyQtyLimitKg} kg/week</strong> priority reserve allowance.</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                    <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
-                    <div>
-                      <strong style={{ color: '#F8FAFC' }}>Store Credit Balance:</strong>{' '}
-                      <span style={{ color: '#94A3B8' }}>Valid against all eligible daily fresh fish varieties at Bangalore counter.</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                    <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
-                    <div>
-                      <strong style={{ color: '#F8FAFC' }}>07:00 AM Morning Truck Priority:</strong>{' '}
-                      <span style={{ color: '#94A3B8' }}>Lock in peak freshness before the morning walk-in counter rush.</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                    <span style={{ color: '#22C55E', fontSize: '16px' }}>✓</span>
-                    <div>
-                      <strong style={{ color: '#F8FAFC' }}>Validity Window:</strong>{' '}
-                      <span style={{ color: '#94A3B8' }}>Active for {plan.validityDays} days from server activation.</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Purchase CTA Button */}
-              <button
-                onClick={() => handleSelectPlan(plan)}
-                style={{
-                  width: '100%',
-                  padding: '14px 20px',
-                  background: '#0284C7',
-                  color: '#FFFFFF',
-                  borderRadius: '8px',
-                  fontSize: '15px',
-                  fontWeight: '700',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.3)'
-                }}
+        {/* 3. Subscription Plans Grid */}
+        {loading ? (
+          <div className="pf-subs-plans-grid">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="pf-plan-card"
+                style={{ height: '480px' }}
               >
-                <span>Subscribe to {plan.title}</span>
-                <span>&rarr;</span>
-              </button>
+                <div>
+                  <div style={{ width: '120px', height: '24px', borderRadius: '6px', background: '#e2e8f0', marginBottom: '20px' }}></div>
+                  <div style={{ width: '60%', height: '36px', borderRadius: '6px', background: '#e2e8f0', marginBottom: '12px' }}></div>
+                  <div style={{ width: '85%', height: '16px', borderRadius: '6px', background: '#f1f5f9', marginBottom: '28px' }}></div>
+                  <div style={{ width: '100%', height: '70px', borderRadius: '12px', background: '#f1f5f9', marginBottom: '24px' }}></div>
+                </div>
+                <div style={{ width: '100%', height: '48px', borderRadius: '12px', background: '#e2e8f0' }}></div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <ErrorState
+            title="Subscription Plans Unavailable"
+            message={error}
+            onRetry={fetchPlans}
+          />
+        ) : plans.length === 0 ? (
+          <EmptyState
+            title="No Subscription Plans Configured"
+            message="Subscription plans are currently undergoing seasonal review. Please visit our Bangalore counter for walk-in fresh catch rates."
+            actionLabel="Browse Fish Catalogue"
+            onAction={() => window.location.href = '/#fish-availability'}
+          />
+        ) : (
+          <div className="pf-subs-plans-grid">
+            {plans.map((plan, idx) => {
+              const isPopular = idx === 1 || plan.title?.toLowerCase().includes('priority');
+              return (
+                <div
+                  key={plan.id}
+                  className={`pf-plan-card ${isPopular ? 'featured' : ''}`}
+                >
+                  {isPopular && (
+                    <div className="pf-plan-featured-badge">
+                      MOST POPULAR
+                    </div>
+                  )}
+
+                  <div>
+                    {/* Plan Title */}
+                    <h3 className="pf-plan-card-title">
+                      {plan.title}
+                    </h3>
+
+                    {/* Price */}
+                    <div className="pf-plan-card-pricing">
+                      <span className="pf-plan-card-price">
+                        ₹{plan.price.toLocaleString('en-IN')}
+                      </span>
+                      <span className="pf-plan-card-validity">
+                        / {plan.validityDays} days validity
+                      </span>
+                    </div>
+
+                    {/* Store Credit Box */}
+                    <div className="pf-plan-credit-box">
+                      <div className="pf-plan-credit-tag">
+                        Monetary Store Credit
+                      </div>
+                      <div className="pf-plan-credit-amount">
+                        Get ₹{plan.creditAmount.toLocaleString('en-IN')} Store Credit
+                      </div>
+                      <div className="pf-plan-credit-desc">
+                        Full monetary balance credited to your store account to spend on fresh lake catch.
+                      </div>
+                    </div>
+
+                    {/* Weekly Limits & Key Features List */}
+                    <div className="pf-plan-perks">
+                      <div className="pf-plan-perk-item">
+                        <Check size={16} color="#159c57" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <div>
+                          <strong style={{ color: '#0f2c59' }}>Weekly Reservation Quota:</strong>{' '}
+                          <span style={{ color: '#475569' }}>Up to <strong style={{ color: '#1e56a0' }}>{plan.weeklyQtyLimitKg} kg/week</strong> priority reserve allowance.</span>
+                        </div>
+                      </div>
+
+                      <div className="pf-plan-perk-item">
+                        <Check size={16} color="#159c57" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <div>
+                          <strong style={{ color: '#0f2c59' }}>Store Credit Balance:</strong>{' '}
+                          <span style={{ color: '#475569' }}>Valid against all eligible daily fresh fish varieties at Bangalore counter.</span>
+                        </div>
+                      </div>
+
+                      <div className="pf-plan-perk-item">
+                        <Check size={16} color="#159c57" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <div>
+                          <strong style={{ color: '#0f2c59' }}>07:00 AM Morning Truck Priority:</strong>{' '}
+                          <span style={{ color: '#475569' }}>Lock in peak freshness before morning walk-in rush.</span>
+                        </div>
+                      </div>
+
+                      <div className="pf-plan-perk-item">
+                        <Check size={16} color="#159c57" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <div>
+                          <strong style={{ color: '#0f2c59' }}>Validity Window:</strong>{' '}
+                          <span style={{ color: '#475569' }}>Active for {plan.validityDays} days from server activation.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Purchase CTA Button */}
+                  <button
+                    onClick={() => handleSelectPlan(plan)}
+                    className="pf-plan-cta-btn"
+                  >
+                    <span>Subscribe to {plan.title}</span>
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 4. Educational Section: Weekly Allowance vs. Monetary Credit */}
+        <div className="pf-subs-edu-card">
+          <h2 className="pf-subs-edu-title">
+            Understanding Your Subscription: Credit vs. Weekly Allowance
+          </h2>
+          <div className="pf-subs-edu-grid">
+            <div className="pf-subs-edu-item">
+              <h3 className="pf-subs-edu-item-heading">
+                Monetary Store Credit (₹)
+              </h3>
+              <p className="pf-subs-edu-item-text">
+                This is your stored rupee balance. When you collect or order fish, the itemized total is deducted from this credit balance. You pay zero extra unless your order exceeds this amount.
+              </p>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* 4. Educational Section: Weekly Allowance vs. Monetary Credit (PW-04 Acceptance Criteria) */}
-      <div style={{
-        background: '#0F172A',
-        border: '1px solid #1E293B',
-        borderRadius: '16px',
-        padding: '36px',
-        marginBottom: '64px'
-      }}>
-        <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#F8FAFC', marginBottom: '16px' }}>
-          Understanding Your Subscription: Credit vs. Weekly Allowance
-        </h2>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '24px'
-        }}>
-          <div style={{ background: '#0B1120', padding: '24px', borderRadius: '10px', border: '1px solid #334155' }}>
-            <div style={{ fontSize: '28px', marginBottom: '10px' }}>💰</div>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#F8FAFC', marginBottom: '8px' }}>
-              Monetary Store Credit (₹)
-            </h3>
-            <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: '1.6' }}>
-              This is your stored rupee balance. When you collect or order fish, the itemized total is deducted from this credit balance. You pay zero extra unless your order exceeds this amount.
-            </p>
-          </div>
+            <div className="pf-subs-edu-item">
+              <h3 className="pf-subs-edu-item-heading">
+                Weekly Allowance Quota (kg)
+              </h3>
+              <p className="pf-subs-edu-item-text">
+                The weekly weight quota (e.g. 2 kg to 3 kg/week depending on plan) protects supply integrity. It allows home subscribers to reserve premium morning truck arrivals while preventing commercial hoarding.
+              </p>
+            </div>
 
-          <div style={{ background: '#0B1120', padding: '24px', borderRadius: '10px', border: '1px solid #334155' }}>
-            <div style={{ fontSize: '28px', marginBottom: '10px' }}>⚖️</div>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#F8FAFC', marginBottom: '8px' }}>
-              Weekly Allowance Quota (kg)
-            </h3>
-            <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: '1.6' }}>
-              The weekly weight quota (e.g. 2 kg to 3 kg/week depending on plan) protects supply integrity. It allows home subscribers to reserve premium morning truck arrivals while preventing commercial hoarding.
-            </p>
-          </div>
-
-          <div style={{ background: '#0B1120', padding: '24px', borderRadius: '10px', border: '1px solid #334155' }}>
-            <div style={{ fontSize: '28px', marginBottom: '10px' }}>🔒</div>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#F8FAFC', marginBottom: '8px' }}>
-              Bank-Verified Security
-            </h3>
-            <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: '1.6' }}>
-              Payments are executed via official Razorpay gateway with server-side HMAC-SHA256 signature verification. No subscription activates without confirmed bank settlement.
-            </p>
+            <div className="pf-subs-edu-item">
+              <h3 className="pf-subs-edu-item-heading">
+                Bank-Verified Security
+              </h3>
+              <p className="pf-subs-edu-item-text">
+                Payments are executed via official Razorpay gateway with server-side HMAC-SHA256 signature verification. No subscription activates without confirmed bank settlement.
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 5. INTERACTIVE PURCHASE & AUTH MODAL (PW-04 Vertical Slice) */}
+      {/* 5. INTERACTIVE PURCHASE & AUTH MODAL */}
       {modalOpen && selectedPlan && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(6px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#0F172A',
-            border: '1px solid #334155',
-            borderRadius: '16px',
-            maxWidth: '520px',
-            width: '100%',
-            padding: '32px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            position: 'relative',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)'
-          }}>
+        <div className="pf-subs-modal-backdrop">
+          <div className="pf-subs-modal-dialog">
             {/* Modal Close Button */}
             <button
               onClick={closeModal}
               aria-label="Close dialog"
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'transparent',
-                border: 'none',
-                color: '#94A3B8',
-                fontSize: '20px',
-                cursor: 'pointer',
-                padding: '4px 8px'
-              }}
+              className="pf-subs-modal-close"
             >
               ✕
             </button>
@@ -675,23 +540,23 @@ export default function SubscriptionsPage() {
             {/* FLOW STEP: AUTHENTICATION */}
             {currentStep === 'AUTH' && (
               <div>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#0284C7', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '6px' }}>
+                <div style={{ fontSize: '12px', fontWeight: '800', color: '#1e56a0', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '6px' }}>
                   Step 1 of 3 • Customer Verification
                 </div>
-                <h3 style={{ fontSize: '22px', fontWeight: '800', color: '#F8FAFC', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '24px', fontWeight: '800', color: '#0f2c59', marginBottom: '10px' }}>
                   Sign In to Subscribe
                 </h3>
-                <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: '1.5', marginBottom: '24px' }}>
+                <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.5', marginBottom: '24px' }}>
                   Subscriptions are associated with your PondFish customer profile to manage your store credit and booking quota.
                 </p>
 
                 {authError && (
                   <div style={{
-                    background: 'rgba(220, 38, 38, 0.15)',
-                    border: '1px solid #DC2626',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    color: '#FCA5A5',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '10px',
+                    padding: '12px 16px',
+                    color: '#b91c1c',
                     fontSize: '13px',
                     marginBottom: '20px',
                     lineHeight: '1.4'
@@ -704,19 +569,19 @@ export default function SubscriptionsPage() {
                   <div>
                     <form onSubmit={otpSent ? handleVerifyOtp : handleSendOtp}>
                       <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#F8FAFC', marginBottom: '6px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f2c59', marginBottom: '6px' }}>
                           Mobile Number
                         </label>
                         <div style={{ display: 'flex' }}>
                           <span style={{
                             padding: '10px 14px',
-                            background: '#1E293B',
-                            border: '1px solid #334155',
+                            background: '#f1f5f9',
+                            border: '1px solid #cbd5e1',
                             borderRight: 'none',
-                            borderRadius: '8px 0 0 8px',
-                            color: '#94A3B8',
+                            borderRadius: '10px 0 0 10px',
+                            color: '#475569',
                             fontSize: '14px',
-                            fontWeight: '600'
+                            fontWeight: '700'
                           }}>
                             +91
                           </span>
@@ -730,11 +595,12 @@ export default function SubscriptionsPage() {
                             style={{
                               flex: 1,
                               padding: '10px 14px',
-                              background: '#0B1120',
-                              border: '1px solid #334155',
-                              borderRadius: '0 8px 8px 0',
-                              color: '#F8FAFC',
+                              background: '#f8fafc',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '0 10px 10px 0',
+                              color: '#0f2c59',
                               fontSize: '14px',
+                              fontWeight: '600',
                               outline: 'none'
                             }}
                           />
@@ -743,7 +609,7 @@ export default function SubscriptionsPage() {
 
                       {otpSent && (
                         <div style={{ marginBottom: '20px' }}>
-                          <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#F8FAFC', marginBottom: '6px' }}>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f2c59', marginBottom: '6px' }}>
                             Verification OTP Code / ID Token
                           </label>
                           <input
@@ -754,15 +620,17 @@ export default function SubscriptionsPage() {
                             style={{
                               width: '100%',
                               padding: '10px 14px',
-                              background: '#0B1120',
-                              border: '1px solid #334155',
-                              borderRadius: '8px',
-                              color: '#F8FAFC',
+                              background: '#f8fafc',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '10px',
+                              color: '#0f2c59',
                               fontSize: '14px',
-                              outline: 'none'
+                              fontWeight: '600',
+                              outline: 'none',
+                              boxSizing: 'border-box'
                             }}
                           />
-                          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '6px' }}>
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
                             OTP dispatch logged to PondFish auth service.
                           </div>
                         </div>
@@ -771,16 +639,13 @@ export default function SubscriptionsPage() {
                       <button
                         type="submit"
                         disabled={authLoading}
+                        className="pf-btn-primary"
                         style={{
                           width: '100%',
+                          justifyContent: 'center',
+                          borderRadius: '10px',
                           padding: '12px 20px',
-                          background: '#0284C7',
-                          color: '#FFFFFF',
-                          borderRadius: '8px',
                           fontSize: '14px',
-                          fontWeight: '700',
-                          border: 'none',
-                          cursor: authLoading ? 'not-allowed' : 'pointer',
                           opacity: authLoading ? 0.7 : 1,
                           marginBottom: '16px'
                         }}
@@ -795,8 +660,9 @@ export default function SubscriptionsPage() {
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: '#38BDF8',
-                        fontSize: '12px',
+                        color: '#1e56a0',
+                        fontSize: '13px',
+                        fontWeight: '600',
                         cursor: 'pointer',
                         textAlign: 'center',
                         width: '100%',
@@ -810,7 +676,7 @@ export default function SubscriptionsPage() {
                   <div>
                     <form onSubmit={handleApplyDirectToken}>
                       <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#F8FAFC', marginBottom: '6px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f2c59', marginBottom: '6px' }}>
                           Customer Session Token (Bearer JWT)
                         </label>
                         <textarea
@@ -821,34 +687,33 @@ export default function SubscriptionsPage() {
                           style={{
                             width: '100%',
                             padding: '10px 14px',
-                            background: '#0B1120',
-                            border: '1px solid #334155',
-                            borderRadius: '8px',
-                            color: '#F8FAFC',
+                            background: '#f8fafc',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '10px',
+                            color: '#0f2c59',
                             fontSize: '13px',
                             fontFamily: 'monospace',
                             outline: 'none',
-                            resize: 'vertical'
+                            resize: 'vertical',
+                            boxSizing: 'border-box'
                           }}
                         />
                       </div>
 
                       <button
                         type="submit"
+                        className="pf-btn-primary"
                         style={{
                           width: '100%',
+                          justifyContent: 'center',
+                          borderRadius: '10px',
                           padding: '12px 20px',
-                          background: '#0284C7',
-                          color: '#FFFFFF',
-                          borderRadius: '8px',
                           fontSize: '14px',
-                          fontWeight: '700',
-                          border: 'none',
-                          cursor: 'pointer',
                           marginBottom: '16px'
                         }}
                       >
-                        Use Customer Session &rarr;
+                        <span>Use Customer Session</span>
+                        <ArrowRight size={14} />
                       </button>
 
                       <button
@@ -857,8 +722,9 @@ export default function SubscriptionsPage() {
                         style={{
                           background: 'transparent',
                           border: 'none',
-                          color: '#94A3B8',
-                          fontSize: '12px',
+                          color: '#64748b',
+                          fontSize: '13px',
+                          fontWeight: '600',
                           cursor: 'pointer',
                           textAlign: 'center',
                           width: '100%'
@@ -872,65 +738,65 @@ export default function SubscriptionsPage() {
               </div>
             )}
 
-            {/* FLOW STEP: REVIEW ORDER & ACCEPT TERMS (PW-04 Spec) */}
+            {/* FLOW STEP: REVIEW ORDER & ACCEPT TERMS */}
             {currentStep === 'REVIEW' && (
               <div>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#0284C7', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '6px' }}>
-                  Step 2 of 3 • Review & Confirm
+                <div style={{ fontSize: '12px', fontWeight: '800', color: '#1e56a0', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '6px' }}>
+                  Step 2 of 3 • Review &amp; Confirm
                 </div>
-                <h3 style={{ fontSize: '22px', fontWeight: '800', color: '#F8FAFC', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '24px', fontWeight: '800', color: '#0f2c59', marginBottom: '16px' }}>
                   Review Subscription Order
                 </h3>
 
                 {/* Plan Summary Card */}
                 <div style={{
-                  background: '#0B1120',
-                  border: '1px solid #1E293B',
-                  borderRadius: '12px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '14px',
                   padding: '20px',
                   marginBottom: '20px'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '14px', color: '#94A3B8' }}>Selected Plan:</span>
-                    <strong style={{ fontSize: '15px', color: '#F8FAFC' }}>{selectedPlan.title}</strong>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>Selected Plan:</span>
+                    <strong style={{ fontSize: '15px', color: '#0f2c59' }}>{selectedPlan.title}</strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '14px', color: '#94A3B8' }}>Payable Amount:</span>
-                    <strong style={{ fontSize: '16px', color: '#38BDF8' }}>₹{selectedPlan.price.toLocaleString('en-IN')}</strong>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>Payable Amount:</span>
+                    <strong style={{ fontSize: '16px', color: '#1e56a0' }}>₹{selectedPlan.price.toLocaleString('en-IN')}</strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '14px', color: '#94A3B8' }}>PondFish Store Credit:</span>
-                    <strong style={{ fontSize: '15px', color: '#22C55E' }}>₹{selectedPlan.creditAmount.toLocaleString('en-IN')}</strong>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>PondFish Store Credit:</span>
+                    <strong style={{ fontSize: '15px', color: '#159c57' }}>₹{selectedPlan.creditAmount.toLocaleString('en-IN')}</strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '14px', color: '#94A3B8' }}>Weekly Reservation Quota:</span>
-                    <strong style={{ fontSize: '14px', color: '#F8FAFC' }}>{selectedPlan.weeklyQtyLimitKg} kg/week</strong>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>Weekly Reservation Quota:</span>
+                    <strong style={{ fontSize: '14px', color: '#0f2c59' }}>{selectedPlan.weeklyQtyLimitKg} kg/week</strong>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #1E293B' }}>
-                    <span style={{ fontSize: '14px', color: '#94A3B8' }}>Plan Validity:</span>
-                    <strong style={{ fontSize: '14px', color: '#F8FAFC' }}>{selectedPlan.validityDays} Days</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>Plan Validity:</span>
+                    <strong style={{ fontSize: '14px', color: '#0f2c59' }}>{selectedPlan.validityDays} Days</strong>
                   </div>
                 </div>
 
-                {/* Visible Terms Before Purchase (Acceptance Criteria) */}
+                {/* Visible Terms Before Purchase */}
                 <div style={{
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid #1E293B',
-                  borderRadius: '10px',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '12px',
                   padding: '16px',
                   marginBottom: '24px',
-                  fontSize: '12px',
-                  color: '#94A3B8',
+                  fontSize: '12.5px',
+                  color: '#1e40af',
                   lineHeight: '1.6'
                 }}>
-                  <strong style={{ color: '#F8FAFC', display: 'block', marginBottom: '6px' }}>
-                    Membership Terms & Rules:
+                  <strong style={{ color: '#1e3a8a', display: 'block', marginBottom: '6px' }}>
+                    Membership Terms &amp; Rules:
                   </strong>
-                  <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px', margin: 0 }}>
                     <li>100% of ₹{selectedPlan.price} is credited to your customer store wallet upon verified payment.</li>
                     <li>Weekly limit of {selectedPlan.weeklyQtyLimitKg} kg resets every week to guarantee fair catch distribution.</li>
                     <li>Payments are securely processed via Razorpay. Activations occur immediately upon bank confirmation.</li>
@@ -941,26 +807,19 @@ export default function SubscriptionsPage() {
                 <button
                   onClick={handleProceedToPayment}
                   disabled={processingOrder}
+                  className="pf-btn-primary"
                   style={{
                     width: '100%',
-                    padding: '14px 20px',
-                    background: '#0284C7',
-                    color: '#FFFFFF',
-                    borderRadius: '8px',
-                    fontSize: '15px',
-                    fontWeight: '700',
-                    border: 'none',
-                    cursor: processingOrder ? 'not-allowed' : 'pointer',
-                    opacity: processingOrder ? 0.7 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '8px',
+                    borderRadius: '12px',
+                    padding: '14px 20px',
+                    fontSize: '15px',
+                    opacity: processingOrder ? 0.7 : 1,
                     marginBottom: '12px'
                   }}
                 >
-                  {processingOrder ? 'Generating Razorpay Order...' : `Proceed to Pay ₹${selectedPlan.price.toLocaleString('en-IN')}`}
-                  {!processingOrder && <span>&rarr;</span>}
+                  <span>{processingOrder ? 'Generating Razorpay Order...' : `Proceed to Pay ₹${selectedPlan.price.toLocaleString('en-IN')}`}</span>
+                  {!processingOrder && <ArrowRight size={16} />}
                 </button>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -975,8 +834,8 @@ export default function SubscriptionsPage() {
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#64748B',
-                      fontSize: '12px',
+                      color: '#64748b',
+                      fontSize: '13px',
                       cursor: 'pointer'
                     }}
                   >
@@ -988,8 +847,8 @@ export default function SubscriptionsPage() {
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#94A3B8',
-                      fontSize: '12px',
+                      color: '#94a3b8',
+                      fontSize: '13px',
                       cursor: 'pointer'
                     }}
                   >
@@ -999,7 +858,7 @@ export default function SubscriptionsPage() {
               </div>
             )}
 
-            {/* FLOW STEP: PAYMENT FAILED / CANCELLED (PW-04 Spec) */}
+            {/* FLOW STEP: PAYMENT FAILED / CANCELLED */}
             {currentStep === 'FAILED' && (
               <div>
                 <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -1007,39 +866,39 @@ export default function SubscriptionsPage() {
                     width: '56px',
                     height: '56px',
                     borderRadius: '50%',
-                    background: 'rgba(220, 38, 38, 0.15)',
-                    color: '#DC2626',
+                    background: '#fee2e2',
+                    color: '#dc2626',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '24px',
-                    margin: '0 auto 16px'
+                    margin: '0 auto 16px',
+                    fontWeight: '800'
                   }}>
                     ✕
                   </div>
-                  <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '22px', fontWeight: '800', color: '#0f2c59', marginBottom: '8px' }}>
                     Payment Incomplete
                   </h3>
-                  {/* Traceability: PW-04 Design Spec exact string requirement */}
                   <div style={{
-                    background: 'rgba(220, 38, 38, 0.1)',
-                    border: '1px solid rgba(220, 38, 38, 0.3)',
-                    borderRadius: '8px',
-                    padding: '14px',
-                    color: '#FCA5A5',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    color: '#991b1b',
                     fontSize: '14px',
                     lineHeight: '1.5',
                     marginBottom: '16px'
                   }}>
-                    <p style={{ margin: 0, fontWeight: '600' }}>
+                    <p style={{ margin: 0, fontWeight: '700' }}>
                       Subscription payment was not completed.
                     </p>
-                    <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#F87171' }}>
+                    <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#b91c1c' }}>
                       You can retry the payment.
                     </p>
                   </div>
                   {paymentError && paymentError !== 'Subscription payment was not completed. You can retry the payment.' && (
-                    <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
                       Server note: {paymentError}
                     </div>
                   )}
@@ -1051,16 +910,13 @@ export default function SubscriptionsPage() {
                       setCurrentStep('REVIEW');
                       setPaymentError('');
                     }}
+                    className="pf-btn-primary"
                     style={{
                       flex: 1,
+                      justifyContent: 'center',
+                      borderRadius: '10px',
                       padding: '12px 20px',
-                      background: '#0284C7',
-                      color: '#FFFFFF',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      fontWeight: '700',
-                      border: 'none',
-                      cursor: 'pointer'
+                      fontSize: '14px'
                     }}
                   >
                     Retry Payment
@@ -1070,12 +926,12 @@ export default function SubscriptionsPage() {
                     style={{
                       flex: 1,
                       padding: '12px 20px',
-                      background: '#1E293B',
-                      color: '#94A3B8',
-                      borderRadius: '8px',
+                      background: '#f1f5f9',
+                      color: '#475569',
+                      borderRadius: '10px',
                       fontSize: '14px',
-                      fontWeight: '600',
-                      border: '1px solid #334155',
+                      fontWeight: '700',
+                      border: '1px solid #cbd5e1',
                       cursor: 'pointer'
                     }}
                   >
@@ -1085,7 +941,7 @@ export default function SubscriptionsPage() {
               </div>
             )}
 
-            {/* FLOW STEP: ACTIVATION SUCCESS (PW-04 Spec) */}
+            {/* FLOW STEP: ACTIVATION SUCCESS */}
             {currentStep === 'SUCCESS' && activationResult && (
               <div>
                 <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -1093,62 +949,64 @@ export default function SubscriptionsPage() {
                     width: '64px',
                     height: '64px',
                     borderRadius: '50%',
-                    background: 'rgba(34, 197, 94, 0.15)',
-                    color: '#22C55E',
+                    background: '#ecfdf5',
+                    color: '#159c57',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '28px',
-                    margin: '0 auto 16px'
+                    fontSize: '32px',
+                    margin: '0 auto 16px',
+                    fontWeight: '800'
                   }}>
                     ✓
                   </div>
-                  <h3 style={{ fontSize: '22px', fontWeight: '800', color: '#F8FAFC', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '24px', fontWeight: '800', color: '#0f2c59', marginBottom: '8px' }}>
                     Subscription Activated!
                   </h3>
-                  <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: '1.5' }}>
-                    Your subscription to <strong style={{ color: '#F8FAFC' }}>{selectedPlan.title}</strong> is now verified and active. ₹{parseFloat(activationResult.ledger?.resulting_balance || selectedPlan.creditAmount).toLocaleString('en-IN')} Store Credit has been credited to your account balance.
+                  <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>
+                    Your subscription to <strong style={{ color: '#0f2c59' }}>{selectedPlan.title}</strong> is now verified and active. ₹{parseFloat(activationResult.ledger?.resulting_balance || selectedPlan.creditAmount).toLocaleString('en-IN')} Store Credit has been credited to your account balance.
                   </p>
                 </div>
 
                 <div style={{
-                  background: '#0B1120',
-                  border: '1px solid #1E293B',
-                  borderRadius: '12px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '14px',
                   padding: '20px',
                   marginBottom: '24px'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <span style={{ fontSize: '13px', color: '#94A3B8' }}>Available Store Credit:</span>
-                    <strong style={{ fontSize: '16px', color: '#22C55E' }}>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>Available Store Credit:</span>
+                    <strong style={{ fontSize: '16px', color: '#159c57' }}>
                       ₹{parseFloat(activationResult.ledger?.resulting_balance || selectedPlan.creditAmount).toLocaleString('en-IN')}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <span style={{ fontSize: '13px', color: '#94A3B8' }}>Weekly Reservation Quota:</span>
-                    <strong style={{ fontSize: '14px', color: '#38BDF8' }}>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>Weekly Reservation Quota:</span>
+                    <strong style={{ fontSize: '14px', color: '#1e56a0' }}>
                       {selectedPlan.weeklyQtyLimitKg} kg/week
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <span style={{ fontSize: '13px', color: '#94A3B8' }}>Status:</span>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>Status:</span>
                     <span style={{
-                      background: 'rgba(34, 197, 94, 0.15)',
-                      color: '#22C55E',
+                      background: '#ecfdf5',
+                      color: '#047857',
                       fontSize: '11px',
                       fontWeight: '800',
-                      padding: '2px 8px',
-                      borderRadius: '4px'
+                      padding: '3px 10px',
+                      borderRadius: '9999px',
+                      border: '1px solid #a7f3d0'
                     }}>
                       ACTIVE
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #1E293B' }}>
-                    <span style={{ fontSize: '13px', color: '#94A3B8' }}>Active Expiry:</span>
-                    <span style={{ fontSize: '13px', color: '#F8FAFC' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>Active Expiry:</span>
+                    <span style={{ fontSize: '13px', color: '#0f2c59', fontWeight: '700' }}>
                       {activationResult.subscription?.expires_at
                         ? new Date(activationResult.subscription.expires_at).toLocaleDateString('en-IN', {
                             day: 'numeric',
@@ -1162,32 +1020,31 @@ export default function SubscriptionsPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <Link
-                    href="/fish"
+                    href="/#fish-availability"
                     onClick={closeModal}
+                    className="pf-btn-primary"
                     style={{
+                      width: '100%',
+                      justifyContent: 'center',
+                      borderRadius: '12px',
                       padding: '12px 20px',
-                      background: '#0284C7',
-                      color: '#FFFFFF',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      fontWeight: '700',
-                      textAlign: 'center',
-                      textDecoration: 'none'
+                      fontSize: '14px'
                     }}
                   >
-                    Browse Fresh Catch & Reserve &rarr;
+                    <span>Browse Fresh Catch &amp; Reserve</span>
+                    <ArrowRight size={14} />
                   </Link>
 
                   <button
                     onClick={closeModal}
                     style={{
                       padding: '12px 20px',
-                      background: 'transparent',
-                      color: '#94A3B8',
-                      borderRadius: '8px',
+                      background: '#f1f5f9',
+                      color: '#475569',
+                      borderRadius: '12px',
                       fontSize: '14px',
-                      fontWeight: '600',
-                      border: '1px solid #334155',
+                      fontWeight: '700',
+                      border: '1px solid #cbd5e1',
                       cursor: 'pointer'
                     }}
                   >

@@ -214,7 +214,7 @@ export default function AdminFishPage() {
   }, [fishList]);
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#F8FAFC' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -234,7 +234,7 @@ export default function AdminFishPage() {
               ADMIN-05
             </span>
           </div>
-          <p style={{ margin: '6px 0 0', color: '#94A3B8', fontSize: '14px' }}>
+          <p style={{ margin: '6px 0 0', color: '#64748B', fontSize: '14px' }}>
             Authoritative catalog configuration, stock availability, pricing, and live customer booking eligibility.
           </p>
         </div>
@@ -243,9 +243,9 @@ export default function AdminFishPage() {
           <button
             onClick={fetchData}
             style={{
-              background: '#1E293B',
-              border: '1px solid #334155',
-              color: '#CBD5E1',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#425B73',
               padding: '10px 16px',
               borderRadius: '8px',
               fontSize: '13px',
@@ -290,7 +290,7 @@ export default function AdminFishPage() {
           display: 'flex',
           justifyContent: 'space-between',
         }}>
-          <span>⚠️ {errorMsg}</span>
+          <span>{errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -314,30 +314,30 @@ export default function AdminFishPage() {
 
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>TOTAL VARIETIES</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#F8FAFC', marginTop: '4px' }}>{metrics.total}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TOTAL VARIETIES</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#0F2C59', marginTop: '4px' }}>{metrics.total}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>ONLINE BOOKABLE</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#38BDF8', marginTop: '4px' }}>{metrics.online}</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>ONLINE BOOKABLE</div>
+          <div style={{ fontSize: '26px', fontWeight: '700', color: '#1E56A0', marginTop: '4px' }}>{metrics.online}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>FRESH CATCH (GREEN)</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>FRESH CATCH (GREEN)</div>
           <div style={{ fontSize: '26px', fontWeight: '700', color: '#10B981', marginTop: '4px' }}>{metrics.freshCount}</div>
         </div>
-        <div style={{ background: '#1E293B', padding: '16px 20px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>AVAILABLE STOCK</div>
+        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>AVAILABLE STOCK</div>
           <div style={{ fontSize: '26px', fontWeight: '700', color: '#F59E0B', marginTop: '4px' }}>{metrics.totalStock.toFixed(1)} kg</div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
       <div style={{
-        background: '#1E293B',
+        background: '#FFFFFF',
         padding: '16px 20px',
         borderRadius: '10px',
-        border: '1px solid #334155',
+        border: '1px solid #E2E8F0',
         marginBottom: '24px',
         display: 'flex',
         gap: '16px',
@@ -353,13 +353,11 @@ export default function AdminFishPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{
               width: '100%',
-              background: '#0F172A',
-              border: '1px solid #334155',
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
               borderRadius: '6px',
               padding: '10px 14px',
-              color: '#F8FAFC',
-              fontSize: '13px',
-              boxSizing: 'border-box',
+              color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
             }}
           />
         </div>
@@ -368,11 +366,11 @@ export default function AdminFishPage() {
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #334155',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
             borderRadius: '6px',
             padding: '10px 14px',
-            color: '#F8FAFC',
+            color: '#0F2C59',
             fontSize: '13px',
           }}
         >
@@ -386,11 +384,11 @@ export default function AdminFishPage() {
           value={freshnessFilter}
           onChange={(e) => setFreshnessFilter(e.target.value)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #334155',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
             borderRadius: '6px',
             padding: '10px 14px',
-            color: '#F8FAFC',
+            color: '#0F2C59',
             fontSize: '13px',
           }}
         >
@@ -405,11 +403,11 @@ export default function AdminFishPage() {
           value={eligibilityFilter}
           onChange={(e) => setEligibilityFilter(e.target.value)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #334155',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
             borderRadius: '6px',
             padding: '10px 14px',
-            color: '#F8FAFC',
+            color: '#0F2C59',
             fontSize: '13px',
           }}
         >
@@ -421,10 +419,10 @@ export default function AdminFishPage() {
       </div>
 
       {/* Main Fish Table */}
-      <div style={{ background: '#1E293B', borderRadius: '10px', border: '1px solid #334155', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
-            <tr style={{ background: '#0F172A', borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Fish Variety</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Category</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Unit Price</th>
@@ -438,13 +436,13 @@ export default function AdminFishPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="8" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   Loading fish catalog...
                 </td>
               </tr>
             ) : filteredList.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ padding: '36px', textAlign: 'center', color: '#94A3B8' }}>
+                <td colSpan="8" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                   No fish items match the specified filters.
                 </td>
               </tr>
@@ -460,7 +458,7 @@ export default function AdminFishPage() {
                     : '#EF4444';
 
                 return (
-                  <tr key={f.id} style={{ borderBottom: '1px solid #334155' }}>
+                  <tr key={f.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                     <td style={{ padding: '14px 18px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         {f.image_url ? (
@@ -474,17 +472,17 @@ export default function AdminFishPage() {
                             width: '38px',
                             height: '38px',
                             borderRadius: '6px',
-                            background: '#0F172A',
+                            background: '#F8FAFC',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontSize: '18px',
                           }}>
-                            🐟
+
                           </div>
                         )}
                         <div>
-                          <div style={{ fontWeight: '600', color: '#F8FAFC' }}>{f.name}</div>
+                          <div style={{ fontWeight: '600', color: '#0F2C59' }}>{f.name}</div>
                           {f.description && (
                             <div style={{ fontSize: '11px', color: '#64748B', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {f.description}
@@ -494,24 +492,24 @@ export default function AdminFishPage() {
                       </div>
                     </td>
 
-                    <td style={{ padding: '14px 18px', color: '#CBD5E1' }}>
+                    <td style={{ padding: '14px 18px', color: '#425B73' }}>
                       <span style={{
-                        background: '#0F172A',
+                        background: '#F8FAFC',
                         padding: '3px 8px',
                         borderRadius: '4px',
-                        border: '1px solid #334155',
+                        border: '1px solid #E2E8F0',
                         fontSize: '12px'
                       }}>
                         {f.category_name || 'Unassigned'}
                       </span>
                     </td>
 
-                    <td style={{ padding: '14px 18px', fontWeight: '600', color: '#38BDF8' }}>
+                    <td style={{ padding: '14px 18px', fontWeight: '600', color: '#1E56A0' }}>
                       ₹{Number(f.unit_price).toFixed(2)} / kg
                     </td>
 
                     <td style={{ padding: '14px 18px' }}>
-                      <div style={{ fontWeight: '600', color: '#F8FAFC' }}>
+                      <div style={{ fontWeight: '600', color: '#0F2C59' }}>
                         {Number(f.available_quantity || 0).toFixed(1)} kg
                       </div>
                       <div style={{ fontSize: '11px', color: '#64748B' }}>
@@ -541,8 +539,8 @@ export default function AdminFishPage() {
                       <button
                         onClick={() => handleQuickToggle(f, 'online_bookable')}
                         style={{
-                          background: f.online_bookable ? '#064E3B' : '#334155',
-                          border: `1px solid ${f.online_bookable ? '#10B981' : '#475569'}`,
+                          background: f.online_bookable ? '#064E3B' : '#E2E8F0',
+                          border: `1px solid ${f.online_bookable ? '#10B981' : '#CBD5E1'}`,
                           color: f.online_bookable ? '#6EE7B7' : '#94A3B8',
                           padding: '4px 10px',
                           borderRadius: '12px',
@@ -559,8 +557,8 @@ export default function AdminFishPage() {
                       <button
                         onClick={() => handleQuickToggle(f, 'physical_available')}
                         style={{
-                          background: f.physical_available ? '#064E3B' : '#334155',
-                          border: `1px solid ${f.physical_available ? '#10B981' : '#475569'}`,
+                          background: f.physical_available ? '#064E3B' : '#E2E8F0',
+                          border: `1px solid ${f.physical_available ? '#10B981' : '#CBD5E1'}`,
                           color: f.physical_available ? '#6EE7B7' : '#94A3B8',
                           padding: '4px 10px',
                           borderRadius: '12px',
@@ -578,9 +576,9 @@ export default function AdminFishPage() {
                         <button
                           onClick={() => openEditModal(f)}
                           style={{
-                            background: '#334155',
+                            background: '#F1F5F9',
                             border: 'none',
-                            color: '#F8FAFC',
+                            color: '#0F2C59',
                             padding: '6px 12px',
                             borderRadius: '6px',
                             fontSize: '12px',
@@ -618,7 +616,7 @@ export default function AdminFishPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -627,8 +625,8 @@ export default function AdminFishPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             width: '100%',
             maxWidth: '560px',
@@ -641,7 +639,7 @@ export default function AdminFishPage() {
               </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '18px', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -650,7 +648,7 @@ export default function AdminFishPage() {
             <form onSubmit={handleSaveFish}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Fish Variety Name *
                   </label>
                   <input
@@ -661,19 +659,17 @@ export default function AdminFishPage() {
                     placeholder="e.g. Rohu Fresh Catch"
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '8px 12px',
-                      color: '#F8FAFC',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
+                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                     }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Category *
                   </label>
                   <select
@@ -682,13 +678,11 @@ export default function AdminFishPage() {
                     onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '8px 12px',
-                      color: '#F8FAFC',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
+                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                     }}
                   >
                     <option value="">Select Category</option>
@@ -701,7 +695,7 @@ export default function AdminFishPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Unit Price (₹ per kg) *
                   </label>
                   <input
@@ -714,19 +708,17 @@ export default function AdminFishPage() {
                     placeholder="250.00"
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '8px 12px',
-                      color: '#F8FAFC',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
+                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                     }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Freshness State
                   </label>
                   <select
@@ -734,13 +726,11 @@ export default function AdminFishPage() {
                     onChange={(e) => setFormData({ ...formData, freshness_state: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       borderRadius: '6px',
                       padding: '8px 12px',
-                      color: '#F8FAFC',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
+                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                     }}
                   >
                     <option value="GREEN">GREEN (0-24h Fresh Catch)</option>
@@ -752,7 +742,7 @@ export default function AdminFishPage() {
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Image URL
                 </label>
                 <input
@@ -762,19 +752,17 @@ export default function AdminFishPage() {
                   placeholder="https://images.unsplash.com/..."
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Description & Culinary Notes
                 </label>
                 <textarea
@@ -784,20 +772,18 @@ export default function AdminFishPage() {
                   placeholder="Pond-fresh, sweet water fish, tender cuts suitable for curry."
                   style={{
                     width: '100%',
-                    background: '#0F172A',
-                    border: '1px solid #334155',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '6px',
                     padding: '8px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
+                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
                   }}
                 />
               </div>
 
               <div style={{
-                background: '#0F172A',
-                border: '1px solid #334155',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
                 borderRadius: '8px',
                 padding: '12px 14px',
                 marginBottom: '20px',
@@ -828,9 +814,9 @@ export default function AdminFishPage() {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   style={{
-                    background: '#334155',
+                    background: '#F1F5F9',
                     border: 'none',
-                    color: '#CBD5E1',
+                    color: '#425B73',
                     padding: '8px 16px',
                     borderRadius: '6px',
                     fontSize: '13px',
@@ -866,7 +852,7 @@ export default function AdminFishPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -875,7 +861,7 @@ export default function AdminFishPage() {
           padding: '20px',
         }}>
           <div style={{
-            background: '#1E293B',
+            background: '#FFFFFF',
             border: '1px solid #EF4444',
             borderRadius: '12px',
             width: '100%',
@@ -885,16 +871,16 @@ export default function AdminFishPage() {
             <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: '#FCA5A5' }}>
               Confirm Deletion: {deleteTarget.name}
             </h3>
-            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#CBD5E1', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#425B73', lineHeight: '1.5' }}>
               Are you sure you want to remove this fish from the active catalog? If bookings or transactions reference this fish, deletion will be blocked to maintain historical audit integrity.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 onClick={() => setDeleteTarget(null)}
                 style={{
-                  background: '#334155',
+                  background: '#F1F5F9',
                   border: 'none',
-                  color: '#CBD5E1',
+                  color: '#425B73',
                   padding: '8px 16px',
                   borderRadius: '6px',
                   fontSize: '13px',
