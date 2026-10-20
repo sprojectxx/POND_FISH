@@ -1,0 +1,59 @@
+/**
+ * Admin Reports CSV Export API Endpoint
+ * GET /api/v1/admin/reports/export
+ * Traceability: AP-18 — Reports & Exports Specification (Section 162 & 163)
+ */
+
+import { NextResponse } from 'next/server';
+const { authenticateAdminAsync } = require('../../../../../../lib/auth/admin-auth');
+const reportingEngine = require('../../../../../../lib/engines/reporting');
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request) {
+  try {
+    await authenticateAdminAsync(request);
+
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type') || 'revenue';
+    const period = searchParams.get('period') || 'this_month';
+    const from = searchParams.get('from') || null;
+    const to = searchParams.get('to') || null;
+
+    const { csvContent, filename } = await reportingEngine.generateCsvExport({
+      type,
+      period,
+      from,
+      to,
+    });
+
+    return new Response(csvContent, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    });
+  } catch (error) {
+    if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED') {
+      return NextResponse.json(
+        { success: false, error: { code: error.code, message: error.message || 'Admin authentication required.' } },
+        { status: 401 }
+      );
+    }
+
+    if (error.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: error.message || 'Administrative privileges required.' } },
+        { status: 403 }
+      );
+    }
+
+    console.error('[API ERROR] GET /api/v1/admin/reports/export:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'EXPORT_FAILED', message: error.message } },
+      { status: 500 }
+    );
+  }
+}

@@ -1,0 +1,1600 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+
+/* PondFish Public Storefront Coastal Theme (Ported from pf) */
+
+:root {
+  --pf-ocean-bg: #f7fcff;
+  --pf-ocean-surface: #f4fafc;
+  --pf-navy-deep: #0f2c59;
+  --pf-navy-card: #0F2C59;
+  --pf-blue-primary: #1e56a0;
+  --pf-blue-vibrant: #2670b7;
+  --pf-blue-light: #e8f1f5;
+  --pf-blue-accent: #93CCFF;
+  --pf-emerald: #159c57;
+  --pf-emerald-bg: #ecfdf5;
+  --pf-emerald-border: #a7f3d0;
+  --pf-slate-text: #425b73;
+  --pf-slate-muted: #64748b;
+  --pf-slate-border: #e2e8f0;
+  --pf-slate-light: #f8fafc;
+}
+
+.pf-public-page {
+  background-color: var(--pf-ocean-bg);
+  color: var(--pf-navy-deep);
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+.pf-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+@media (min-width: 640px) {
+  .pf-container {
+    padding: 0 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .pf-container {
+    padding: 0 32px;
+  }
+}
+
+/* Header */
+.pf-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.pf-header .pf-container {
+  max-width: 1440px;
+  width: 100%;
+}
+
+.pf-header-inner {
+  display: flex;
+  height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pf-logo {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.06em;
+  text-decoration: none;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.pf-logo-pond {
+  color: #0f2c59;
+}
+
+.pf-logo-fish {
+  color: #2670b7;
+}
+
+.pf-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #475569;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.pf-nav-link {
+  color: #475569;
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 6px 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.pf-nav-link:hover {
+  color: #1e56a0;
+  background-color: rgba(30, 86, 160, 0.05);
+}
+
+.pf-nav-dropdown-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pf-nav-link-dropdown {
+  gap: 4px;
+  cursor: pointer;
+}
+
+.pf-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(15, 44, 89, 0.12), 0 4px 6px -2px rgba(15, 44, 89, 0.05);
+  padding: 6px;
+  min-width: 190px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: pfFadeDown 0.15s ease-out;
+}
+
+/* Invisible bridge so mouse moving down from trigger to menu never triggers mouseleave */
+.pf-dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: transparent;
+}
+
+@keyframes pfFadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pf-dropdown-item {
+  display: block;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  border-radius: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pf-dropdown-item:hover {
+  background-color: #f1f5f9;
+  color: #1e56a0;
+}
+
+.pf-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.pf-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f2c59;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pf-pill-btn span {
+  white-space: nowrap;
+}
+
+.pf-pill-btn:hover {
+  background-color: #ffffff;
+  border-color: #1e56a0;
+  color: #1e56a0;
+  box-shadow: 0 2px 6px rgba(30, 86, 160, 0.08);
+}
+
+.pf-pill-btn-tv {
+  border-color: #bfdbfe;
+  background-color: #eff6ff;
+  color: #1e56a0;
+}
+
+.pf-pill-btn-tv:hover {
+  background-color: #dbeafe;
+}
+
+.pf-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9999px;
+  background-color: #1e56a0;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.pf-btn-primary:hover {
+  background-color: #163f78;
+}
+
+.pf-btn-app {
+  border-radius: 8px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pf-btn-app span {
+  white-space: nowrap;
+}
+
+.pf-mobile-toggle {
+  display: none !important;
+}
+
+/* Full-Bleed Hero Section (Exact pf layout) */
+.pf-hero-full {
+  position: relative;
+  overflow: hidden;
+  background-color: #f7fcff;
+  min-height: calc(100vh - 72px);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Desktop Banner Layer */
+.pf-hero-bg-desktop {
+  display: none;
+  position: absolute;
+  inset: 0;
+}
+
+@media (min-width: 640px) {
+  .pf-hero-bg-desktop {
+    display: block;
+  }
+}
+
+.pf-hero-img-desktop {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 68% bottom;
+}
+
+.pf-hero-gradient-desktop {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 68%;
+  background: linear-gradient(to right, #f7fcff 0%, #f7fcff 45%, rgba(247, 252, 255, 0.90) 60%, rgba(247, 252, 255, 0) 100%);
+}
+
+/* Mobile Banner Layer */
+.pf-hero-bg-mobile {
+  display: block;
+  position: absolute;
+  inset: 0;
+}
+
+@media (min-width: 640px) {
+  .pf-hero-bg-mobile {
+    display: none;
+  }
+}
+
+.pf-hero-img-mobile {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.pf-hero-gradient-mobile {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 61%;
+  background: linear-gradient(to bottom, #f7fcff 0%, rgba(247, 252, 255, 0.92) 75%, transparent 100%);
+}
+
+/* Content Container */
+.pf-hero-content-wrap {
+  position: relative;
+  z-index: 10;
+  margin: 0 auto;
+  max-width: 1280px;
+  min-height: calc(100vh - 72px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 16px;
+}
+
+@media (min-width: 640px) {
+  .pf-hero-content-wrap {
+    padding: 60px 40px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .pf-hero-content-wrap {
+    padding: 60px 32px;
+  }
+}
+
+.pf-hero-copy {
+  max-width: 580px;
+}
+
+.pf-hero-title {
+  font-size: 2.65rem;
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.065em;
+  color: #0f2c59;
+  margin-bottom: 0;
+}
+
+@media (min-width: 640px) {
+  .pf-hero-title {
+    font-size: 60px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .pf-hero-title {
+    font-size: 72px;
+  }
+}
+
+.pf-cyan {
+  color: #2670b7;
+}
+
+.pf-block-cyan {
+  display: block;
+  color: #2670b7;
+}
+
+.pf-hero-desc {
+  margin-top: 20px;
+  max-width: 460px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #425b73;
+}
+
+@media (min-width: 640px) {
+  .pf-hero-desc {
+    font-size: 17px;
+    line-height: 1.65;
+  }
+}
+
+.pf-hero-ctas {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+}
+
+.pf-hero-how-link {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e56a0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.pf-hero-checks {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #38536e;
+}
+
+.pf-hero-check-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pf-hero-visual {
+  position: relative;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  border: 1px solid #bfdbfe;
+  padding: 32px;
+  box-shadow: 0 10px 25px -5px rgba(30, 86, 160, 0.1);
+  text-align: center;
+}
+
+/* Live Database Pill */
+.pf-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+}
+
+.pf-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: #10b981;
+  animation: pf-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pf-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* Section Header */
+.pf-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #bcd3df;
+  padding-bottom: 20px;
+  margin-bottom: 32px;
+}
+
+.pf-eyebrow {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: #1e56a0;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.pf-section-title {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: #0f2c59;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  .pf-section-title {
+    font-size: 40px;
+  }
+}
+
+/* Carousel Controls & Navigation */
+.pf-carousel-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pf-carousel-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #1e56a0;
+  background-color: #e0f2fe;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  border: 1px solid #bfdbfe;
+  white-space: nowrap;
+}
+
+.pf-carousel-arrows {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-carousel-arrow-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #0f2c59;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(15, 44, 89, 0.08);
+}
+
+.pf-carousel-arrow-btn:hover {
+  background-color: #1e56a0;
+  color: #ffffff;
+  border-color: #1e56a0;
+  transform: translateY(-1px);
+}
+
+.pf-carousel-arrow-btn:active {
+  transform: scale(0.95);
+}
+
+/* Fish Grid */
+.pf-fish-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 24px;
+}
+
+.pf-fish-card {
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-fish-card:hover {
+  transform: translateY(-4px);
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 20px -5px rgba(30, 86, 160, 0.15);
+}
+
+.pf-fish-card-imgwrap {
+  position: relative;
+  aspect-ratio: 4/3;
+  background-color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pf-fish-card-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  border-radius: 9999px;
+  background-color: #1e56a0;
+  padding: 3px 8px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.pf-fish-card-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.pf-fish-card-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 2px;
+}
+
+.pf-fish-card-telugu {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.pf-freshness-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 9999px;
+  border: 1px solid #a7f3d0;
+  background-color: #ecfdf5;
+  color: #047857;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  width: fit-content;
+  margin-bottom: 12px;
+}
+
+.pf-fish-card-bottom {
+  margin-top: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.pf-fish-card-price {
+  font-size: 20px;
+  font-weight: 900;
+  color: #1e56a0;
+}
+
+.pf-fish-card-unit {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  margin-left: 2px;
+}
+
+.pf-btn-book {
+  border-radius: 8px;
+  background-color: #1e56a0;
+  color: #ffffff;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.pf-btn-book:hover {
+  background-color: #0f2c59;
+}
+
+/* Category Filter Tabs */
+.pf-filter-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.pf-tab-btn {
+  border-radius: 9999px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pf-tab-btn.active {
+  background-color: #1e56a0;
+  color: #ffffff;
+  border-color: #1e56a0;
+}
+
+/* Offer Tiles */
+.pf-offers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.pf-offer-card {
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-offer-imgwrap {
+  position: relative;
+  aspect-ratio: 16/9;
+  background-color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-discount-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  border-radius: 6px;
+  background-color: #dc2626;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 3px 8px;
+}
+
+.pf-seller-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border-radius: 6px;
+  background-color: #fef08a;
+  color: #854d0e;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+}
+
+/* Truck Status Card */
+.pf-truck-card {
+  border-radius: 16px;
+  border: 1px solid #bfdbfe;
+  background-color: #ffffff;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (min-width: 768px) {
+  .pf-truck-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.pf-truck-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.pf-truck-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background-color: #e8f1f5;
+  color: #1e56a0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pf-truck-telemetry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pf-truck-telemetry-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Subscription Plans */
+.pf-subs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.pf-sub-card {
+  border-radius: 20px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pf-sub-card:hover {
+  transform: translateY(-4px);
+  border-color: #1e56a0;
+  box-shadow: 0 12px 24px -6px rgba(30, 86, 160, 0.15);
+}
+
+.pf-sub-card.featured {
+  border: 2px solid #1e56a0;
+  background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%);
+  position: relative;
+}
+
+.pf-sub-featured-pill {
+  position: absolute;
+  top: -12px;
+  right: 24px;
+  background-color: #1e56a0;
+  color: #ffffff;
+  border-radius: 9999px;
+  padding: 3px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* How It Works */
+.pf-how-grid {
+  display: grid;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+@media (min-width: 768px) {
+  .pf-how-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.pf-how-step {
+  position: relative;
+  padding: 28px 24px;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+@media (min-width: 768px) {
+  .pf-how-step {
+    border-bottom: none;
+    border-right: 1px solid #cbd5e1;
+  }
+  .pf-how-step:last-child {
+    border-right: none;
+  }
+}
+
+.pf-step-number {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-size: 44px;
+  font-weight: 900;
+  color: #c7dfeb;
+  line-height: 1;
+}
+
+/* Mobile App Banner */
+.pf-app-banner {
+  border-radius: 24px;
+  background-color: #0f2c59;
+  color: #ffffff;
+  padding: 36px;
+  box-shadow: 0 15px 30px -10px rgba(15, 44, 89, 0.3);
+}
+
+/* Footer */
+.pf-footer {
+  background-color: #0f2c59;
+  color: #cbd5e1;
+  padding: 48px 0 32px;
+  margin-top: 32px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pf-footer-grid {
+  display: grid;
+  gap: 40px;
+  margin-bottom: 40px;
+}
+
+@media (min-width: 768px) {
+  .pf-footer-grid {
+    grid-template-columns: 1.3fr 0.8fr 1fr;
+  }
+}
+
+.pf-footer-link {
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 13px;
+  transition: color 0.15s ease;
+}
+
+.pf-footer-link:hover {
+  color: #ffffff;
+}
+
+/* Modal Backdrops */
+.pf-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.pf-modal-box {
+  background-color: #ffffff;
+  border-radius: 20px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ----------------------------------------------------
+ * Subscriptions Page & Modal Design System (Coastal Theme)
+ * ---------------------------------------------------- */
+.pf-subs-page {
+  padding: 24px 0 0;
+}
+
+.pf-subs-header {
+  text-align: center;
+  max-width: 820px;
+  margin: 0 auto 24px;
+}
+
+.pf-subs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #e0f2fe;
+  border: 1px solid #bae6fd;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+}
+
+.pf-subs-title {
+  font-size: 38px;
+  font-weight: 900;
+  color: #0f2c59;
+  letter-spacing: -0.04em;
+  margin-bottom: 12px;
+  line-height: 1.15;
+}
+
+.pf-subs-subtitle {
+  font-size: 15px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+/* Callout Banner */
+.pf-subs-banner {
+  background: linear-gradient(135deg, #e8f4fc 0%, #f0fdf4 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 20px;
+  padding: 24px 28px;
+  margin-bottom: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  box-shadow: 0 10px 25px -5px rgba(30, 86, 160, 0.05);
+}
+
+.pf-subs-banner-copy {
+  max-width: 620px;
+}
+
+.pf-subs-banner-eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0284c7;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+}
+
+.pf-subs-banner-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f2c59;
+  margin-bottom: 8px;
+  line-height: 1.25;
+}
+
+.pf-subs-banner-desc {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.pf-subs-banner-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pf-subs-stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  text-align: center;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(15, 44, 89, 0.04);
+}
+
+.pf-subs-stat-val {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.pf-subs-stat-val.green {
+  color: #159c57;
+}
+
+.pf-subs-stat-val.blue {
+  color: #1e56a0;
+}
+
+.pf-subs-stat-lbl {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Subscription Plans Grid */
+.pf-subs-plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 28px;
+  margin-bottom: 32px;
+}
+
+.pf-plan-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 36px 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  box-shadow: 0 4px 20px -2px rgba(15, 44, 89, 0.06);
+  transition: all 0.25s ease;
+}
+
+.pf-plan-card:hover {
+  transform: translateY(-4px);
+  border-color: #93ccff;
+  box-shadow: 0 16px 32px -8px rgba(30, 86, 160, 0.12);
+}
+
+.pf-plan-card.featured {
+  border: 2px solid #1e56a0;
+  box-shadow: 0 12px 30px -4px rgba(30, 86, 160, 0.12);
+}
+
+.pf-plan-featured-badge {
+  position: absolute;
+  top: -12px;
+  right: 24px;
+  background: #1e56a0;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  letter-spacing: 0.5px;
+}
+
+.pf-plan-card-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f2c59;
+  margin-bottom: 10px;
+}
+
+.pf-plan-card-pricing {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.pf-plan-card-price {
+  font-size: 38px;
+  font-weight: 900;
+  color: #1e56a0;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.pf-plan-card-validity {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pf-plan-credit-box {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.pf-plan-credit-tag {
+  font-size: 11px;
+  font-weight: 800;
+  color: #047857;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.pf-plan-credit-amount {
+  font-size: 20px;
+  font-weight: 900;
+  color: #065f46;
+}
+
+.pf-plan-credit-desc {
+  font-size: 12px;
+  color: #047857;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.pf-plan-perks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 32px;
+  flex: 1;
+}
+
+.pf-plan-perk-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.pf-plan-cta-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: #1e56a0;
+  color: #ffffff;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 14px rgba(30, 86, 160, 0.25);
+}
+
+.pf-plan-cta-btn:hover {
+  background: #163f78;
+  transform: translateY(-1px);
+}
+
+/* Educational Box */
+.pf-subs-edu-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 30px;
+  margin-bottom: 0;
+  box-shadow: 0 4px 20px -2px rgba(15, 44, 89, 0.05);
+}
+
+.pf-subs-edu-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f2c59;
+  margin-bottom: 24px;
+}
+
+.pf-subs-edu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.pf-subs-edu-item {
+  background: #f8fafc;
+  padding: 24px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+}
+
+.pf-subs-edu-item-icon {
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+
+.pf-subs-edu-item-heading {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f2c59;
+  margin-bottom: 8px;
+}
+
+.pf-subs-edu-item-text {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+/* Modal in Coastal Light Theme */
+.pf-subs-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 44, 89, 0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.pf-subs-modal-dialog {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  max-width: 520px;
+  width: 100%;
+  padding: 36px 32px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 25px 50px -12px rgba(15, 44, 89, 0.3);
+}
+
+.pf-subs-modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #f1f5f9;
+  border: none;
+  color: #64748b;
+  font-size: 16px;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.pf-subs-modal-close:hover {
+  background: #e2e8f0;
+  color: #0f2c59;
+}
+
+/* Mobile Hamburger Button */
+.pf-mobile-hamburger {
+  display: none;
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 8px;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.pf-mobile-hamburger:hover {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* Mobile Drawer Backdrop & Drawer */
+/* Mobile Drawer Backdrop & Drawer */
+.pf-mobile-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 44, 89, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 99999;
+  display: flex;
+  justify-content: flex-end;
+  animation: pfFadeIn 0.2s ease-out;
+}
+
+.pf-mobile-menu-drawer {
+  width: 82%;
+  max-width: 320px;
+  height: 100vh;
+  min-height: 100vh;
+  background: #ffffff;
+  box-shadow: -8px 0 32px rgba(15, 44, 89, 0.25);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 18px;
+  overflow-y: auto;
+  z-index: 100000;
+  animation: pfSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pfFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pfSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.pf-mobile-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pf-mobile-close-btn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pf-mobile-close-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.pf-mobile-nav-list {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 0;
+  gap: 4px;
+  flex: 1;
+}
+
+.pf-mobile-nav-item {
+  display: block;
+  padding: 11px 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f2c59;
+  text-decoration: none;
+  border-radius: 10px;
+  transition: all 0.15s ease;
+}
+
+.pf-mobile-nav-item:hover,
+.pf-mobile-nav-item:active {
+  background-color: #f0f7ff;
+  color: #1e56a0;
+  padding-left: 18px;
+}
+
+.pf-mobile-subnav {
+  display: flex;
+  flex-direction: column;
+  padding-left: 16px;
+  margin-top: -2px;
+  margin-bottom: 6px;
+  gap: 2px;
+}
+
+.pf-mobile-sublink {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: color 0.15s ease;
+}
+
+.pf-mobile-sublink:hover {
+  color: #1e56a0;
+}
+
+.pf-mobile-menu-footer {
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ==========================================================================
+   Mobile 2-in-one-row Downward Vertical Grid Experience
+   ========================================================================== */
+@media (max-width: 900px) {
+  /* Hide desktop navbar and show hamburger */
+  .pf-nav-links,
+  .pf-header-actions {
+    display: none !important;
+  }
+
+  .pf-mobile-hamburger {
+    display: inline-flex !important;
+  }
+
+  /* 2 in one row downward vertical grid - NO horizontal scrolling */
+  .pf-fish-grid,
+  .pf-offers-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    overflow-x: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .pf-fish-card,
+  .pf-offer-card {
+    flex: none !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    box-shadow: 0 1px 4px rgba(15, 44, 89, 0.06) !important;
+    border-radius: 12px !important;
+  }
+
+  .pf-fish-card-imgwrap {
+    height: 120px !important;
+    aspect-ratio: auto !important;
+  }
+
+  .pf-fish-card-tag {
+    font-size: 9px !important;
+    padding: 3px 6px !important;
+    top: 6px !important;
+    left: 6px !important;
+  }
+
+  .pf-fish-card-body {
+    padding: 10px 8px 12px !important;
+    gap: 4px !important;
+  }
+
+  .pf-fish-card-name {
+    font-size: 13px !important;
+    line-height: 1.25 !important;
+  }
+
+  .pf-fish-card-telugu {
+    font-size: 11px !important;
+  }
+
+  .pf-freshness-pill {
+    font-size: 9px !important;
+    padding: 3px 6px !important;
+  }
+
+  .pf-fish-card-bottom {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+    margin-top: 4px !important;
+  }
+
+  .pf-fish-card-price {
+    font-size: 15px !important;
+  }
+
+  .pf-fish-card-unit {
+    font-size: 10px !important;
+  }
+
+  .pf-btn-book {
+    width: 100% !important;
+    text-align: center !important;
+    justify-content: center !important;
+    padding: 7px 8px !important;
+    font-size: 11.5px !important;
+  }
+
+  /* Hide carousel arrow controls since it's a downward vertical grid */
+  .pf-carousel-arrows {
+    display: none !important;
+  }
+
+  /* Category tabs horizontal swipe */
+  .pf-filter-tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 12px;
+    gap: 8px;
+    scrollbar-width: none;
+  }
+
+  .pf-filter-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pf-tab-btn {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  .pf-section-head {
+    align-items: center;
+    gap: 12px;
+  }
+
+  .pf-carousel-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
