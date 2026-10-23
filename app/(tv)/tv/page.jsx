@@ -135,8 +135,8 @@ export default function TVPortalPage() {
       if (json.success && Array.isArray(json.data?.transactions)) {
         const fetched = json.data.transactions;
         setTransactions(fetched);
-        // Track seen IDs for deduplication
-        fetched.forEach((tx) => seenTxnIdsRef.current.add(tx.id));
+        // Track seen IDs for deduplication - reconcile state on hydration and reconnect
+        seenTxnIdsRef.current = new Set(fetched.map((tx) => tx.id));
       }
     } catch (err) {
       console.warn('[TV PORTAL] Hydration error:', err.message);
@@ -145,10 +145,10 @@ export default function TVPortalPage() {
     }
   }, []);
 
-  // Handle new incoming transaction with deduplication and highlight
+  // Handle new incoming transaction with deduplication, structural validation and highlight
   const handleIncomingTransaction = useCallback(
     (newTx) => {
-      if (!newTx || !newTx.id) return;
+      if (!newTx || !newTx.id || !newTx.transactionNumber) return;
 
       // Strict deduplication: ignore if already displayed
       if (seenTxnIdsRef.current.has(newTx.id)) {
@@ -157,8 +157,14 @@ export default function TVPortalPage() {
 
       seenTxnIdsRef.current.add(newTx.id);
 
+      // Sanitize paidAmount
+      const sanitizedTx = {
+        ...newTx,
+        paidAmount: Math.max(0, Math.round(Number(newTx.paidAmount) || 0)),
+      };
+
       // Prepend new transaction
-      setTransactions((prev) => [newTx, ...prev]);
+      setTransactions((prev) => [sanitizedTx, ...prev]);
 
       // Add highlight state
       setNewTxnIds((prev) => new Set(prev).add(newTx.id));
