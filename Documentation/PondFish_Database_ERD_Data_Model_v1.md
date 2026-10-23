@@ -456,17 +456,19 @@ The authoritative explanation comes from ledger tables.
 
 Every monetary subscription change is recorded.
 
-  Field             Type
-  ----------------- -----------
-  id                UUID
-  subscription_id   UUID
-  entry_type        ENUM
-  amount            DECIMAL
-  balance_after     DECIMAL
-  reference_type    VARCHAR
-  reference_id      UUID
-  description       TEXT
-  created_at        TIMESTAMP
+  Field                 Type
+  --------------------- -----------
+  id                    UUID PRIMARY KEY
+  subscription_id       UUID NOT NULL (FK -> customer_subscriptions.id)
+  transaction_id        UUID nullable (FK -> transactions.id)
+  booking_id            UUID nullable (FK -> bookings.id)
+  type                  ENUM (CreditLedgerType)
+  amount                DECIMAL
+  resulting_balance     DECIMAL
+  created_at            TIMESTAMP
+
+*Note on Schema Harmonization (Phase 2 Integrity Gate):*
+The deployed PostgreSQL schema designates ledger entries using `type` (CreditLedgerType enum) and the balance after adjustment via `resulting_balance`.
 
 Entry types:
 
@@ -763,20 +765,20 @@ CANCELLED
 
   Field                 Type
   --------------------- ---------------
-  id                    UUID
-  transaction_id        UUID
-  booking_id            UUID nullable
-  provider              VARCHAR
-  provider_order_id     VARCHAR
-  provider_payment_id   VARCHAR
+  id                    UUID PRIMARY KEY
+  transaction_id        UUID nullable (FK -> transactions.id)
+  booking_id            UUID nullable (FK -> bookings.id)
+  subscription_id       UUID nullable (FK -> customer_subscriptions.id, Migration 0019)
+  razorpay_order_id     TEXT UNIQUE
+  razorpay_payment_id   TEXT UNIQUE nullable
+  razorpay_signature    TEXT nullable
   amount                DECIMAL
-  gateway_fee           DECIMAL
-  gateway_gst           DECIMAL
-  status                ENUM
-  payment_method        ENUM
-  paid_at               TIMESTAMP
+  method                TEXT (RAZORPAY, CASH)
+  status                TEXT (CREATED, PENDING, SUCCESS, FAILED, REFUNDED)
   created_at            TIMESTAMP
-  updated_at            TIMESTAMP
+
+*Note on Schema Harmonization (Phase 2 Integrity Gate):*
+The deployed PostgreSQL database uses provider columns `razorpay_order_id`, `razorpay_payment_id`, and `razorpay_signature`. Migration `0019_payments_subscription_id.sql` establishes `subscription_id UUID REFERENCES customer_subscriptions(id)` to deterministically resolve subscription payment replays without heuristic ambiguity.
 
 Payment status:
 

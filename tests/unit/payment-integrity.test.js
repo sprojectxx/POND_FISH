@@ -469,11 +469,8 @@ function projectColumns(sql, row) {
         return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
       }
       if (sql.includes('FROM payments')) {
-        return {
-          rows: [
-            { id: 'pay-1', razorpay_payment_id: 'pay_same_1', razorpay_order_id: 'order_same_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-same-1', booking_id: null, transaction_id: null, created_at: now },
-          ],
-        };
+        const stored = { id: 'pay-1', razorpay_payment_id: 'pay_same_1', razorpay_order_id: 'order_same_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-same-1', booking_id: null, transaction_id: null, created_at: now };
+        return { rows: [projectColumns(sql, stored)] };
       }
       if (sql.includes('FROM customer_subscriptions')) {
         return {
@@ -496,6 +493,7 @@ function projectColumns(sql, row) {
       assert.strictEqual(result.subscription.id, 'sub-same-1');
       assert.strictEqual(result.subscription.customer_id, 'cust-legit');
       assert.strictEqual(result.payment.id, 'pay-1');
+      assert.strictEqual(result.payment.subscription_id, 'sub-same-1');
 
       // Zero writes to customer_subscriptions or subscription_credit_ledger
       const subWrites = executedWrites.filter(s => s.includes('customer_subscriptions') || s.includes('subscription_credit_ledger'));
@@ -509,11 +507,8 @@ function projectColumns(sql, row) {
         return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
       }
       if (sql.includes('FROM payments')) {
-        return {
-          rows: [
-            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-victim-1', booking_id: null, transaction_id: null, created_at: new Date() },
-          ],
-        };
+        const stored = { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-victim-1', booking_id: null, transaction_id: null, created_at: new Date() };
+        return { rows: [projectColumns(sql, stored)] };
       }
       if (sql.includes('FROM customer_subscriptions')) {
         // Linked subscription belongs to cust-VICTIM, not cust-ATTACKER
@@ -549,11 +544,8 @@ function projectColumns(sql, row) {
         return { rows: [{ id: 'plan-silver', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
       }
       if (sql.includes('FROM payments')) {
-        return {
-          rows: [
-            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-gold-1', booking_id: null, transaction_id: null, created_at: new Date() },
-          ],
-        };
+        const stored = { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-gold-1', booking_id: null, transaction_id: null, created_at: new Date() };
+        return { rows: [projectColumns(sql, stored)] };
       }
       if (sql.includes('FROM customer_subscriptions')) {
         // Linked subscription was created for plan-gold, not requested plan-silver
@@ -590,21 +582,18 @@ function projectColumns(sql, row) {
         return { rows: [{ id: 'plan-gold', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
       }
       if (sql.includes('FROM payments')) {
-        return {
-          rows: [
-            {
-              id: 'pay-purchase-2',
-              razorpay_payment_id: 'pay_rzp_2',
-              razorpay_order_id: 'order_rzp_2',
-              amount: 500,
-              status: 'SUCCESS',
-              subscription_id: 'sub-purchase-2', // Deterministically linked to Sub B
-              booking_id: null,
-              transaction_id: null,
-              created_at: new Date(),
-            },
-          ],
+        const stored = {
+          id: 'pay-purchase-2',
+          razorpay_payment_id: 'pay_rzp_2',
+          razorpay_order_id: 'order_rzp_2',
+          amount: 500,
+          status: 'SUCCESS',
+          subscription_id: 'sub-purchase-2', // Deterministically linked to Sub B
+          booking_id: null,
+          transaction_id: null,
+          created_at: new Date(),
         };
+        return { rows: [projectColumns(sql, stored)] };
       }
       if (sql.includes('FROM customer_subscriptions')) {
         // Query must be by specific subscription ID, returning Sub B
@@ -639,22 +628,18 @@ function projectColumns(sql, row) {
         return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
       }
       if (sql.includes('FROM payments')) {
-        return {
-          rows: [
-            // Payment exists and has SUCCESS status, but lacks any deterministic link to a subscription
-            {
-              id: 'pay-unprovable',
-              razorpay_payment_id: 'pay_unprovable_1',
-              razorpay_order_id: 'order_unprovable_1',
-              amount: 500,
-              status: 'SUCCESS',
-              subscription_id: null,
-              booking_id: null,
-              transaction_id: null,
-              created_at: new Date(),
-            },
-          ],
+        const stored = {
+          id: 'pay-unprovable',
+          razorpay_payment_id: 'pay_unprovable_1',
+          razorpay_order_id: 'order_unprovable_1',
+          amount: 500,
+          status: 'SUCCESS',
+          subscription_id: null,
+          booking_id: null,
+          transaction_id: null,
+          created_at: new Date(),
         };
+        return { rows: [projectColumns(sql, stored)] };
       }
       return { rows: [] };
     }, async () => {
@@ -676,8 +661,7 @@ function projectColumns(sql, row) {
     });
   });
 
-  await t.test('2.9 Query projection: when DB has valid relationship but SELECT omits column, query does not retrieve it and fails closed', async () => {
-    // Database table has a payment row containing subscription_id: 'sub-db-1'
+  await t.test('2.9 Query projection: safe replay retrieves subscription_id from DB via SELECT projection and resolves subscription', async () => {
     const dbStoredPayment = {
       id: 'pay-db-1',
       transaction_id: null,
@@ -687,7 +671,7 @@ function projectColumns(sql, row) {
       amount: 500,
       method: 'RAZORPAY',
       status: 'SUCCESS',
-      subscription_id: 'sub-db-1', // Present in DB table, but will the query retrieve it?
+      subscription_id: 'sub-db-1', // Present in DB table, and retrieved by SELECT query
       created_at: new Date(),
     };
 
@@ -698,7 +682,8 @@ function projectColumns(sql, row) {
       if (sql.includes('FROM payments')) {
         // Enforce actual query shape: project only columns present in the SQL SELECT clause
         const projected = projectColumns(sql, dbStoredPayment);
-        // Notice: because the verified schema query does NOT select subscription_id, projected.subscription_id is undefined!
+        // Assert that subscription_id was selected by the production SQL query
+        assert.strictEqual(projected.subscription_id, 'sub-db-1', 'SELECT query must project subscription_id');
         return { rows: [projected] };
       }
       if (sql.includes('FROM customer_subscriptions')) {
@@ -710,23 +695,129 @@ function projectColumns(sql, row) {
       }
       return { rows: [] };
     }, async () => {
-      // Because the production query on the verified schema does not retrieve subscription_id,
-      // it cannot prove the relationship and must fail closed rather than guessing.
-      await assert.rejects(
-        async () => {
-          await subscriptionRepository.activateOrRenewSubscription({
-            customerId: 'cust-1',
-            planId: 'plan-1',
-            razorpayOrderId: 'order_proj_1',
-            razorpayPaymentId: 'pay_proj_1',
-            razorpaySignature: 'sig',
-          });
-        },
-        (err) => {
-          assert.strictEqual(err.code, 'PAYMENT_SUBSCRIPTION_UNPROVABLE');
-          return true;
-        }
-      );
+      const result = await subscriptionRepository.activateOrRenewSubscription({
+        customerId: 'cust-1',
+        planId: 'plan-1',
+        razorpayOrderId: 'order_proj_1',
+        razorpayPaymentId: 'pay_proj_1',
+        razorpaySignature: 'sig',
+      });
+
+      assert.strictEqual(result.idempotentReplay, true);
+      assert.strictEqual(result.subscription.id, 'sub-db-1');
+      assert.strictEqual(result.payment.subscription_id, 'sub-db-1');
+    });
+  });
+
+  await t.test('2.10 activateOrRenewSubscription atomically records subscription_id on payments table during purchase', async () => {
+    let recordedPaymentRow = null;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        // No existing payment on first purchase
+        return { rows: [] };
+      }
+      if (sql.includes('FROM customer_subscriptions')) {
+        // No active subscription, creating first time
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO customer_subscriptions')) {
+        return {
+          rows: [
+            { id: 'sub-brand-new-123', customer_id: 'cust-1', plan_id: 'plan-1', credit_balance: 500, status: 'ACTIVE', created_at: new Date() },
+          ],
+        };
+      }
+      if (sql.includes('INSERT INTO subscription_credit_ledger')) {
+        return {
+          rows: [
+            { id: 'ledg-1', subscription_id: 'sub-brand-new-123', type: 'PURCHASE', amount: 500, resulting_balance: 500 },
+          ],
+        };
+      }
+      if (sql.includes('INSERT INTO payments')) {
+        // Check params: $1 must be subscription.id
+        assert.strictEqual(params[0], 'sub-brand-new-123', 'First parameter of payments insert must be subscription.id');
+        assert.strictEqual(params[1], 'order_new_1');
+        assert.strictEqual(params[2], 'pay_new_1');
+        recordedPaymentRow = {
+          id: 'pay-new-1',
+          subscription_id: params[0],
+          razorpay_order_id: params[1],
+          razorpay_payment_id: params[2],
+          amount: params[4],
+          status: 'SUCCESS',
+        };
+        return { rows: [recordedPaymentRow] };
+      }
+      return { rows: [] };
+    }, async () => {
+      const result = await subscriptionRepository.activateOrRenewSubscription({
+        customerId: 'cust-1',
+        planId: 'plan-1',
+        razorpayOrderId: 'order_new_1',
+        razorpayPaymentId: 'pay_new_1',
+        razorpaySignature: 'sig',
+      });
+
+      assert.strictEqual(result.subscription.id, 'sub-brand-new-123');
+      assert.strictEqual(result.payment.subscription_id, 'sub-brand-new-123');
+      assert.strictEqual(recordedPaymentRow.subscription_id, 'sub-brand-new-123');
+    });
+  });
+
+  await t.test('2.11 adminPurchaseSubscriptionAtomic atomically records subscription_id on payments table', async () => {
+    let recordedPaymentRow = null;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM customer_subscriptions')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO customer_subscriptions')) {
+        return {
+          rows: [
+            { id: 'sub-admin-cash-456', customer_id: 'cust-1', plan_id: 'plan-1', credit_balance: 500, status: 'ACTIVE', created_at: new Date() },
+          ],
+        };
+      }
+      if (sql.includes('INSERT INTO subscription_credit_ledger')) {
+        return {
+          rows: [
+            { id: 'ledg-admin-1', subscription_id: 'sub-admin-cash-456', type: 'PURCHASE', amount: 500, resulting_balance: 500 },
+          ],
+        };
+      }
+      if (sql.includes('INSERT INTO payments')) {
+        assert.strictEqual(params[0], 'sub-admin-cash-456', 'First parameter of admin payments insert must be subscription.id');
+        assert.ok(params[1].startsWith('CASH_ADMIN_'), 'Admin cash order must have authoritative CASH_ADMIN identifier');
+        recordedPaymentRow = {
+          id: 'pay-admin-cash-1',
+          subscription_id: params[0],
+          razorpay_order_id: params[1],
+          amount: params[4],
+          method: params[5],
+          status: 'SUCCESS',
+        };
+        return { rows: [recordedPaymentRow] };
+      }
+      return { rows: [] };
+    }, async () => {
+      const result = await subscriptionRepository.adminPurchaseSubscriptionAtomic({
+        customerId: 'cust-1',
+        planId: 'plan-1',
+        paymentMethod: 'CASH',
+        adminId: 'admin-1',
+      });
+
+      assert.strictEqual(result.subscription.id, 'sub-admin-cash-456');
+      assert.strictEqual(result.payment.subscription_id, 'sub-admin-cash-456');
+      assert.strictEqual(recordedPaymentRow.subscription_id, 'sub-admin-cash-456');
     });
   });
 

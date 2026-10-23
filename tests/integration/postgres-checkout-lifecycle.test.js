@@ -514,6 +514,7 @@ async function runRealPostgresIntegrationSuite() {
         id UUID PRIMARY KEY,
         booking_id UUID,
         transaction_id UUID,
+        subscription_id UUID,
         razorpay_order_id TEXT UNIQUE,
         razorpay_payment_id TEXT,
         amount NUMERIC,
