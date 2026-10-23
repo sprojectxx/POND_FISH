@@ -6,9 +6,9 @@
  */
 
 import { NextResponse } from 'next/server';
-const { verifySessionToken } = require('../../../../../../lib/engines/customer');
-const { createRazorpayOrder, isRazorpayConfigured } = require('../../../../../../lib/engines/payment');
-const { previewCheckout } = require('../../../../../../lib/engines/booking');
+const customerEngine = require('../../../../../../lib/engines/customer');
+const paymentEngine = require('../../../../../../lib/engines/payment');
+const bookingEngine = require('../../../../../../lib/engines/booking');
 const checkoutIntentRepository = require('../../../../../../lib/db/repositories/checkoutIntentRepository');
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ function authenticateRequest(request) {
   }
   const token = authHeader.substring(7).trim();
   try {
-    return verifySessionToken(token);
+    return customerEngine.verifySessionToken(token);
   } catch {
     const err = new Error('INVALID_SESSION_TOKEN');
     err.code = 'UNAUTHORIZED';
@@ -54,7 +54,7 @@ export async function POST(request) {
       notes.type = 'BILL_PURCHASE';
     } else {
       // Online Cart Booking (Slice 4)
-      preview = await previewCheckout(session.customerId);
+      preview = await bookingEngine.previewCheckout(session.customerId);
       authoritativeAmount = preview.summary.finalPayableAmount;
       notes.type = 'BOOKING';
       notes.itemCount = String(preview.items?.length || 0);
@@ -76,7 +76,7 @@ export async function POST(request) {
       );
     }
 
-    if (!isRazorpayConfigured()) {
+    if (!paymentEngine.isRazorpayConfigured()) {
       return NextResponse.json(
         {
           success: false,
@@ -91,7 +91,7 @@ export async function POST(request) {
       );
     }
 
-    const order = await createRazorpayOrder({
+    const order = await paymentEngine.createRazorpayOrder({
       amount: authoritativeAmount,
       currency: 'INR',
       receipt: `rcpt_${Date.now()}`,
@@ -102,18 +102,30 @@ export async function POST(request) {
     // Persist immutable snapshot before initiating Razorpay payment
     const orderId = order.orderId || order.id;
     if (orderId) {
-      await checkoutIntentRepository.createIntent({
-        razorpayOrderId: orderId,
-        customerId: session.customerId,
-        cartSnapshot: billId ? (body?.items || []) : (preview?.items || []),
-        subscriptionSnapshot: preview?.subscription || null,
-        feeBreakdown: preview?.summary || { finalPayableAmount: authoritativeAmount },
-        amountPaise: Math.round(authoritativeAmount * 100),
-        currency: 'INR',
-        status: 'CREATED',
-      }).catch((intentErr) => {
-        console.warn('[CHECKOUT INTENT PERSISTENCE WARNING]', intentErr.message);
-      });
+      try {
+        await checkoutIntentRepository.createIntent({
+          razorpayOrderId: orderId,
+          customerId: session.customerId,
+          cartSnapshot: billId ? (body?.items || []) : (preview?.items || []),
+          subscriptionSnapshot: preview?.subscription || null,
+          feeBreakdown: preview?.summary || { finalPayableAmount: authoritativeAmount },
+          amountPaise: Math.round(authoritativeAmount * 100),
+          currency: 'INR',
+          status: 'CREATED',
+        });
+      } catch (intentErr) {
+        console.error('[CHECKOUT INTENT PERSISTENCE ERROR]', intentErr.message);
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'CHECKOUT_INTENT_PERSISTENCE_FAILED',
+              message: 'Failed to securely persist checkout intent snapshot. Order creation cannot proceed.',
+            },
+          },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({

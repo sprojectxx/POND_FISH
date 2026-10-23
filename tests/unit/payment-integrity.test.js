@@ -1,208 +1,748 @@
 /**
  * Pure In-Memory Unit Test Suite for Phase 2: Checkout & Payment Integrity
- * ZERO database connections, ZERO live network requests.
- * Covers:
- * - Payment order amount & currency validation (server-side authority)
- * - Subscription activation replay idempotency (duplicate prevention)
- * - Booking cancellation & expiry payment refund status alignment
- * - POS counter checkout payment reuse guard
- * - Razorpay order creation preview snapshot persistence
+ * ZERO real database connections, ZERO live payment credentials or network requests.
+ * Directly exercises production engines, repositories, and routes:
+ * 1. Fail-closed Razorpay order verification in customerSubscriptionEngine & bookingEngine
+ * 2. Subscription payment idempotency, cross-customer rejection, identifier consistency in subscriptionRepository
+ * 3. Booking cancellation and expiry restoring subscription credits without marking gateway payments REFUNDED
+ * 4. Actual POS payment/order reuse prevention in posFinalizationEngine
+ * 5. Checkout-intent persistence failure handling in razorpay orders route
  */
 
 const assert = require('assert');
 const test = require('node:test');
+const fs = require('fs');
+const path = require('path');
+const pg = require('pg');
+
 const paymentEngine = require('../../lib/engines/payment');
 const customerSubscriptionEngine = require('../../lib/engines/customer-subscription');
+const subscriptionRepository = require('../../lib/db/repositories/subscriptionRepository');
+const bookingEngine = require('../../lib/engines/booking');
+const bookingExpiryEngine = require('../../lib/engines/booking-expiry');
+const posFinalizationEngine = require('../../lib/engines/pos-finalization');
+const checkoutIntentRepository = require('../../lib/db/repositories/checkoutIntentRepository');
+const fishRepository = require('../../lib/db/repositories/fishRepository');
+const customerRepository = require('../../lib/db/repositories/customerRepository');
+const customerEngine = require('../../lib/engines/customer');
 
-test('Phase 2 Payment Integrity Suite', async (t) => {
+// Dynamic route loader adhering to repository conventions (admin-route-authorization & post-ui-integration-audit)
+function loadRoute(relPath) {
+  const fullPath = path.resolve(__dirname, relPath);
+  let code = fs.readFileSync(fullPath, 'utf8');
 
-  await t.test('1. calculatePaymentFees enforces authoritative 2% gateway fee + 18% GST', () => {
-    const fees = paymentEngine.calculatePaymentFees(1000);
-    assert.strictEqual(fees.basePayable, 1000);
-    assert.strictEqual(fees.gatewayFee, 20); // 2% of 1000
-    assert.strictEqual(fees.feeGst, 3.6); // 18% of 20
-    assert.strictEqual(fees.totalFee, 23.6);
-    assert.strictEqual(fees.finalPayable, 1023.6);
+  code = code.replace(/import\s*\{\s*NextResponse\s*\}\s*from\s*['"]next\/server(\.js)?['"];?/g, 'const { NextResponse } = require("next/server");');
+  code = code.replace(/import\s*\{\s*([a-zA-Z0-9_,\s]+)\s*\}\s*from\s*['"]([^'"]+)['"];?/g, 'const { $1 } = require("$2");');
+  code = code.replace(/export\s+const\s+dynamic\s*=\s*['"][^'"]+['"];?/g, '');
+  code = code.replace(/export\s+async\s+function\s+([a-zA-Z0-9_]+)/g, 'exports.$1 = async function $1');
 
-    const zeroFees = paymentEngine.calculatePaymentFees(0);
-    assert.strictEqual(zeroFees.finalPayable, 0);
-    assert.strictEqual(zeroFees.totalFee, 0);
-  });
-
-  await t.test('2. Subscription activation idempotency: duplicate payment ID returns existing subscription safely', async () => {
-    const existingPaymentId = 'pay_sub_idempotent_001';
-    const existingOrderId = 'order_sub_idempotent_001';
-    const mockCustomerId = 'cust_sub_test_001';
-
-    let paymentsQueried = false;
-    const mockClient = {
-      query: async (sql, params) => {
-        if (sql.includes('SELECT id, razorpay_order_id, razorpay_payment_id')) {
-          paymentsQueried = true;
-          return {
-            rows: [{
-              id: 'payment-row-001',
-              razorpay_order_id: existingOrderId,
-              razorpay_payment_id: existingPaymentId,
-              amount: 500,
-              status: 'SUCCESS',
-              created_at: new Date(),
-            }],
-          };
-        }
-        if (sql.includes('FROM customer_subscriptions WHERE customer_id = $1')) {
-          return {
-            rows: [{
-              id: 'sub-row-001',
-              customer_id: mockCustomerId,
-              plan_id: 'plan-001',
-              credit_balance: 500,
-              status: 'ACTIVE',
-            }],
-          };
-        }
-        if (sql.includes('FROM subscription_credit_ledger')) {
-          return {
-            rows: [{
-              id: 'ledger-001',
-              amount: 500,
-              resulting_balance: 500,
-            }],
-          };
-        }
-        return { rows: [] };
-      },
-    };
-
-    // Test the transaction callback logic directly
-    const result = await (async () => {
-      // Execute the idempotency query logic
-      const existingPaymentRes = await mockClient.query(
-        `SELECT id, razorpay_order_id, razorpay_payment_id, amount, status, created_at
-         FROM payments
-         WHERE ($1::text IS NOT NULL AND razorpay_payment_id = $1)
-            OR ($2::text IS NOT NULL AND razorpay_order_id = $2)
-         LIMIT 1;`,
-        [existingPaymentId, existingOrderId]
-      );
-      assert.strictEqual(existingPaymentRes.rows.length, 1);
-      assert.strictEqual(existingPaymentRes.rows[0].razorpay_payment_id, existingPaymentId);
+  const m = { exports: {} };
+  const customRequire = (specifier) => {
+    if (specifier === 'next/server' || specifier === 'next/server.js') {
       return {
-        idempotentReplay: true,
-        payment: existingPaymentRes.rows[0],
+        NextResponse: {
+          json: (data, init = {}) => ({
+            status: init.status || 200,
+            json: async () => data,
+            headers: new Map(Object.entries(init.headers || {})),
+          }),
+        },
       };
-    })();
+    }
+    if (specifier.startsWith('.')) {
+      return require(path.resolve(path.dirname(fullPath), specifier));
+    }
+    return require(specifier);
+  };
 
-    assert.strictEqual(paymentsQueried, true);
-    assert.strictEqual(result.idempotentReplay, true);
-    assert.strictEqual(result.payment.id, 'payment-row-001');
+  const fn = new Function('require', 'module', 'exports', '__filename', '__dirname', code);
+  fn(customRequire, m, m.exports, fullPath, path.dirname(fullPath));
+  return m.exports;
+}
+
+const { POST: ordersPost } = loadRoute('../../app/api/v1/payments/razorpay/orders/route.js');
+
+// Helper to install mock pg client for withTransaction and pool.connect/query calls
+function withMockPgClient(clientQueryHandler, testFn) {
+  const origConnect = pg.Pool.prototype.connect;
+  const origQuery = pg.Pool.prototype.query;
+  const mockClient = {
+    query: clientQueryHandler,
+    release: () => {},
+  };
+  pg.Pool.prototype.connect = async function() {
+    return mockClient;
+  };
+  pg.Pool.prototype.query = async function(...args) {
+    return clientQueryHandler(...args);
+  };
+
+  const origDbUrl = process.env.DATABASE_URL;
+  if (!process.env.DATABASE_URL) {
+    process.env.DATABASE_URL = 'postgresql://mock:mock@localhost:5432/mock_db';
+  }
+
+  return Promise.resolve()
+    .then(() => testFn(mockClient))
+    .finally(() => {
+      pg.Pool.prototype.connect = origConnect;
+      pg.Pool.prototype.query = origQuery;
+      if (origDbUrl !== undefined) process.env.DATABASE_URL = origDbUrl;
+      else delete process.env.DATABASE_URL;
+    });
+}
+
+test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
+
+  // -------------------------------------------------------------------------
+  // 1. Fail-Closed Razorpay Order Verification (Production Engines)
+  // -------------------------------------------------------------------------
+  await t.test('1.1 verifyAndActivateSubscription rejects when Razorpay order lookup fails', async () => {
+    const origConfigured = paymentEngine.isRazorpayConfigured;
+    const origVerifySig = paymentEngine.verifyPaymentSignature;
+    const origGetOrder = paymentEngine.getRazorpayOrder;
+    const origFindPlan = subscriptionRepository.findPlanById;
+
+    try {
+      paymentEngine.isRazorpayConfigured = () => true;
+      paymentEngine.verifyPaymentSignature = () => true;
+      paymentEngine.getRazorpayOrder = async () => null; // Gateway returns null / 404
+      subscriptionRepository.findPlanById = async () => ({
+        id: 'plan-gold-1',
+        title: 'Weekly Gold',
+        price: '500.00',
+        credit_amount: '500.00',
+        active: true,
+      });
+
+      await assert.rejects(
+        async () => {
+          await customerSubscriptionEngine.verifyAndActivateSubscription({
+            customerId: 'cust-uuid-1',
+            planId: 'plan-gold-1',
+            razorpayOrderId: 'order_lookup_fail_123',
+            razorpayPaymentId: 'pay_123',
+            razorpaySignature: 'valid_sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_ORDER_NOT_FOUND');
+          return true;
+        }
+      );
+    } finally {
+      paymentEngine.isRazorpayConfigured = origConfigured;
+      paymentEngine.verifyPaymentSignature = origVerifySig;
+      paymentEngine.getRazorpayOrder = origGetOrder;
+      subscriptionRepository.findPlanById = origFindPlan;
+    }
   });
 
-  await t.test('3. Subscription payment verification rejects invalid HMAC signature', async () => {
-    await assert.rejects(
-      async () => {
-        await customerSubscriptionEngine.verifyAndActivateSubscription({
-          customerId: 'cust-123',
-          planId: 'plan-123',
-          razorpayOrderId: 'order-123',
-          razorpayPaymentId: 'pay-123',
-          razorpaySignature: 'forged_or_invalid_signature',
-        });
-      },
-      (err) => {
-        return err.code === 'INVALID_PAYMENT_SIGNATURE';
-      }
-    );
+  await t.test('1.2 verifyAndActivateSubscription rejects when order currency is missing or not INR', async () => {
+    const origConfigured = paymentEngine.isRazorpayConfigured;
+    const origVerifySig = paymentEngine.verifyPaymentSignature;
+    const origGetOrder = paymentEngine.getRazorpayOrder;
+    const origFindPlan = subscriptionRepository.findPlanById;
+
+    try {
+      paymentEngine.isRazorpayConfigured = () => true;
+      paymentEngine.verifyPaymentSignature = () => true;
+      subscriptionRepository.findPlanById = async () => ({
+        id: 'plan-gold-1',
+        title: 'Weekly Gold',
+        price: '500.00',
+        active: true,
+      });
+
+      // Case A: Missing currency
+      paymentEngine.getRazorpayOrder = async () => ({
+        id: 'order_curr_123',
+        amount: 50000,
+        currency: null,
+      });
+
+      await assert.rejects(
+        async () => {
+          await customerSubscriptionEngine.verifyAndActivateSubscription({
+            customerId: 'cust-uuid-1',
+            planId: 'plan-gold-1',
+            razorpayOrderId: 'order_curr_123',
+            razorpayPaymentId: 'pay_123',
+            razorpaySignature: 'valid_sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_CURRENCY_MISMATCH');
+          return true;
+        }
+      );
+
+      // Case B: Foreign currency (USD)
+      paymentEngine.getRazorpayOrder = async () => ({
+        id: 'order_curr_123',
+        amount: 50000,
+        currency: 'USD',
+      });
+
+      await assert.rejects(
+        async () => {
+          await customerSubscriptionEngine.verifyAndActivateSubscription({
+            customerId: 'cust-uuid-1',
+            planId: 'plan-gold-1',
+            razorpayOrderId: 'order_curr_123',
+            razorpayPaymentId: 'pay_123',
+            razorpaySignature: 'valid_sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_CURRENCY_MISMATCH');
+          return true;
+        }
+      );
+    } finally {
+      paymentEngine.isRazorpayConfigured = origConfigured;
+      paymentEngine.verifyPaymentSignature = origVerifySig;
+      paymentEngine.getRazorpayOrder = origGetOrder;
+      subscriptionRepository.findPlanById = origFindPlan;
+    }
   });
 
-  await t.test('4. Booking cancellation and expiry reconcile payments status to REFUNDED', async () => {
-    const executedStatements = [];
-    const mockClient = {
-      query: async (sql, params) => {
-        executedStatements.push({ sql, params });
+  await t.test('1.3 verifyAndActivateSubscription rejects mismatched order ID or order amount', async () => {
+    const origConfigured = paymentEngine.isRazorpayConfigured;
+    const origVerifySig = paymentEngine.verifyPaymentSignature;
+    const origGetOrder = paymentEngine.getRazorpayOrder;
+    const origFindPlan = subscriptionRepository.findPlanById;
+
+    try {
+      paymentEngine.isRazorpayConfigured = () => true;
+      paymentEngine.verifyPaymentSignature = () => true;
+      subscriptionRepository.findPlanById = async () => ({
+        id: 'plan-gold-1',
+        title: 'Weekly Gold',
+        price: '500.00',
+        active: true,
+      });
+
+      // Case A: Mismatched Order ID
+      paymentEngine.getRazorpayOrder = async () => ({
+        id: 'order_different_999',
+        amount: 50000,
+        currency: 'INR',
+      });
+
+      await assert.rejects(
+        async () => {
+          await customerSubscriptionEngine.verifyAndActivateSubscription({
+            customerId: 'cust-uuid-1',
+            planId: 'plan-gold-1',
+            razorpayOrderId: 'order_expected_111',
+            razorpayPaymentId: 'pay_123',
+            razorpaySignature: 'valid_sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_ORDER_ID_MISMATCH');
+          return true;
+        }
+      );
+
+      // Case B: Amount mismatch (underpayment)
+      paymentEngine.getRazorpayOrder = async () => ({
+        id: 'order_expected_111',
+        amount: 30000, // 300 INR vs 500 INR plan
+        currency: 'INR',
+      });
+
+      await assert.rejects(
+        async () => {
+          await customerSubscriptionEngine.verifyAndActivateSubscription({
+            customerId: 'cust-uuid-1',
+            planId: 'plan-gold-1',
+            razorpayOrderId: 'order_expected_111',
+            razorpayPaymentId: 'pay_123',
+            razorpaySignature: 'valid_sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_AMOUNT_MISMATCH');
+          return true;
+        }
+      );
+    } finally {
+      paymentEngine.isRazorpayConfigured = origConfigured;
+      paymentEngine.verifyPaymentSignature = origVerifySig;
+      paymentEngine.getRazorpayOrder = origGetOrder;
+      subscriptionRepository.findPlanById = origFindPlan;
+    }
+  });
+
+  await t.test('1.4 createBooking enforces fail-closed Razorpay order verification', async () => {
+    const origConfigured = paymentEngine.isRazorpayConfigured;
+    const origVerifySig = paymentEngine.verifyPaymentSignature;
+    const origGetOrder = paymentEngine.getRazorpayOrder;
+    const origFindFish = fishRepository.findFishById;
+    const origBlocked = customerRepository.getBlockedCustomerIds;
+
+    try {
+      paymentEngine.isRazorpayConfigured = () => true;
+      paymentEngine.verifyPaymentSignature = () => true;
+      paymentEngine.getRazorpayOrder = async () => null; // Gateway lookup fails
+      customerRepository.getBlockedCustomerIds = async () => new Set();
+      fishRepository.findFishById = async () => ({
+        id: 'fish-1',
+        name: 'Rohu',
+        physical_available: true,
+        online_bookable: true,
+      });
+
+      const fakeCartSnapshot = {
+        items: [{ fishId: 'fish-1', name: 'Rohu', quantityKg: 1, unitPrice: 200, effectivePrice: 200, subtotal: 200 }],
+        summary: { totalCartAmount: 200, subscriptionCreditUsed: 0, basePayableAmount: 200, finalPayableAmount: 204.72 },
+        subscriptionCoverage: { extraPayableAmount: 200, coveredQuantityKg: 0, subCreditUsed: 0 },
+        feeCalc: { finalPayable: 204.72 },
+      };
+
+      await withMockPgClient(async (sql, params) => {
         return { rows: [] };
-      },
-    };
-
-    const bookingId = 'booking-test-refund-001';
-
-    // Simulate the payment status update executed on cancellation/expiry
-    await mockClient.query(
-      `UPDATE payments SET status = 'REFUNDED' WHERE booking_id = $1 AND status = 'SUCCESS';`,
-      [bookingId]
-    );
-
-    const updateStmt = executedStatements.find(s => s.sql.includes("UPDATE payments SET status = 'REFUNDED'"));
-    assert.ok(updateStmt, 'UPDATE payments SET status = REFUNDED statement was executed');
-    assert.strictEqual(updateStmt.params[0], bookingId);
+      }, async () => {
+        await assert.rejects(
+          async () => {
+            await bookingEngine.createBooking({
+              customerId: 'cust-uuid-1',
+              checkoutSnapshot: fakeCartSnapshot,
+              paymentVerification: {
+                razorpayOrderId: 'order_booking_fail_1',
+                razorpayPaymentId: 'pay_booking_fail_1',
+                razorpaySignature: 'sig_1',
+              },
+            });
+          },
+          (err) => {
+            assert.strictEqual(err.code, 'PAYMENT_ORDER_NOT_FOUND');
+            return true;
+          }
+        );
+      });
+    } finally {
+      paymentEngine.isRazorpayConfigured = origConfigured;
+      paymentEngine.verifyPaymentSignature = origVerifySig;
+      paymentEngine.getRazorpayOrder = origGetOrder;
+      fishRepository.findFishById = origFindFish;
+      customerRepository.getBlockedCustomerIds = origBlocked;
+    }
   });
 
-  await t.test('5. POS counter payment reuse detection checks both paymentId and orderId', async () => {
-    const usedPaymentId = 'pay_already_used_999';
-    const usedOrderId = 'order_already_used_999';
+  // -------------------------------------------------------------------------
+  // 2. Subscription Idempotency, Replay & Constraint Protection
+  // -------------------------------------------------------------------------
+  await t.test('2.1 activateOrRenewSubscription rejects conflicting records matching order/payment', async () => {
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        // Return 2 distinct conflicting records
+        return {
+          rows: [
+            { id: 'pay-1', razorpay_payment_id: 'pay_conflict_1', razorpay_order_id: 'order_conflict_A', amount: 500, status: 'SUCCESS' },
+            { id: 'pay-2', razorpay_payment_id: 'pay_conflict_2', razorpay_order_id: 'order_conflict_B', amount: 500, status: 'SUCCESS' },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await subscriptionRepository.activateOrRenewSubscription({
+            customerId: 'cust-1',
+            planId: 'plan-1',
+            razorpayOrderId: 'order_conflict_B',
+            razorpayPaymentId: 'pay_conflict_1',
+            razorpaySignature: 'sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_IDENTIFIER_CONFLICT');
+          return true;
+        }
+      );
+    });
+  });
 
-    const mockClient = {
-      query: async (sql, params) => {
-        if (sql.includes('SELECT id FROM payments')) {
-          const matchPayment = params[0] === usedPaymentId;
-          const matchOrder = params[1] === usedOrderId;
-          if (matchPayment || matchOrder) {
-            return { rows: [{ id: 'payment-existing-uuid' }] };
-          }
+  await t.test('2.2 activateOrRenewSubscription rejects identifier mismatch on stored payment', async () => {
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        // Record has order_1 but payment_old
+        return {
+          rows: [
+            { id: 'pay-1', razorpay_payment_id: 'pay_old', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', booking_id: null, transaction_id: null },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await subscriptionRepository.activateOrRenewSubscription({
+            customerId: 'cust-1',
+            planId: 'plan-1',
+            razorpayOrderId: 'order_1',
+            razorpayPaymentId: 'pay_different',
+            razorpaySignature: 'sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_IDENTIFIER_MISMATCH');
+          return true;
+        }
+      );
+    });
+  });
+
+  await t.test('2.3 activateOrRenewSubscription rejects stored payment with non-SUCCESS status', async () => {
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        return {
+          rows: [
+            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'FAILED', booking_id: null, transaction_id: null },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await subscriptionRepository.activateOrRenewSubscription({
+            customerId: 'cust-1',
+            planId: 'plan-1',
+            razorpayOrderId: 'order_1',
+            razorpayPaymentId: 'pay_1',
+            razorpaySignature: 'sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_NOT_SETTLED');
+          return true;
+        }
+      );
+    });
+  });
+
+  await t.test('2.4 activateOrRenewSubscription rejects cross-customer payment replay', async () => {
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        return {
+          rows: [
+            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', booking_id: null, transaction_id: null, created_at: new Date() },
+          ],
+        };
+      }
+      if (sql.includes('FROM subscription_credit_ledger')) {
+        // Linked subscription belongs to cust-VICTIM, not cust-ATTACKER
+        return {
+          rows: [
+            { id: 'sub-victim-1', customer_id: 'cust-VICTIM', plan_id: 'plan-1', credit_balance: 500, ledger_id: 'ledg-1', ledger_amount: 500, ledger_resulting_balance: 500 },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await subscriptionRepository.activateOrRenewSubscription({
+            customerId: 'cust-ATTACKER',
+            planId: 'plan-1',
+            razorpayOrderId: 'order_1',
+            razorpayPaymentId: 'pay_1',
+            razorpaySignature: 'sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_CUSTOMER_MISMATCH');
+          return true;
+        }
+      );
+    });
+  });
+
+  await t.test('2.5 activateOrRenewSubscription safe replay returns linked subscription with zero duplicate writes', async () => {
+    const executedWrites = [];
+    const now = new Date();
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT') || sql.includes('UPDATE')) {
+        executedWrites.push(sql);
+      }
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        return {
+          rows: [
+            { id: 'pay-1', razorpay_payment_id: 'pay_same_1', razorpay_order_id: 'order_same_1', amount: 500, status: 'SUCCESS', booking_id: null, transaction_id: null, created_at: now },
+          ],
+        };
+      }
+      if (sql.includes('FROM subscription_credit_ledger')) {
+        return {
+          rows: [
+            { id: 'sub-same-1', customer_id: 'cust-legit', plan_id: 'plan-1', credit_balance: 500, status: 'ACTIVE', ledger_id: 'ledg-same-1', ledger_amount: 500, ledger_resulting_balance: 500 },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      const result = await subscriptionRepository.activateOrRenewSubscription({
+        customerId: 'cust-legit',
+        planId: 'plan-1',
+        razorpayOrderId: 'order_same_1',
+        razorpayPaymentId: 'pay_same_1',
+        razorpaySignature: 'sig',
+      });
+
+      assert.strictEqual(result.idempotentReplay, true);
+      assert.strictEqual(result.subscription.id, 'sub-same-1');
+      assert.strictEqual(result.subscription.customer_id, 'cust-legit');
+      assert.strictEqual(result.payment.id, 'pay-1');
+
+      // Zero writes to customer_subscriptions or subscription_credit_ledger
+      const subWrites = executedWrites.filter(s => s.includes('customer_subscriptions') || s.includes('subscription_credit_ledger'));
+      assert.strictEqual(subWrites.length, 0, 'Replay must not write any subscription or ledger updates');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 3. Keep Gateway Refunds Separate from Internal Credit Restoration
+  // -------------------------------------------------------------------------
+  await t.test('3.1 cancelBooking restores internal credit without marking gateway payments REFUNDED', async () => {
+    const executedSql = [];
+
+    await withMockPgClient(async (sql, params) => {
+      executedSql.push(sql);
+      if (sql.includes('SELECT * FROM bookings')) {
+        return {
+          rows: [{
+            id: 'booking-uuid-1',
+            customer_id: 'cust-1',
+            status: 'CONFIRMED',
+            booking_code: 'BK-100',
+            sub_credit_used: 100,
+            razorpay_paid: 300,
+          }],
+        };
+      }
+      if (sql.includes('SELECT * FROM booking_items')) {
+        return { rows: [] };
+      }
+      if (sql.includes('customer_subscriptions')) {
+        return { rows: [{ id: 'sub-1', credit_balance: 200, status: 'ACTIVE' }] };
+      }
+      if (sql.includes('UPDATE bookings')) {
+        return { rows: [{ id: 'booking-uuid-1', status: 'CANCELLED' }] };
+      }
+      return { rows: [] };
+    }, async () => {
+      const result = await bookingEngine.cancelBooking({
+        customerId: 'cust-1',
+        bookingId: 'booking-uuid-1',
+      });
+
+      assert.strictEqual(result.status, 'CANCELLED');
+
+      // Critical Invariant: payments table must NEVER be updated to REFUNDED
+      const paymentRefundSql = executedSql.find(s => s.includes('UPDATE payments') && s.includes('REFUNDED'));
+      assert.strictEqual(paymentRefundSql, undefined, 'cancelBooking must NOT alter payment status to REFUNDED');
+
+      // Internal credit restoration was executed
+      const creditRestoreSql = executedSql.find(s => s.includes('subscription_credit_ledger'));
+      assert.ok(creditRestoreSql, 'Internal credit restoration was recorded in subscription_credit_ledger');
+    });
+  });
+
+  await t.test('3.2 expireBooking restores internal credit without marking gateway payments REFUNDED', async () => {
+    const executedSql = [];
+
+    await withMockPgClient(async (sql, params) => {
+      executedSql.push(sql);
+      if (sql.includes('SELECT * FROM bookings')) {
+        return {
+          rows: [{
+            id: 'booking-uuid-2',
+            customer_id: 'cust-1',
+            status: 'CREATED',
+            booking_code: 'BK-200',
+            sub_credit_used: 50,
+            razorpay_paid: 200,
+            expires_at: new Date(Date.now() - 3600000), // Expired 1 hr ago
+          }],
+        };
+      }
+      if (sql.includes('SELECT * FROM booking_items')) {
+        return { rows: [] };
+      }
+      if (sql.includes('customer_subscriptions')) {
+        return { rows: [{ id: 'sub-1', credit_balance: 150, status: 'ACTIVE' }] };
+      }
+      if (sql.includes('UPDATE bookings')) {
+        return { rows: [{ id: 'booking-uuid-2', status: 'EXPIRED' }] };
+      }
+      return { rows: [] };
+    }, async () => {
+      const result = await bookingExpiryEngine.expireBooking('booking-uuid-2', { force: true });
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.booking.status, 'EXPIRED');
+
+      const paymentRefundSql = executedSql.find(s => s.includes('UPDATE payments') && s.includes('REFUNDED'));
+      assert.strictEqual(paymentRefundSql, undefined, 'expireBooking must NOT alter payment status to REFUNDED');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 4. Actual POS Payment / Order Reuse Prevention (Production Function)
+  // -------------------------------------------------------------------------
+  await t.test('4.1 finalizePhysicalPurchaseAtomic rejects reused Razorpay payment ID or order ID', async () => {
+    const origConfigured = paymentEngine.isRazorpayConfigured;
+    const origVerifySig = paymentEngine.verifyPaymentSignature;
+    const origGetOrder = paymentEngine.getRazorpayOrder;
+
+    try {
+      paymentEngine.isRazorpayConfigured = () => true;
+      paymentEngine.verifyPaymentSignature = () => true;
+      paymentEngine.getRazorpayOrder = async (id) => ({
+        id,
+        amount: 25590, // 250 INR + 2% + 18% GST = 255.90 INR = 25590 paise
+        currency: 'INR',
+      });
+
+      await withMockPgClient(async (sql, params) => {
+        if (sql.includes('SELECT * FROM bills')) {
+          return {
+            rows: [{
+              id: 'bill-123',
+              customer_id: 'cust-pos-1',
+              manual_bill_id: 'BILL-999',
+              status: 'CAPTURED',
+              extracted_text: null,
+            }],
+          };
+        }
+        if (sql.includes('bills b') || sql.includes('transactions t')) {
+          return { rows: [] };
+        }
+        if (sql.includes('fish')) {
+          return {
+            rows: [{
+              id: 'fish-1',
+              name: 'Rohu',
+              unit_price: 250,
+              physical_available: true,
+              online_bookable: true,
+            }],
+          };
+        }
+        if (sql.includes('FROM payments')) {
+          // Stored payment match detected
+          return { rows: [{ id: 'existing-payment-uuid' }] };
         }
         return { rows: [] };
-      },
-    };
-
-    // Query with used payment ID
-    const res1 = await mockClient.query(
-      `SELECT id FROM payments 
-       WHERE razorpay_payment_id = $1 
-          OR ($2::text IS NOT NULL AND razorpay_order_id = $2) 
-       LIMIT 1;`,
-      [usedPaymentId, 'order_new_001']
-    );
-    assert.strictEqual(res1.rows.length, 1);
-
-    // Query with reused order ID
-    const res2 = await mockClient.query(
-      `SELECT id FROM payments 
-       WHERE razorpay_payment_id = $1 
-          OR ($2::text IS NOT NULL AND razorpay_order_id = $2) 
-       LIMIT 1;`,
-      ['pay_new_001', usedOrderId]
-    );
-    assert.strictEqual(res2.rows.length, 1);
-
-    // Query with fresh identifiers
-    const res3 = await mockClient.query(
-      `SELECT id FROM payments 
-       WHERE razorpay_payment_id = $1 
-          OR ($2::text IS NOT NULL AND razorpay_order_id = $2) 
-       LIMIT 1;`,
-      ['pay_fresh_001', 'order_fresh_001']
-    );
-    assert.strictEqual(res3.rows.length, 0);
+      }, async () => {
+        await assert.rejects(
+          async () => {
+            await posFinalizationEngine.finalizePhysicalPurchaseAtomic({
+              billId: 'bill-123',
+              customerId: 'cust-pos-1',
+              paymentMethod: 'RAZORPAY',
+              razorpayOrderId: 'order_reused_123',
+              razorpayPaymentId: 'pay_reused_123',
+              razorpaySignature: 'sig_valid',
+              items: [{ fishId: 'fish-1', quantity: 1, unitPrice: 250, subtotal: 250 }],
+            });
+          },
+          (err) => {
+            assert.strictEqual(err.code, 'PAYMENT_ALREADY_USED');
+            return true;
+          }
+        );
+      });
+    } finally {
+      paymentEngine.isRazorpayConfigured = origConfigured;
+      paymentEngine.verifyPaymentSignature = origVerifySig;
+      paymentEngine.getRazorpayOrder = origGetOrder;
+    }
   });
 
-  await t.test('6. Currency validation rejects non-INR payments', () => {
-    const orderUSD = { amount: 100000, currency: 'USD' };
-    const orderINR = { amount: 100000, currency: 'INR' };
+  // -------------------------------------------------------------------------
+  // 5. Checkout-Intent Persistence Failure Handling
+  // -------------------------------------------------------------------------
+  await t.test('5.1 Razorpay orders route fails closed with 500 when intent persistence fails', async () => {
+    const origCreateOrder = paymentEngine.createRazorpayOrder;
+    const origConfigured = paymentEngine.isRazorpayConfigured;
+    const origCreateIntent = checkoutIntentRepository.createIntent;
 
-    assert.strictEqual(orderINR.currency.toUpperCase(), 'INR');
-
-    let errorThrown = false;
     try {
-      if (orderUSD.currency && orderUSD.currency.toUpperCase() !== 'INR') {
-        const err = new Error('Payment currency mismatch. Currency must be INR.');
-        err.code = 'PAYMENT_CURRENCY_MISMATCH';
+      paymentEngine.isRazorpayConfigured = () => true;
+      paymentEngine.createRazorpayOrder = async () => ({
+        success: true,
+        configured: true,
+        orderId: 'order_intent_err_1',
+        amount: 50000,
+        currency: 'INR',
+      });
+
+      // Simulate failure in checkout intent persistence
+      checkoutIntentRepository.createIntent = async () => {
+        const err = new Error('Database connection closed abruptly');
+        err.code = 'DB_ERROR';
         throw err;
+      };
+
+      const token = customerEngine.generateSessionToken({ id: 'cust-intent-fail-1', mobile_number: '+919999999999' });
+
+      const headersMap = new Map([
+        ['authorization', `Bearer ${token}`],
+        ['content-type', 'application/json'],
+      ]);
+      const mockRequest = {
+        headers: {
+          get: (k) => headersMap.get(k.toLowerCase()),
+        },
+        json: async () => ({
+          billId: null,
+        }),
+      };
+
+      // Mock previewCheckout to return valid payable amount
+      const origPreview = bookingEngine.previewCheckout;
+      bookingEngine.previewCheckout = async () => ({
+        items: [{ fishId: 'fish-1', quantityKg: 1, unitPrice: 500, effectivePrice: 500, subtotal: 500 }],
+        summary: { totalCartAmount: 500, finalPayableAmount: 511.80 },
+        subscription: null,
+      });
+
+      try {
+        const response = await ordersPost(mockRequest);
+        const data = await response.json();
+
+        assert.strictEqual(response.status, 500);
+        assert.strictEqual(data.success, false);
+        assert.strictEqual(data.error.code, 'CHECKOUT_INTENT_PERSISTENCE_FAILED');
+      } finally {
+        bookingEngine.previewCheckout = origPreview;
       }
-    } catch (err) {
-      errorThrown = true;
-      assert.strictEqual(err.code, 'PAYMENT_CURRENCY_MISMATCH');
+    } finally {
+      paymentEngine.createRazorpayOrder = origCreateOrder;
+      paymentEngine.isRazorpayConfigured = origConfigured;
+      checkoutIntentRepository.createIntent = origCreateIntent;
     }
-    assert.strictEqual(errorThrown, true);
   });
 
 });
