@@ -21,6 +21,8 @@ export default function WorkerLayout({ children }) {
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [logoutError, setLogoutError] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isLoginPage = pathname === '/worker/login';
 
@@ -99,19 +101,51 @@ export default function WorkerLayout({ children }) {
   }, [isLoginPage, router]);
 
   async function handleLogout() {
+    setIsLoggingOut(true);
+    setLogoutError(null);
+
     try {
-      await fetch('/api/v1/worker/auth/logout', {
+      const res = await fetch('/api/v1/worker/auth/logout', {
         method: 'POST',
         credentials: 'include',
       });
-    } catch {}
 
-    localStorage.removeItem('pondfish_worker_token');
-    localStorage.removeItem('pondfish_worker_info');
-    setWorker(null);
-    setCachedProfile(null);
-    setSessionState('UNAUTHENTICATED');
-    window.location.href = '/worker/login';
+      const json = await res.json().catch(() => ({}));
+
+      // Distinguish confirmed server-side revocation from failed logout
+      if (!res.ok || !json.success) {
+        // If session was already expired or revoked at route level (401/403), treat as terminated
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('pondfish_worker_token');
+          localStorage.removeItem('pondfish_worker_info');
+          setWorker(null);
+          setCachedProfile(null);
+          setSessionState('UNAUTHENTICATED');
+          window.location.href = '/worker/login';
+          return;
+        }
+
+        // Server-side revocation failed (e.g. 500 error):
+        // Never report logout as successfully revoked when the server returned an error.
+        // Keep authenticated session state and credentials intact to allow safe retry.
+        const errMsg = json.error?.message || 'Server failed to revoke session. Please retry.';
+        setLogoutError(errMsg);
+        return;
+      }
+
+      // Confirmed server-side revocation: clear local state and redirect to login
+      localStorage.removeItem('pondfish_worker_token');
+      localStorage.removeItem('pondfish_worker_info');
+      setWorker(null);
+      setCachedProfile(null);
+      setSessionState('UNAUTHENTICATED');
+      window.location.href = '/worker/login';
+    } catch {
+      // Network failure during logout: do not claim session is revoked
+      setLogoutError('Network error prevented session revocation. Check your connection and retry.');
+    } finally {
+      setIsLoggingOut(false);
+    }
   }
 
   if (isLoginPage) {
@@ -306,6 +340,7 @@ export default function WorkerLayout({ children }) {
           ) : null}
           <button
             onClick={handleLogout}
+            disabled={isLoggingOut}
             style={{
               background: '#FEF2F2',
               border: '1px solid #FECACA',
@@ -314,14 +349,81 @@ export default function WorkerLayout({ children }) {
               borderRadius: '8px',
               fontSize: '12px',
               fontWeight: '700',
-              cursor: 'pointer',
+              cursor: isLoggingOut ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
+              opacity: isLoggingOut ? 0.6 : 1,
             }}
           >
-            Sign Out
+            {isLoggingOut ? 'Signing out...' : 'Sign Out'}
           </button>
         </div>
       </header>
+
+      {/* Explicit Revocation Failure Banner when Logout Fails */}
+      {logoutError && (
+        <div
+          role="alert"
+          style={{
+            background: '#FEF2F2',
+            borderBottom: '1px solid #F87171',
+            padding: '12px 16px',
+            color: '#991B1B',
+            fontSize: '13px',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>
+              <strong>Sign Out Failed:</strong> {logoutError} Your server session has not been revoked.
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              disabled={isLoggingOut}
+              onClick={handleLogout}
+              style={{
+                background: '#DC2626',
+                border: '1px solid #B91C1C',
+                color: '#FFFFFF',
+                borderRadius: '6px',
+                padding: '5px 12px',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: isLoggingOut ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isLoggingOut ? 'Retrying...' : 'Retry Sign Out'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLogoutError(null)}
+              style={{
+                background: '#FFFFFF',
+                border: '1px solid #D1D5DB',
+                color: '#4B5563',
+                borderRadius: '6px',
+                padding: '5px 10px',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Explicit Offline Banner when Session Cannot Be Verified */}
       {sessionState === 'OFFLINE' && (
@@ -540,6 +642,7 @@ export default function WorkerLayout({ children }) {
 
             {/* Logout button at bottom of drawer */}
             <button
+              disabled={isLoggingOut}
               onClick={() => {
                 setMobileMenuOpen(false);
                 handleLogout();
@@ -551,15 +654,17 @@ export default function WorkerLayout({ children }) {
                 color: '#F87171',
                 padding: '12px 14px',
                 borderRadius: '8px',
-                cursor: 'pointer',
+                cursor: isLoggingOut ? 'not-allowed' : 'pointer',
                 fontSize: '13px',
                 fontWeight: '700',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '8px',
+                opacity: isLoggingOut ? 0.6 : 1,
               }}
             >
-              Sign Out
+              {isLoggingOut ? 'Signing out...' : 'Sign Out'}
             </button>
           </div>
         </div>,

@@ -296,25 +296,73 @@ console.log('\n[Test Group 7] Worker Login Token Concealment & Scoped API Respon
   assert.ok(setCookieHeader, 'worker_session cookie must be set');
   assert.strictEqual(setCookieHeader.httpOnly, true, 'worker_session cookie must be HttpOnly');
 
-  // 7.2 Explicit API Client Login: MUST return token in response data
-  const apiReq = createMockRequest({
+  // 7.2 Adversarial & Token-Request Flags/Headers MUST NEVER Disclose Bearer Token
+  // Attempt 1: body returnToken: true
+  const tokenFlagReq = createMockRequest({
+    pathname: '/api/v1/worker/auth/login',
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+  });
+  tokenFlagReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', returnToken: true });
+  const tokenFlagRes = await loginRoute.POST(tokenFlagReq);
+  assert.strictEqual(tokenFlagRes.status, 200);
+  const tokenFlagBody = await tokenFlagRes.json();
+  assert.strictEqual(tokenFlagBody.data.token, undefined, 'returnToken flag must never disclose bearer token');
+
+  // Attempt 2: body clientType: 'api'
+  const clientTypeReq = createMockRequest({
+    pathname: '/api/v1/worker/auth/login',
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+  });
+  clientTypeReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', clientType: 'api' });
+  const clientTypeRes = await loginRoute.POST(clientTypeReq);
+  assert.strictEqual(clientTypeRes.status, 200);
+  const clientTypeBody = await clientTypeRes.json();
+  assert.strictEqual(clientTypeBody.data.token, undefined, 'clientType body field must never disclose bearer token');
+
+  // Attempt 3: header x-client-type: api
+  const headerApiReq = createMockRequest({
     pathname: '/api/v1/worker/auth/login',
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-client-type': 'api' },
   });
-  apiReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
+  headerApiReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
+  const headerApiRes = await loginRoute.POST(headerApiReq);
+  assert.strictEqual(headerApiRes.status, 200);
+  const headerApiBody = await headerApiRes.json();
+  assert.strictEqual(headerApiBody.data.token, undefined, 'x-client-type header must never disclose bearer token');
 
-  const apiRes = await loginRoute.POST(apiReq);
-  assert.strictEqual(apiRes.status, 200);
-  const apiBody = await apiRes.json();
-  assert.strictEqual(apiBody.success, true);
-  assert.ok(apiBody.data.token, 'Explicit API client must receive bearer token');
+  // Attempt 4: header x-auth-mode: token
+  const headerAuthModeReq = createMockRequest({
+    pathname: '/api/v1/worker/auth/login',
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-auth-mode': 'token' },
+  });
+  headerAuthModeReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
+  const headerAuthModeRes = await loginRoute.POST(headerAuthModeReq);
+  assert.strictEqual(headerAuthModeRes.status, 200);
+  const headerAuthModeBody = await headerAuthModeRes.json();
+  assert.strictEqual(headerAuthModeBody.data.token, undefined, 'x-auth-mode header must never disclose bearer token');
+
+  // Attempt 5: Combined headers and body flags
+  const combinedReq = createMockRequest({
+    pathname: '/api/v1/worker/auth/login',
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-client-type': 'api', 'x-auth-mode': 'token' },
+  });
+  combinedReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', returnToken: true, clientType: 'api' });
+  const combinedRes = await loginRoute.POST(combinedReq);
+  assert.strictEqual(combinedRes.status, 200);
+  const combinedBody = await combinedRes.json();
+  assert.strictEqual(combinedBody.data.token, undefined, 'Combined flags must never disclose bearer token');
+  assert.ok(combinedRes.cookies.get('worker_session'), 'HttpOnly session cookie must be set');
 
   workerRepository.findWorkerByMobile = origFindByMobile;
   workerRepository.verifyPassword = origVerifyPw;
 
   passed++;
-  console.log('  ✓ 7.1 Browser worker login conceals token from JavaScript response; explicit API clients receive bearer token');
+  console.log('  ✓ 7.1 Browser worker login strictly conceals token; all token-request flags and caller-supplied headers rejected');
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +422,84 @@ console.log('\n[Test Group 9] Middleware Malformed Percent-Encoding & Path Edge 
 
   passed++;
   console.log('  ✓ 9.1 Malformed URI percent-encoding rejected with 400; consecutive and trailing slashes normalized');
+}
+
+// ---------------------------------------------------------------------------
+// 10. Worker Logout Revocation Failure Contract & Cookie Preservation
+// ---------------------------------------------------------------------------
+console.log('\n[Test Group 10] Worker Logout Server Revocation Failure Contract');
+{
+  function loadRoute(relPath) {
+    const fullPath = path.resolve(__dirname, relPath);
+    let code = fs.readFileSync(fullPath, 'utf8');
+    code = code.replace(/import\s*\{\s*NextResponse\s*\}\s*from\s*['"]next\/server(\.js)?['"];?/g, 'const { NextResponse } = require("next/server");');
+    code = code.replace(/import\s*\{\s*([a-zA-Z0-9_,\s]+)\s*\}\s*from\s*['"]([^'"]+)['"];?/g, 'const { $1 } = require("$2");');
+    code = code.replace(/export\s+const\s+dynamic\s*=\s*['"][^'"]+['"];?/g, '');
+    code = code.replace(/export\s+async\s+function\s+([a-zA-Z0-9_]+)/g, 'exports.$1 = async function $1');
+    const m = { exports: {} };
+    const customRequire = (specifier) => {
+      if (specifier.startsWith('.')) return require(path.resolve(path.dirname(fullPath), specifier));
+      return require(specifier);
+    };
+    const fn = new Function('require', 'module', 'exports', '__filename', '__dirname', code);
+    fn(customRequire, m, m.exports, fullPath, path.dirname(fullPath));
+    return m.exports;
+  }
+
+  const logoutRoute = loadRoute('../../app/api/v1/worker/auth/logout/route.js');
+  const workerEngine = require('../../lib/engines/worker');
+  const pool = require('../../lib/db/pool');
+
+  // 10.1 Durable Revocation Failure (500): Cookie MUST NOT be cleared
+  const origDbUrl = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = 'postgresql://invalid-host-will-fail:5432/pondfish';
+
+  const origWithTx = pool.withTransaction;
+  pool.withTransaction = async () => {
+    throw new Error('Database transaction failed during session deletion');
+  };
+
+  const token = workerEngine.generateWorkerSessionToken({ id: 'w-fail-log', name: 'Staff' }, 'sess-fail-logout');
+
+  const failedLogoutReq = createMockRequest({
+    pathname: '/api/v1/worker/auth/logout',
+    method: 'POST',
+    cookies: { worker_session: token },
+  });
+
+  const failedLogoutRes = await logoutRoute.POST(failedLogoutReq);
+
+  pool.withTransaction = origWithTx;
+  if (origDbUrl) process.env.DATABASE_URL = origDbUrl;
+  else delete process.env.DATABASE_URL;
+
+  assert.strictEqual(failedLogoutRes.status, 500, 'Logout route must return 500 on revocation failure');
+  const failedLogoutBody = await failedLogoutRes.json();
+  assert.strictEqual(failedLogoutBody.success, false);
+  assert.strictEqual(failedLogoutBody.error.code, 'LOGOUT_FAILED');
+  assert.strictEqual(
+    failedLogoutRes.cookies.get('worker_session'),
+    undefined,
+    'Session cookie MUST NOT be cleared when server-side revocation fails (avoids false success and preserves retry credentials)'
+  );
+
+  // 10.2 Confirmed Server-Side Revocation (200): Cookie is invalidated
+  const successfulLogoutReq = createMockRequest({
+    pathname: '/api/v1/worker/auth/logout',
+    method: 'POST',
+    cookies: { worker_session: token },
+  });
+
+  const successfulLogoutRes = await logoutRoute.POST(successfulLogoutReq);
+  assert.strictEqual(successfulLogoutRes.status, 200, 'Logout route must return 200 on confirmed revocation');
+  const successfulLogoutBody = await successfulLogoutRes.json();
+  assert.strictEqual(successfulLogoutBody.success, true);
+  const clearedCookie = successfulLogoutRes.cookies.get('worker_session');
+  assert.ok(clearedCookie, 'Cookie must be targeted for expiration upon confirmed revocation');
+  assert.strictEqual(clearedCookie.maxAge, 0, 'Cookie maxAge must be 0 to expire upon confirmed revocation');
+
+  passed++;
+  console.log('  ✓ 10.1 Logout revocation failure returns 500 without clearing cookie; confirmed revocation invalidates cookie');
 }
 
   console.log('\n======================================================');
