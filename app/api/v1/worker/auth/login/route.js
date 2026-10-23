@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { mobileNumber, password } = body;
+    const { mobileNumber, password, clientType, returnToken } = body;
 
     if (!mobileNumber || !password) {
       return NextResponse.json(
@@ -30,10 +30,25 @@ export async function POST(request) {
 
     const result = await authenticateWorker({ mobileNumber, password });
 
+    // Determine whether caller is an explicit non-browser/API client requesting bearer token
+    const isExplicitApiClient =
+      clientType === 'api' ||
+      returnToken === true ||
+      request.headers?.get?.('x-client-type') === 'api' ||
+      request.headers?.get?.('x-auth-mode') === 'token';
+
+    // Browser portal authenticates strictly via HttpOnly cookie; omit token from JSON body.
+    // Explicit API clients receive bearer token in data.token.
+    const responseData = {
+      worker: result.worker,
+      sessionId: result.sessionId,
+      ...(isExplicitApiClient ? { token: result.token } : {}),
+    };
+
     const response = NextResponse.json(
       {
         success: true,
-        data: result,
+        data: responseData,
         message: 'Worker signed in successfully.',
         timestamp: new Date().toISOString(),
       },

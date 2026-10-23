@@ -21,6 +21,8 @@ const {
   verifyWorkerSessionAsync,
   logoutWorker,
   extractWorkerToken,
+  loadWorkerSessionRegistry,
+  mutateWorkerSessionRegistry,
 } = require('../../lib/engines/worker');
 const workerRepository = require('../../lib/db/repositories/workerRepository');
 const gpsTrackingEngine = require('../../lib/engines/gps-tracking');
@@ -31,6 +33,7 @@ let passed = 0;
 const TEST_JWT_SECRET = 'pondfish-test-suite-secure-jwt-secret-key-2026';
 process.env.JWT_SECRET = TEST_JWT_SECRET;
 process.env.NODE_ENV = 'test';
+process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
 
 function createMockRequest({ pathname = '/', cookies = {}, headers = {}, method = 'GET', search = '' } = {}) {
   const url = new URL(`http://localhost:3000${pathname}${search}`);
@@ -235,6 +238,142 @@ console.log('\n[Test Group 6] Native Realtime WebSocket Architecture');
 
   passed++;
   console.log('  ✓ 6.1 TV and Admin Journeys live pages use native WebSocket endpoint with zero Supabase dependencies');
+}
+
+// ---------------------------------------------------------------------------
+// 7. Worker Login Scoped Token Exposure & HttpOnly Cookie Verification
+// ---------------------------------------------------------------------------
+console.log('\n[Test Group 7] Worker Login Token Concealment & Scoped API Response');
+{
+  function loadRoute(relPath) {
+    const fullPath = path.resolve(__dirname, relPath);
+    let code = fs.readFileSync(fullPath, 'utf8');
+    code = code.replace(/import\s*\{\s*NextResponse\s*\}\s*from\s*['"]next\/server(\.js)?['"];?/g, 'const { NextResponse } = require("next/server");');
+    code = code.replace(/import\s*\{\s*([a-zA-Z0-9_,\s]+)\s*\}\s*from\s*['"]([^'"]+)['"];?/g, 'const { $1 } = require("$2");');
+    code = code.replace(/export\s+const\s+dynamic\s*=\s*['"][^'"]+['"];?/g, '');
+    code = code.replace(/export\s+async\s+function\s+([a-zA-Z0-9_]+)/g, 'exports.$1 = async function $1');
+    const m = { exports: {} };
+    const customRequire = (specifier) => {
+      if (specifier.startsWith('.')) return require(path.resolve(path.dirname(fullPath), specifier));
+      return require(specifier);
+    };
+    const fn = new Function('require', 'module', 'exports', '__filename', '__dirname', code);
+    fn(customRequire, m, m.exports, fullPath, path.dirname(fullPath));
+    return m.exports;
+  }
+
+  const loginRoute = loadRoute('../../app/api/v1/worker/auth/login/route.js');
+
+  const origFindByMobile = workerRepository.findWorkerByMobile;
+  const origVerifyPw = workerRepository.verifyPassword;
+
+  workerRepository.findWorkerByMobile = async (mobile) => ({
+    id: 'worker-login-audit-1',
+    name: 'Suresh Staff',
+    mobile_number: mobile,
+    active: true,
+    password_hash: 'mock-hash',
+  });
+  workerRepository.verifyPassword = () => true;
+
+  // 7.1 Standard Browser Login: MUST NOT return token in response body
+  const browserReq = createMockRequest({
+    pathname: '/api/v1/worker/auth/login',
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+  });
+  browserReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
+
+  const browserRes = await loginRoute.POST(browserReq);
+  assert.strictEqual(browserRes.status, 200);
+  const browserBody = await browserRes.json();
+  assert.strictEqual(browserBody.success, true);
+  assert.ok(browserBody.data.worker, 'Worker profile must be returned');
+  assert.ok(browserBody.data.sessionId, 'SessionId must be returned');
+  assert.strictEqual(browserBody.data.token, undefined, 'Session token MUST NOT be returned in JSON payload for browser clients');
+
+  const setCookieHeader = browserRes.cookies.get('worker_session');
+  assert.ok(setCookieHeader, 'worker_session cookie must be set');
+  assert.strictEqual(setCookieHeader.httpOnly, true, 'worker_session cookie must be HttpOnly');
+
+  // 7.2 Explicit API Client Login: MUST return token in response data
+  const apiReq = createMockRequest({
+    pathname: '/api/v1/worker/auth/login',
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-client-type': 'api' },
+  });
+  apiReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
+
+  const apiRes = await loginRoute.POST(apiReq);
+  assert.strictEqual(apiRes.status, 200);
+  const apiBody = await apiRes.json();
+  assert.strictEqual(apiBody.success, true);
+  assert.ok(apiBody.data.token, 'Explicit API client must receive bearer token');
+
+  workerRepository.findWorkerByMobile = origFindByMobile;
+  workerRepository.verifyPassword = origVerifyPw;
+
+  passed++;
+  console.log('  ✓ 7.1 Browser worker login conceals token from JavaScript response; explicit API clients receive bearer token');
+}
+
+// ---------------------------------------------------------------------------
+// 8. Hardened In-Memory Session Fallback (Accidental NODE_ENV=test Protection)
+// ---------------------------------------------------------------------------
+console.log('\n[Test Group 8] In-Memory Session Fallback Guard Hardening');
+{
+  // 8.1 Accidental NODE_ENV=test in deployed environment (without ALLOW_TEST_SESSION_FALLBACK)
+  delete process.env.ALLOW_TEST_SESSION_FALLBACK;
+  let missingGuardErr = null;
+  try {
+    await loadWorkerSessionRegistry();
+  } catch (err) {
+    missingGuardErr = err;
+  }
+  assert.ok(missingGuardErr, 'Accidental NODE_ENV=test without explicit guard must fail closed');
+  assert.strictEqual(missingGuardErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+  assert.strictEqual(missingGuardErr.status, 500);
+
+  // 8.2 Production runtime strictly rejects in-memory fallback even if guard was set
+  process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
+  process.env.NODE_ENV = 'production';
+  let prodErr = null;
+  try {
+    await loadWorkerSessionRegistry();
+  } catch (err) {
+    prodErr = err;
+  }
+  assert.ok(prodErr, 'Production environment must strictly reject in-memory session registry');
+  assert.strictEqual(prodErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+  assert.strictEqual(prodErr.status, 500);
+
+  // Restore test configuration
+  process.env.NODE_ENV = 'test';
+  process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
+
+  passed++;
+  console.log('  ✓ 8.1 Accidental NODE_ENV=test without explicit guard strictly fails closed; production rejects in-memory fallback');
+}
+
+// ---------------------------------------------------------------------------
+// 9. Middleware Malformed URI & Path Traversal Normalization
+// ---------------------------------------------------------------------------
+console.log('\n[Test Group 9] Middleware Malformed Percent-Encoding & Path Edge Cases');
+{
+  // 9.1 Malformed percent-encoding must fail closed with 400 Bad Request
+  const malformedReq = createMockRequest({ pathname: '/api/v1/%E0%A4%A/worker/bookings' });
+  const malformedRes = middleware(malformedReq);
+  assert.strictEqual(malformedRes.status, 400, 'Malformed percent-encoding must return 400');
+  const malformedBody = await malformedRes.json();
+  assert.strictEqual(malformedBody.error.code, 'MALFORMED_URI_ENCODING');
+
+  // 9.2 Consecutive slashes normalized without bypassing route guards
+  const consecutiveSlashReq = createMockRequest({ pathname: '/api/v1//worker///bookings/today//' });
+  const consecutiveRes = middleware(consecutiveSlashReq);
+  assert.strictEqual(consecutiveRes.status, 401, 'Consecutive slashes must be normalized and blocked if unauthenticated');
+
+  passed++;
+  console.log('  ✓ 9.1 Malformed URI percent-encoding rejected with 400; consecutive and trailing slashes normalized');
 }
 
   console.log('\n======================================================');

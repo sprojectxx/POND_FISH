@@ -51,13 +51,30 @@ function verifyJwt(token) {
 
 export function middleware(request) {
   const rawPathname = request.nextUrl.pathname;
-  // Normalize path: decode URI components and strip trailing slash for consistent route matching
+  // Normalize path: decode URI components, collapse consecutive slashes, and strip trailing slash
   let pathname = rawPathname;
   try {
     pathname = decodeURIComponent(rawPathname);
-  } catch {}
+  } catch {
+    // Malformed percent-encoding is an invalid HTTP request; fail closed with 400
+    if (rawPathname.startsWith('/api/')) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'MALFORMED_URI_ENCODING',
+            message: 'Malformed URI percent-encoding in request path.',
+          },
+        },
+        { status: 400 }
+      );
+    }
+    return new NextResponse('Bad Request: Malformed URI encoding', { status: 400 });
+  }
+
+  pathname = pathname.replace(/\/{2,}/g, '/');
   if (pathname.length > 1 && pathname.endsWith('/')) {
-    pathname = pathname.slice(0, -1);
+    pathname = pathname.replace(/\/+$/, '');
   }
 
   // Let static files, Next.js internals, and public assets pass through
