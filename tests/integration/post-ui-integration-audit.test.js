@@ -502,6 +502,157 @@ console.log('\n[Test Group 10] Worker Logout Server Revocation Failure Contract'
   console.log('  ✓ 10.1 Logout revocation failure returns 500 without clearing cookie; confirmed revocation invalidates cookie');
 }
 
+// ---------------------------------------------------------------------------
+// 11. Worker Session Registry Fail-Closed Verification
+// ---------------------------------------------------------------------------
+console.log('\n[Test Group 11] Worker Session Registry Fail-Closed Verification (Empty Registry, Absent Session, Read Failure)');
+{
+  const activeWorker = { id: 'worker-reg-audit-01', name: 'Kavitha Staff', mobile: '9876543210', active: true };
+  const origFind = workerRepository.findWorkerById;
+  workerRepository.findWorkerById = async (id) => {
+    if (id === activeWorker.id) return activeWorker;
+    return null;
+  };
+
+  try {
+    // 11.1 A validly signed token whose session ID is present in a non-empty registry is accepted
+    const validSessionId = 'session-present-11-1';
+    const validToken = generateWorkerSessionToken(activeWorker, validSessionId);
+    await mutateWorkerSessionRegistry((reg) => {
+      reg[validSessionId] = {
+        workerId: activeWorker.id,
+        name: activeWorker.name,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 3600000,
+      };
+    });
+
+    const verifiedSession = await verifyWorkerSessionAsync(validToken);
+    assert.strictEqual(verifiedSession.workerId, activeWorker.id);
+    assert.strictEqual(verifiedSession.sessionId, validSessionId);
+    assert.strictEqual(verifiedSession.worker.active, true);
+    passed++;
+    console.log('  ✓ 11.1 Validly signed token present in non-empty session registry is accepted for active worker');
+
+    // 11.2 A validly signed token whose session ID is absent from a non-empty registry is rejected
+    const absentSessionId = 'session-absent-11-2';
+    const absentToken = generateWorkerSessionToken(activeWorker, absentSessionId);
+
+    let absentErr = null;
+    try {
+      await verifyWorkerSessionAsync(absentToken);
+    } catch (err) {
+      absentErr = err;
+    }
+    assert.ok(absentErr, 'Absent session ID in non-empty registry must throw');
+    assert.strictEqual(absentErr.code, 'SESSION_EXPIRED');
+    assert.strictEqual(absentErr.status, 401);
+    passed++;
+    console.log('  ✓ 11.2 Validly signed token absent from non-empty session registry is rejected with 401 SESSION_EXPIRED');
+
+    // 11.3 A validly signed token whose session ID is absent from an empty registry is rejected
+    await mutateWorkerSessionRegistry((reg) => {
+      for (const k of Object.keys(reg)) delete reg[k];
+    });
+    const emptyReg = await loadWorkerSessionRegistry();
+    assert.strictEqual(Object.keys(emptyReg).length, 0, 'Registry must be verified empty');
+
+    let emptyRegistryErr = null;
+    try {
+      await verifyWorkerSessionAsync(validToken);
+    } catch (err) {
+      emptyRegistryErr = err;
+    }
+    assert.ok(emptyRegistryErr, 'Token verified against empty session registry must strictly fail closed');
+    assert.strictEqual(emptyRegistryErr.code, 'SESSION_EXPIRED');
+    assert.strictEqual(emptyRegistryErr.status, 401);
+    passed++;
+    console.log('  ✓ 11.3 Validly signed token absent from empty registry is strictly rejected with 401 (fail closed)');
+
+    // 11.4 Revoking the only registered session leaves an empty registry, and the old token is rejected afterward
+    const soloSessionId = 'session-solo-11-4';
+    const soloToken = generateWorkerSessionToken(activeWorker, soloSessionId);
+    await mutateWorkerSessionRegistry((reg) => {
+      reg[soloSessionId] = {
+        workerId: activeWorker.id,
+        name: activeWorker.name,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 3600000,
+      };
+    });
+
+    // Verify it is accepted while sole session in registry
+    const preRevoke = await verifyWorkerSessionAsync(soloToken);
+    assert.strictEqual(preRevoke.sessionId, soloSessionId);
+
+    // Revoke the only registered session
+    const soloLogoutRes = await logoutWorker(soloToken);
+    assert.strictEqual(soloLogoutRes.success, true);
+
+    // Verify registry is now completely empty
+    const postRevokeReg = await loadWorkerSessionRegistry();
+    assert.strictEqual(Object.keys(postRevokeReg).length, 0, 'Revoking sole session must leave registry empty');
+
+    // The old token MUST be rejected afterward
+    let postRevokeErr = null;
+    try {
+      await verifyWorkerSessionAsync(soloToken);
+    } catch (err) {
+      postRevokeErr = err;
+    }
+    assert.ok(postRevokeErr, 'Token must be rejected after revocation leaves empty registry');
+    assert.strictEqual(postRevokeErr.status, 401);
+    assert.ok(postRevokeErr.code === 'SESSION_REVOKED' || postRevokeErr.code === 'SESSION_EXPIRED');
+    passed++;
+    console.log('  ✓ 11.4 Revoking the only registered session leaves an empty registry and rejects subsequent access');
+
+    // 11.5 Registry/database read failure produces a fail-closed error, not successful authentication
+    const origDbUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://invalid-host-will-fail:5432/pondfish';
+    const pool = require('../../lib/db/pool');
+    const origQuery = pool.query;
+    pool.query = async () => {
+      throw new Error('Database read failure: query timeout');
+    };
+
+    let readFailErr = null;
+    try {
+      await verifyWorkerSessionAsync(validToken);
+    } catch (err) {
+      readFailErr = err;
+    } finally {
+      pool.query = origQuery;
+      if (origDbUrl) process.env.DATABASE_URL = origDbUrl;
+      else delete process.env.DATABASE_URL;
+    }
+
+    assert.ok(readFailErr, 'Database read failure must throw error');
+    assert.strictEqual(readFailErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+    assert.strictEqual(readFailErr.status, 500);
+    passed++;
+    console.log('  ✓ 11.5 Database read failure strictly produces fail-closed 500 error, never false authentication');
+
+    // 11.6 Intentional test-only fallback works ONLY under explicit allowed configuration
+    delete process.env.ALLOW_TEST_SESSION_FALLBACK;
+    let fallbackGuardErr = null;
+    try {
+      await loadWorkerSessionRegistry();
+    } catch (err) {
+      fallbackGuardErr = err;
+    } finally {
+      process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
+    }
+    assert.ok(fallbackGuardErr, 'Missing test fallback flag must fail closed');
+    assert.strictEqual(fallbackGuardErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+    assert.strictEqual(fallbackGuardErr.status, 500);
+    passed++;
+    console.log('  ✓ 11.6 Test-only in-memory fallback works strictly under explicit ALLOW_TEST_SESSION_FALLBACK guard');
+
+  } finally {
+    workerRepository.findWorkerById = origFind;
+  }
+}
+
   console.log('\n======================================================');
   console.log(`Results: ${passed} post-UI integration audit test assertions passed successfully.`);
   console.log('======================================================\n');
