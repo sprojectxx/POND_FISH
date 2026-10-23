@@ -442,11 +442,11 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
       if (sql.includes('FROM payments')) {
         return {
           rows: [
-            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', booking_id: null, transaction_id: null, created_at: new Date() },
+            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-victim-1', booking_id: null, transaction_id: null, created_at: new Date() },
           ],
         };
       }
-      if (sql.includes('FROM subscription_credit_ledger')) {
+      if (sql.includes('FROM customer_subscriptions')) {
         // Linked subscription belongs to cust-VICTIM, not cust-ATTACKER
         return {
           rows: [
@@ -488,11 +488,11 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
       if (sql.includes('FROM payments')) {
         return {
           rows: [
-            { id: 'pay-1', razorpay_payment_id: 'pay_same_1', razorpay_order_id: 'order_same_1', amount: 500, status: 'SUCCESS', booking_id: null, transaction_id: null, created_at: now },
+            { id: 'pay-1', razorpay_payment_id: 'pay_same_1', razorpay_order_id: 'order_same_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-same-1', booking_id: null, transaction_id: null, created_at: now },
           ],
         };
       }
-      if (sql.includes('FROM subscription_credit_ledger')) {
+      if (sql.includes('FROM customer_subscriptions')) {
         return {
           rows: [
             { id: 'sub-same-1', customer_id: 'cust-legit', plan_id: 'plan-1', credit_balance: 500, status: 'ACTIVE', ledger_id: 'ledg-same-1', ledger_amount: 500, ledger_resulting_balance: 500 },
@@ -517,6 +517,100 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
       // Zero writes to customer_subscriptions or subscription_credit_ledger
       const subWrites = executedWrites.filter(s => s.includes('customer_subscriptions') || s.includes('subscription_credit_ledger'));
       assert.strictEqual(subWrites.length, 0, 'Replay must not write any subscription or ledger updates');
+    });
+  });
+
+  await t.test('2.6 Two purchases of the same plan close together must never cause one payment to resolve to the other purchase', async () => {
+    // Payment 2 was created for Sub B. It must strictly resolve to Sub B, never falling back to Sub A
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-gold', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        return {
+          rows: [
+            {
+              id: 'pay-purchase-2',
+              razorpay_payment_id: 'pay_rzp_2',
+              razorpay_order_id: 'order_rzp_2',
+              amount: 500,
+              status: 'SUCCESS',
+              subscription_id: 'sub-purchase-2', // Deterministically linked to Sub B
+              booking_id: null,
+              transaction_id: null,
+              created_at: new Date(),
+            },
+          ],
+        };
+      }
+      if (sql.includes('FROM customer_subscriptions')) {
+        // Query must be by specific subscription ID, returning Sub B
+        if (params && params[0] === 'sub-purchase-2') {
+          return {
+            rows: [
+              { id: 'sub-purchase-2', customer_id: 'cust-1', plan_id: 'plan-gold', credit_balance: 1000, ledger_id: 'ledg-2', ledger_amount: 500, ledger_resulting_balance: 1000 },
+            ],
+          };
+        }
+        return { rows: [] };
+      }
+      return { rows: [] };
+    }, async () => {
+      const result = await subscriptionRepository.activateOrRenewSubscription({
+        customerId: 'cust-1',
+        planId: 'plan-gold',
+        razorpayOrderId: 'order_rzp_2',
+        razorpayPaymentId: 'pay_rzp_2',
+        razorpaySignature: 'sig_2',
+      });
+
+      assert.strictEqual(result.idempotentReplay, true);
+      assert.strictEqual(result.subscription.id, 'sub-purchase-2', 'Must resolve to the exact purchase 2 subscription');
+      assert.notStrictEqual(result.subscription.id, 'sub-purchase-1', 'Must never resolve to purchase 1');
+    });
+  });
+
+  await t.test('2.7 A replay with no provable payment-to-subscription relationship must fail closed', async () => {
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        return {
+          rows: [
+            // Payment exists and has SUCCESS status, but lacks any deterministic link to a subscription
+            {
+              id: 'pay-unprovable',
+              razorpay_payment_id: 'pay_unprovable_1',
+              razorpay_order_id: 'order_unprovable_1',
+              amount: 500,
+              status: 'SUCCESS',
+              subscription_id: null,
+              notes: null,
+              booking_id: null,
+              transaction_id: null,
+              created_at: new Date(),
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await subscriptionRepository.activateOrRenewSubscription({
+            customerId: 'cust-1',
+            planId: 'plan-1',
+            razorpayOrderId: 'order_unprovable_1',
+            razorpayPaymentId: 'pay_unprovable_1',
+            razorpaySignature: 'sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_SUBSCRIPTION_UNPROVABLE');
+          return true;
+        }
+      );
     });
   });
 
@@ -680,6 +774,74 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
     }
   });
 
+  await t.test('4.2 finalizePhysicalPurchaseAtomic rejects 1-paise discrepancy under exact matching', async () => {
+    const origConfigured = paymentEngine.isRazorpayConfigured;
+    const origVerifySig = paymentEngine.verifyPaymentSignature;
+    const origGetOrder = paymentEngine.getRazorpayOrder;
+
+    try {
+      paymentEngine.isRazorpayConfigured = () => true;
+      paymentEngine.verifyPaymentSignature = () => true;
+      // Expected paise for 250 INR + fee + GST is 25590. Here gateway has 25591 (1 paise off)
+      paymentEngine.getRazorpayOrder = async (id) => ({
+        id,
+        amount: 25591,
+        currency: 'INR',
+      });
+
+      await withMockPgClient(async (sql, params) => {
+        if (sql.includes('SELECT * FROM bills')) {
+          return {
+            rows: [{
+              id: 'bill-exact-1',
+              customer_id: 'cust-pos-1',
+              manual_bill_id: 'BILL-1001',
+              status: 'CAPTURED',
+              extracted_text: null,
+            }],
+          };
+        }
+        if (sql.includes('bills b') || sql.includes('transactions t')) {
+          return { rows: [] };
+        }
+        if (sql.includes('fish')) {
+          return {
+            rows: [{
+              id: 'fish-1',
+              name: 'Rohu',
+              unit_price: 250,
+              physical_available: true,
+              online_bookable: true,
+            }],
+          };
+        }
+        return { rows: [] };
+      }, async () => {
+        await assert.rejects(
+          async () => {
+            await posFinalizationEngine.finalizePhysicalPurchaseAtomic({
+              billId: 'bill-exact-1',
+              customerId: 'cust-pos-1',
+              paymentMethod: 'RAZORPAY',
+              razorpayOrderId: 'order_exact_mismatch',
+              razorpayPaymentId: 'pay_exact_mismatch',
+              razorpaySignature: 'sig_valid',
+              items: [{ fishId: 'fish-1', quantity: 1, unitPrice: 250, subtotal: 250 }],
+            });
+          },
+          (err) => {
+            assert.strictEqual(err.code, 'PAYMENT_AMOUNT_MISMATCH');
+            return true;
+          }
+        );
+      });
+    } finally {
+      paymentEngine.isRazorpayConfigured = origConfigured;
+      paymentEngine.verifyPaymentSignature = origVerifySig;
+      paymentEngine.getRazorpayOrder = origGetOrder;
+    }
+  });
+
   // -------------------------------------------------------------------------
   // 5. Checkout-Intent Persistence Failure Handling
   // -------------------------------------------------------------------------
@@ -745,4 +907,57 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
     }
   });
 
+  await t.test('5.2 Razorpay orders route rejects missing or empty order ID with 502', async () => {
+    const origCreateOrder = paymentEngine.createRazorpayOrder;
+    const origConfigured = paymentEngine.isRazorpayConfigured;
+
+    try {
+      paymentEngine.isRazorpayConfigured = () => true;
+      paymentEngine.createRazorpayOrder = async () => ({
+        success: true,
+        configured: true,
+        orderId: null, // Gateway returned null order ID
+        amount: 50000,
+        currency: 'INR',
+      });
+
+      const token = customerEngine.generateSessionToken({ id: 'cust-no-orderid-1', mobile_number: '+919999999999' });
+
+      const headersMap = new Map([
+        ['authorization', `Bearer ${token}`],
+        ['content-type', 'application/json'],
+      ]);
+      const mockRequest = {
+        headers: {
+          get: (k) => headersMap.get(k.toLowerCase()),
+        },
+        json: async () => ({
+          billId: null,
+        }),
+      };
+
+      const origPreview = bookingEngine.previewCheckout;
+      bookingEngine.previewCheckout = async () => ({
+        items: [{ fishId: 'fish-1', quantityKg: 1, unitPrice: 500, effectivePrice: 500, subtotal: 500 }],
+        summary: { totalCartAmount: 500, finalPayableAmount: 511.80 },
+        subscription: null,
+      });
+
+      try {
+        const response = await ordersPost(mockRequest);
+        const data = await response.json();
+
+        assert.strictEqual(response.status, 502);
+        assert.strictEqual(data.success, false);
+        assert.strictEqual(data.error.code, 'RAZORPAY_ORDER_CREATION_FAILED');
+      } finally {
+        bookingEngine.previewCheckout = origPreview;
+      }
+    } finally {
+      paymentEngine.createRazorpayOrder = origCreateOrder;
+      paymentEngine.isRazorpayConfigured = origConfigured;
+    }
+  });
+
 });
+

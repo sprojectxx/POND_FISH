@@ -98,34 +98,45 @@ export async function POST(request) {
       notes,
     });
 
+    const orderId = order?.orderId || order?.id;
+    if (!orderId || typeof orderId !== 'string' || !orderId.trim()) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'RAZORPAY_ORDER_CREATION_FAILED',
+            message: 'Payment gateway did not return a valid order ID. Checkout initialization failed.',
+          },
+        },
+        { status: 502 }
+      );
+    }
+
     // Durable Checkout Intent Persistence (Phase 2J-K)
     // Persist immutable snapshot before initiating Razorpay payment
-    const orderId = order.orderId || order.id;
-    if (orderId) {
-      try {
-        await checkoutIntentRepository.createIntent({
-          razorpayOrderId: orderId,
-          customerId: session.customerId,
-          cartSnapshot: billId ? (body?.items || []) : (preview?.items || []),
-          subscriptionSnapshot: preview?.subscription || null,
-          feeBreakdown: preview?.summary || { finalPayableAmount: authoritativeAmount },
-          amountPaise: Math.round(authoritativeAmount * 100),
-          currency: 'INR',
-          status: 'CREATED',
-        });
-      } catch (intentErr) {
-        console.error('[CHECKOUT INTENT PERSISTENCE ERROR]', intentErr.message);
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'CHECKOUT_INTENT_PERSISTENCE_FAILED',
-              message: 'Failed to securely persist checkout intent snapshot. Order creation cannot proceed.',
-            },
+    try {
+      await checkoutIntentRepository.createIntent({
+        razorpayOrderId: orderId.trim(),
+        customerId: session.customerId,
+        cartSnapshot: billId ? (body?.items || []) : (preview?.items || []),
+        subscriptionSnapshot: preview?.subscription || null,
+        feeBreakdown: preview?.summary || { finalPayableAmount: authoritativeAmount },
+        amountPaise: Math.round(authoritativeAmount * 100),
+        currency: 'INR',
+        status: 'CREATED',
+      });
+    } catch (intentErr) {
+      console.error('[CHECKOUT INTENT PERSISTENCE ERROR]', intentErr.message);
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'CHECKOUT_INTENT_PERSISTENCE_FAILED',
+            message: 'Failed to securely persist checkout intent snapshot. Order creation cannot proceed.',
           },
-          { status: 500 }
-        );
-      }
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
