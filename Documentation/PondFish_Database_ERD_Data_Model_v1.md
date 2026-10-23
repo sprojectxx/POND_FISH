@@ -777,8 +777,8 @@ CANCELLED
   status                TEXT (CREATED, PENDING, SUCCESS, FAILED, REFUNDED)
   created_at            TIMESTAMP
 
-*Note on Schema Harmonization (Phase 2 Integrity Gate):*
-The deployed PostgreSQL database uses provider columns `razorpay_order_id`, `razorpay_payment_id`, and `razorpay_signature`. Migration `0019_payments_subscription_id.sql` establishes `subscription_id UUID REFERENCES customer_subscriptions(id)` to deterministically resolve subscription payment replays without heuristic ambiguity.
+*Note on Schema Harmonization & Verified Deployment (Phase 2 Integrity Gate):*
+The deployed PostgreSQL database uses provider columns `razorpay_order_id`, `razorpay_payment_id`, and `razorpay_signature`. Migration `0019_payments_subscription_id.sql` was applied and verified against the target PostgreSQL database on 2026-10-23 (establishing `subscription_id UUID REFERENCES customer_subscriptions(id)` and index `idx_payments_subscription_id`), enabling deterministic resolution of subscription payment replays without heuristic ambiguity.
 
 Payment status:
 

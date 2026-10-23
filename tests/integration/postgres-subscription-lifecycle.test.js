@@ -34,9 +34,14 @@ function getDbConnectionString() {
 const connectionString = getDbConnectionString();
 
 test('PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)', async (t) => {
+  const isOptional = process.env.ALLOW_DB_SKIP === 'true' || process.env.OPTIONAL_DB === 'true';
+
   if (!connectionString) {
-    t.diagnostic('DATABASE_URL not configured. Skipping real PostgreSQL integration test.');
-    return;
+    if (isOptional) {
+      t.diagnostic('[DB OPTIONAL] DATABASE_URL not configured. Skipping real PostgreSQL integration test (explicitly optional).');
+      return;
+    }
+    throw new Error('[DB FATAL] DATABASE_URL is not configured. Real PostgreSQL integration tests are mandatory for CI and release-verification. (Set ALLOW_DB_SKIP=true to skip in optional local mode).');
   }
 
   const isLocal = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
@@ -54,10 +59,14 @@ test('PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)'
   let client;
   try {
     client = await pool.connect();
+    t.diagnostic('[DB CONNECTED] Authoritative PostgreSQL database connection established.');
   } catch (err) {
-    t.diagnostic(`Cannot connect to PostgreSQL: ${err.message}. Skipping live test.`);
     await pool.end();
-    return;
+    if (isOptional) {
+      t.diagnostic(`[DB OPTIONAL] Cannot connect to PostgreSQL: ${err.message}. Skipping live test (explicitly optional).`);
+      return;
+    }
+    throw new Error(`[DB FATAL] Failed to connect to authoritative PostgreSQL database in mandatory test mode: ${err.message}`);
   }
 
   // Track created entities for rigorous cleanup
@@ -303,6 +312,146 @@ test('PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)'
         }
       );
     });
+    // -------------------------------------------------------------------------
+    // Test 6: Transactional Rollback Test
+    // -------------------------------------------------------------------------
+    await t.test('6. Rollback: deliberate failure during payment insertion rolls back subscription, ledger, and payment', async () => {
+      const rollbackSuffix = `rb_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const rbCustRes = await client.query(`
+        INSERT INTO customers (id, mobile_number, name, created_at, updated_at)
+        VALUES (gen_random_uuid(), '99991${Math.floor(10000 + Math.random() * 90000)}', 'Rollback Cust ${rollbackSuffix}', NOW(), NOW())
+        RETURNING id;
+      `);
+      const rbCustId = rbCustRes.rows[0].id;
+      createdCustomerIds.push(rbCustId);
+
+      const rbOrderId = `order_rb_${rollbackSuffix}`;
+      const rbPaymentId = `pay_rb_${rollbackSuffix}`;
+
+      // Hook pool connect from lib/db/pool so the transaction's client fails on payment insert
+      const dbPoolModule = require('../../lib/db/pool');
+      const activePool = dbPoolModule.getPool();
+      const origPoolConnect = activePool.connect.bind(activePool);
+
+      let interceptedClient = null;
+      let origQuery = null;
+
+      activePool.connect = async function() {
+        interceptedClient = await origPoolConnect();
+        origQuery = interceptedClient.query.bind(interceptedClient);
+        interceptedClient.query = async function(text, params) {
+          if (typeof text === 'string' && text.includes('INSERT INTO payments')) {
+            throw new Error('DELIBERATE_POSTGRES_PAYMENT_INSERT_FAILURE');
+          }
+          return origQuery(text, params);
+        };
+        return interceptedClient;
+      };
+
+      try {
+        await assert.rejects(
+          async () => {
+            await subscriptionRepository.activateOrRenewSubscription({
+              customerId: rbCustId,
+              planId: planAId,
+              razorpayOrderId: rbOrderId,
+              razorpayPaymentId: rbPaymentId,
+              razorpaySignature: 'sig_rb',
+            });
+          },
+          (err) => {
+            assert.ok(err.message.includes('DELIBERATE_POSTGRES_PAYMENT_INSERT_FAILURE'));
+            return true;
+          }
+        );
+      } finally {
+        activePool.connect = origPoolConnect;
+        if (interceptedClient && origQuery) {
+          interceptedClient.query = origQuery;
+        }
+      }
+
+      // Verify complete rollback against PostgreSQL using our independent inspection client
+      const subsCheck = await client.query('SELECT * FROM customer_subscriptions WHERE customer_id = $1', [rbCustId]);
+      assert.strictEqual(subsCheck.rows.length, 0, 'Subscription row must be rolled back on payment insertion failure');
+
+      const ledgerCheck = await client.query(`
+        SELECT scl.* FROM subscription_credit_ledger scl
+        JOIN customer_subscriptions cs ON scl.subscription_id = cs.id
+        WHERE cs.customer_id = $1;
+      `, [rbCustId]);
+      assert.strictEqual(ledgerCheck.rows.length, 0, 'Credit ledger row must be rolled back on payment insertion failure');
+
+      const paymentCheck = await client.query('SELECT * FROM payments WHERE razorpay_order_id = $1', [rbOrderId]);
+      assert.strictEqual(paymentCheck.rows.length, 0, 'Payment row must not exist in payments table');
+    });
+
+    // -------------------------------------------------------------------------
+    // Test 7: Concurrency Test (First-time customer concurrent purchase)
+    // -------------------------------------------------------------------------
+    await t.test('7. Concurrency: concurrent first-time purchases commit exactly one credit, subscription, payment, and ledger entry', async () => {
+      const concSuffix = `conc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const concCustRes = await client.query(`
+        INSERT INTO customers (id, mobile_number, name, created_at, updated_at)
+        VALUES (gen_random_uuid(), '99992${Math.floor(10000 + Math.random() * 90000)}', 'Concurrent Cust ${concSuffix}', NOW(), NOW())
+        RETURNING id;
+      `);
+      const concCustId = concCustRes.rows[0].id;
+      createdCustomerIds.push(concCustId);
+
+      const concOrderId = `order_conc_${concSuffix}`;
+      const concPaymentId = `pay_conc_${concSuffix}`;
+      const concSig = `sig_conc_${concSuffix}`;
+
+      // Submit identical payment identifiers concurrently across independent database connections
+      const p1 = subscriptionRepository.activateOrRenewSubscription({
+        customerId: concCustId,
+        planId: planAId,
+        razorpayOrderId: concOrderId,
+        razorpayPaymentId: concPaymentId,
+        razorpaySignature: concSig,
+      });
+
+      const p2 = subscriptionRepository.activateOrRenewSubscription({
+        customerId: concCustId,
+        planId: planAId,
+        razorpayOrderId: concOrderId,
+        razorpayPaymentId: concPaymentId,
+        razorpaySignature: concSig,
+      });
+
+      const [res1, res2] = await Promise.all([p1, p2]);
+
+      // Both promises must succeed
+      assert.ok(res1.subscription?.id, 'Call 1 must succeed');
+      assert.ok(res2.subscription?.id, 'Call 2 must succeed');
+      assert.strictEqual(res1.subscription.id, res2.subscription.id, 'Both calls must resolve to the exact same subscription ID');
+
+      createdSubscriptionIds.push(res1.subscription.id);
+      if (res1.payment?.id) createdPaymentIds.push(res1.payment.id);
+      if (res2.payment?.id && res2.payment.id !== res1.payment?.id) createdPaymentIds.push(res2.payment.id);
+
+      // Exactly one must be the primary activation, and the other must be the idempotent replay
+      const replayCount = (res1.idempotentReplay ? 1 : 0) + (res2.idempotentReplay ? 1 : 0);
+      assert.strictEqual(replayCount, 1, 'Exactly one concurrent call must be the initial purchase and the other an idempotent replay');
+
+      // Verify the real PostgreSQL database state
+      const subRows = await client.query('SELECT id, credit_balance FROM customer_subscriptions WHERE customer_id = $1', [concCustId]);
+      assert.strictEqual(subRows.rows.length, 1, 'Exactly one customer subscription row must be committed in PostgreSQL');
+      assert.strictEqual(parseFloat(subRows.rows[0].credit_balance), 500, 'Credit balance must be exactly 500 (zero duplicate credit applied)');
+
+      const ledgerRows = await client.query(`
+        SELECT scl.* FROM subscription_credit_ledger scl
+        JOIN customer_subscriptions cs ON scl.subscription_id = cs.id
+        WHERE cs.customer_id = $1;
+      `, [concCustId]);
+      assert.strictEqual(ledgerRows.rows.length, 1, 'Exactly one ledger entry must be committed in PostgreSQL');
+      assert.strictEqual(parseFloat(ledgerRows.rows[0].resulting_balance), 500, 'Resulting balance must be 500');
+
+      const paymentRows = await client.query('SELECT id, subscription_id, status FROM payments WHERE razorpay_order_id = $1', [concOrderId]);
+      assert.strictEqual(paymentRows.rows.length, 1, 'Exactly one payment row must be committed in PostgreSQL');
+      assert.strictEqual(paymentRows.rows[0].subscription_id, res1.subscription.id, 'Payment must link to the committed subscription');
+    });
 
   } finally {
     // -------------------------------------------------------------------------
@@ -328,5 +477,9 @@ test('PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)'
 
     client.release();
     await pool.end();
+    try {
+      const dbPoolModule = require('../../lib/db/pool');
+      await dbPoolModule.getPool().end();
+    } catch (_) {}
   }
 });
