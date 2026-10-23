@@ -35,20 +35,16 @@ export default function WorkerBookingDetailsPage({ params }) {
     setLoading(true);
     setError(null);
 
-    const token = localStorage.getItem('pondfish_worker_token');
-    if (!token) {
-      router.replace('/worker/login');
-      return;
-    }
-
     try {
       const res = await fetch(`/api/v1/worker/bookings/${bookingId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       });
 
       const json = await res.json();
       if (!res.ok || !json.success) {
         if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('pondfish_worker_token');
+          localStorage.removeItem('pondfish_worker_info');
           router.replace('/worker/login');
           return;
         }
@@ -74,15 +70,14 @@ export default function WorkerBookingDetailsPage({ params }) {
   // Handle transition: CONFIRMED -> PENDING_COLLECTION
   async function handleMarkPreparing() {
     setPreparing(true);
-    const token = localStorage.getItem('pondfish_worker_token');
 
     try {
       const res = await fetch(`/api/v1/worker/bookings/${bookingId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ status: 'PENDING_COLLECTION' }),
       });
 
@@ -108,15 +103,14 @@ export default function WorkerBookingDetailsPage({ params }) {
     }
 
     setCompleting(true);
-    const token = localStorage.getItem('pondfish_worker_token');
 
     try {
       const res = await fetch(`/api/v1/worker/bookings/${bookingId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
       });
 
       const json = await res.json();

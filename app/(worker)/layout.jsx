@@ -16,9 +16,13 @@ export default function WorkerLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [worker, setWorker] = useState(null);
+  const [cachedProfile, setCachedProfile] = useState(null);
+  const [sessionState, setSessionState] = useState('VERIFYING'); // 'VERIFYING' | 'AUTHENTICATED' | 'OFFLINE' | 'UNAUTHENTICATED'
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [logoutError, setLogoutError] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isLoginPage = pathname === '/worker/login';
 
@@ -37,29 +41,39 @@ export default function WorkerLayout({ children }) {
       return;
     }
 
-    const cachedWorker = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_info') : null;
-    if (cachedWorker) {
+    // Load cached profile display metadata only (never establishes authenticated session)
+    const cached = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_info') : null;
+    if (cached) {
       try {
-        setWorker(JSON.parse(cachedWorker));
-      } catch {
-        // invalid cache
-      }
+        setCachedProfile(JSON.parse(cached));
+      } catch {}
     }
 
-    // Verify session with backend via credentials (cookie) and optional Bearer header
-    const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_token') : null;
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    // Purge any legacy token from browser storage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('pondfish_worker_token');
+    }
 
+    // Verify session with backend via secure HttpOnly cookie
     fetch('/api/v1/worker/auth/me', {
-      headers,
       credentials: 'include',
     })
       .then((res) => {
-        if (res.status === 401 || res.status === 403) {
-          localStorage.removeItem('pondfish_worker_token');
-          localStorage.removeItem('pondfish_worker_info');
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            // Explicit server authentication rejection:
+            // Purge cached metadata and redirect to login
+            localStorage.removeItem('pondfish_worker_token');
+            localStorage.removeItem('pondfish_worker_info');
+            setWorker(null);
+            setCachedProfile(null);
+            setSessionState('UNAUTHENTICATED');
+            router.replace('/worker/login');
+            return null;
+          }
+          // Server error (e.g. 500, 503)
           setWorker(null);
-          router.replace('/worker/login');
+          setSessionState('OFFLINE');
           return null;
         }
         return res.json();
@@ -67,12 +81,19 @@ export default function WorkerLayout({ children }) {
       .then((json) => {
         if (json && json.success && json.data?.worker) {
           setWorker(json.data.worker);
+          setCachedProfile(json.data.worker);
+          setSessionState('AUTHENTICATED');
           localStorage.setItem('pondfish_worker_info', JSON.stringify(json.data.worker));
+        } else if (json) {
+          setWorker(null);
+          setSessionState('UNAUTHENTICATED');
+          router.replace('/worker/login');
         }
       })
       .catch((err) => {
-        // Transient network issue: keep cached worker info if present
+        // Transient network issue: preserve cached metadata for display without treating as verified
         console.warn('[WorkerLayout] Network issue during session verification:', err.message);
+        setSessionState('OFFLINE');
       })
       .finally(() => {
         setLoading(false);
@@ -80,20 +101,51 @@ export default function WorkerLayout({ children }) {
   }, [isLoginPage, router]);
 
   async function handleLogout() {
+    setIsLoggingOut(true);
+    setLogoutError(null);
+
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_token') : null;
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      await fetch('/api/v1/worker/auth/logout', {
+      const res = await fetch('/api/v1/worker/auth/logout', {
         method: 'POST',
-        headers,
         credentials: 'include',
       });
-    } catch {}
 
-    localStorage.removeItem('pondfish_worker_token');
-    localStorage.removeItem('pondfish_worker_info');
-    setWorker(null);
-    window.location.href = '/worker/login';
+      const json = await res.json().catch(() => ({}));
+
+      // Distinguish confirmed server-side revocation from failed logout
+      if (!res.ok || !json.success) {
+        // If session was already expired or revoked at route level (401/403), treat as terminated
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('pondfish_worker_token');
+          localStorage.removeItem('pondfish_worker_info');
+          setWorker(null);
+          setCachedProfile(null);
+          setSessionState('UNAUTHENTICATED');
+          window.location.href = '/worker/login';
+          return;
+        }
+
+        // Server-side revocation failed (e.g. 500 error):
+        // Never report logout as successfully revoked when the server returned an error.
+        // Keep authenticated session state and credentials intact to allow safe retry.
+        const errMsg = json.error?.message || 'Server failed to revoke session. Please retry.';
+        setLogoutError(errMsg);
+        return;
+      }
+
+      // Confirmed server-side revocation: clear local state and redirect to login
+      localStorage.removeItem('pondfish_worker_token');
+      localStorage.removeItem('pondfish_worker_info');
+      setWorker(null);
+      setCachedProfile(null);
+      setSessionState('UNAUTHENTICATED');
+      window.location.href = '/worker/login';
+    } catch {
+      // Network failure during logout: do not claim session is revoked
+      setLogoutError('Network error prevented session revocation. Check your connection and retry.');
+    } finally {
+      setIsLoggingOut(false);
+    }
   }
 
   if (isLoginPage) {
@@ -157,20 +209,52 @@ export default function WorkerLayout({ children }) {
             </span>
           </Link>
 
-          <span
-            className="pf-worker-active-badge"
-            style={{
-              fontSize: '11px',
-              background: '#DCFCE7',
-              color: '#166534',
-              padding: '3px 9px',
-              borderRadius: '20px',
-              fontWeight: '800',
-              border: '1px solid #BBF7D0',
-            }}
-          >
-            ● STORE ACTIVE
-          </span>
+          {sessionState === 'AUTHENTICATED' ? (
+            <span
+              className="pf-worker-active-badge"
+              style={{
+                fontSize: '11px',
+                background: '#DCFCE7',
+                color: '#166534',
+                padding: '3px 9px',
+                borderRadius: '20px',
+                fontWeight: '800',
+                border: '1px solid #BBF7D0',
+              }}
+            >
+              ● STORE ACTIVE
+            </span>
+          ) : sessionState === 'OFFLINE' ? (
+            <span
+              className="pf-worker-active-badge"
+              style={{
+                fontSize: '11px',
+                background: '#FEF3C7',
+                color: '#92400E',
+                padding: '3px 9px',
+                borderRadius: '20px',
+                fontWeight: '800',
+                border: '1px solid #FDE68A',
+              }}
+            >
+              ⚠️ OFFLINE / UNVERIFIED
+            </span>
+          ) : (
+            <span
+              className="pf-worker-active-badge"
+              style={{
+                fontSize: '11px',
+                background: '#F1F5F9',
+                color: '#475569',
+                padding: '3px 9px',
+                borderRadius: '20px',
+                fontWeight: '800',
+                border: '1px solid #E2E8F0',
+              }}
+            >
+              VERIFYING...
+            </span>
+          )}
         </div>
 
         {/* Desktop Navigation Tabs */}
@@ -203,7 +287,7 @@ export default function WorkerLayout({ children }) {
 
         {/* Worker Badge & Logout */}
         <div className="pf-worker-user-section">
-          {worker && (
+          {worker ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div
                 style={{
@@ -228,9 +312,35 @@ export default function WorkerLayout({ children }) {
                 <div style={{ fontSize: '11px', color: '#64748B' }}>{worker.mobileNumber || ''}</div>
               </div>
             </div>
-          )}
+          ) : cachedProfile && sessionState === 'OFFLINE' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.85 }}>
+              <div
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '10px',
+                  background: '#FEF3C7',
+                  color: '#92400E',
+                  fontWeight: '800',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  border: '1px solid #FDE68A',
+                  flexShrink: 0,
+                }}
+              >
+                {cachedProfile.name ? cachedProfile.name.charAt(0).toUpperCase() : 'W'}
+              </div>
+              <div className="pf-worker-user-details" style={{ lineHeight: 1.2 }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#92400E' }}>{cachedProfile.name}</div>
+                <div style={{ fontSize: '11px', color: '#B45309' }}>Offline / Unverified</div>
+              </div>
+            </div>
+          ) : null}
           <button
             onClick={handleLogout}
+            disabled={isLoggingOut}
             style={{
               background: '#FEF2F2',
               border: '1px solid #FECACA',
@@ -239,14 +349,127 @@ export default function WorkerLayout({ children }) {
               borderRadius: '8px',
               fontSize: '12px',
               fontWeight: '700',
-              cursor: 'pointer',
+              cursor: isLoggingOut ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
+              opacity: isLoggingOut ? 0.6 : 1,
             }}
           >
-            Sign Out
+            {isLoggingOut ? 'Signing out...' : 'Sign Out'}
           </button>
         </div>
       </header>
+
+      {/* Explicit Revocation Failure Banner when Logout Fails */}
+      {logoutError && (
+        <div
+          role="alert"
+          style={{
+            background: '#FEF2F2',
+            borderBottom: '1px solid #F87171',
+            padding: '12px 16px',
+            color: '#991B1B',
+            fontSize: '13px',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>
+              <strong>Sign Out Failed:</strong> {logoutError} Your server session has not been revoked.
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              disabled={isLoggingOut}
+              onClick={handleLogout}
+              style={{
+                background: '#DC2626',
+                border: '1px solid #B91C1C',
+                color: '#FFFFFF',
+                borderRadius: '6px',
+                padding: '5px 12px',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: isLoggingOut ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isLoggingOut ? 'Retrying...' : 'Retry Sign Out'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLogoutError(null)}
+              style={{
+                background: '#FFFFFF',
+                border: '1px solid #D1D5DB',
+                color: '#4B5563',
+                borderRadius: '6px',
+                padding: '5px 10px',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Explicit Offline Banner when Session Cannot Be Verified */}
+      {sessionState === 'OFFLINE' && (
+        <div
+          role="alert"
+          style={{
+            background: '#FFFBEB',
+            borderBottom: '1px solid #FDE68A',
+            padding: '10px 16px',
+            color: '#92400E',
+            fontSize: '13px',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            textAlign: 'center',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>
+            Live worker session unverified (network connection offline). Protected operations require active server verification.
+          </span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            style={{
+              marginLeft: '8px',
+              background: '#FEF3C7',
+              border: '1px solid #FCD34D',
+              borderRadius: '4px',
+              padding: '2px 8px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              fontWeight: '700',
+              color: '#92400E',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Main Workspace */}
       <main className="pf-worker-main">
@@ -328,7 +551,7 @@ export default function WorkerLayout({ children }) {
             </div>
 
             {/* Worker Profile Mini Card */}
-            {worker && (
+            {worker ? (
               <div style={{
                 background: 'rgba(255, 255, 255, 0.06)',
                 border: '1px solid rgba(255, 255, 255, 0.12)',
@@ -358,7 +581,37 @@ export default function WorkerLayout({ children }) {
                   <div style={{ fontSize: '11px', color: '#94A3B8' }}>{worker.mobileNumber || ''}</div>
                 </div>
               </div>
-            )}
+            ) : cachedProfile && sessionState === 'OFFLINE' ? (
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '10px',
+                padding: '12px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: '#D97706',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '15px',
+                  fontWeight: '800',
+                  color: '#FFFFFF',
+                }}>
+                  {cachedProfile.name ? cachedProfile.name.charAt(0).toUpperCase() : 'W'}
+                </div>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#FDE68A' }}>{cachedProfile.name}</div>
+                  <div style={{ fontSize: '11px', color: '#FCD34D' }}>Offline / Unverified</div>
+                </div>
+              </div>
+            ) : null}
 
             {/* Navigation Links */}
             <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
@@ -389,6 +642,7 @@ export default function WorkerLayout({ children }) {
 
             {/* Logout button at bottom of drawer */}
             <button
+              disabled={isLoggingOut}
               onClick={() => {
                 setMobileMenuOpen(false);
                 handleLogout();
@@ -400,15 +654,17 @@ export default function WorkerLayout({ children }) {
                 color: '#F87171',
                 padding: '12px 14px',
                 borderRadius: '8px',
-                cursor: 'pointer',
+                cursor: isLoggingOut ? 'not-allowed' : 'pointer',
                 fontSize: '13px',
                 fontWeight: '700',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '8px',
+                opacity: isLoggingOut ? 0.6 : 1,
               }}
             >
-              Sign Out
+              {isLoggingOut ? 'Signing out...' : 'Sign Out'}
             </button>
           </div>
         </div>,

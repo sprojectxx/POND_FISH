@@ -118,9 +118,9 @@ export async function POST(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    let status = 500;
-    if (error.code === 'UNAUTHORIZED') status = 401;
-    else if (error.code === 'FORBIDDEN' || error.code === 'CUSTOMER_BILL_MISMATCH') status = 403;
+    let status = error.status || 500;
+    if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED' || error.code === 'WORKER_NOT_FOUND') status = 401;
+    else if (error.code === 'FORBIDDEN' || error.code === 'WORKER_ACCOUNT_DISABLED' || error.code === 'CUSTOMER_BILL_MISMATCH') status = 403;
     else if (error.code === 'BILL_NOT_FOUND' || error.code === 'CUSTOMER_NOT_FOUND') status = 404;
     else if (error.code === 'BILL_ALREADY_PROCESSED') status = 409;
     else if (error.code === 'BILL_NUMBER_MISSING' || error.code === 'INVALID_PAYMENT_SIGNATURE' || error.code === 'PAYMENT_REQUIRED' || error.code === 'BILL_ID_REQUIRED' || error.code === 'CUSTOMER_ID_REQUIRED') status = 400;

@@ -7,23 +7,13 @@
  */
 
 import { NextResponse } from 'next/server';
-const { verifyWorkerSessionToken, extractWorkerToken, completeBookingOrder } = require('../../../../../../../lib/engines/worker');
+const { authenticateWorkerAsync, completeBookingOrder } = require('../../../../../../../lib/engines/worker');
 
 export const dynamic = 'force-dynamic';
 
-function authenticateWorker(request) {
-  const token = extractWorkerToken(request);
-  if (!token) {
-    const err = new Error('MISSING_BEARER_TOKEN');
-    err.code = 'UNAUTHORIZED';
-    throw err;
-  }
-  return verifyWorkerSessionToken(token);
-}
-
 export async function POST(request, { params }) {
   try {
-    const session = authenticateWorker(request);
+    const session = await authenticateWorkerAsync(request);
     const bookingId = params.id;
 
     const result = await completeBookingOrder({
@@ -41,16 +31,24 @@ export async function POST(request, { params }) {
       { status: 200 }
     );
   } catch (error) {
-    if (error.code === 'UNAUTHORIZED' || error.code === 'FORBIDDEN') {
+    if (
+      error.code === 'UNAUTHORIZED' ||
+      error.code === 'FORBIDDEN' ||
+      error.code === 'SESSION_EXPIRED' ||
+      error.code === 'SESSION_REVOKED' ||
+      error.code === 'WORKER_NOT_FOUND' ||
+      error.code === 'WORKER_ACCOUNT_DISABLED'
+    ) {
+      const status = error.status || (error.code === 'FORBIDDEN' || error.code === 'WORKER_ACCOUNT_DISABLED' ? 403 : 401);
       return NextResponse.json(
         {
           success: false,
           error: {
             code: error.code,
-            message: 'Valid worker authorization is required.',
+            message: error.message || 'Valid worker authorization is required.',
           },
         },
-        { status: error.code === 'FORBIDDEN' ? 403 : 401 }
+        { status }
       );
     }
 

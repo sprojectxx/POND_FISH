@@ -30,10 +30,18 @@ export async function POST(request) {
 
     const result = await authenticateWorker({ mobileNumber, password });
 
+    // Authentication token is strictly delivered via secure HttpOnly cookie.
+    // The JSON response payload never discloses session tokens to browser JavaScript,
+    // regardless of arbitrary request-body parameters or caller-supplied headers.
+    const responseData = {
+      worker: result.worker,
+      sessionId: result.sessionId,
+    };
+
     const response = NextResponse.json(
       {
         success: true,
-        data: result,
+        data: responseData,
         message: 'Worker signed in successfully.',
         timestamp: new Date().toISOString(),
       },

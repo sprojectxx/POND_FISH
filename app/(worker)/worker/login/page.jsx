@@ -50,9 +50,10 @@ export default function WorkerLoginPage() {
         return;
       }
 
-      // Store token and worker profile
-      localStorage.setItem('pondfish_worker_token', json.data.token);
+      // Authoritative session is stored in the secure HttpOnly cookie set by the server.
+      // Cache non-sensitive worker metadata strictly for UI hydration.
       localStorage.setItem('pondfish_worker_info', JSON.stringify(json.data.worker));
+      localStorage.removeItem('pondfish_worker_token');
 
       router.replace('/worker');
     } catch {

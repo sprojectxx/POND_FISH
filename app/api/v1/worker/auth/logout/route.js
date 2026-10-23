@@ -34,18 +34,18 @@ export async function POST(request) {
     return response;
   } catch (error) {
     console.error('[API ERROR] POST /api/v1/worker/auth/logout:', error.message);
-    const response = NextResponse.json({
-      success: true,
-      message: 'Worker logged out successfully.',
-      timestamp: new Date().toISOString(),
-    });
-    response.cookies.set('worker_session', '', {
-      path: '/',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 0,
-    });
-    return response;
+    // When durable revocation fails, fail closed with 500.
+    // Do NOT clear the cookie: clearing the cookie alone does not prove durable session
+    // revocation, masks the server failure, and destroys credentials needed for retry.
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'LOGOUT_FAILED',
+          message: 'Unable to revoke worker session reliably due to a server error.',
+        },
+      },
+      { status: 500 }
+    );
   }
 }

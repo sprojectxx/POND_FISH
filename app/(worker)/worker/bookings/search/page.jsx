@@ -25,19 +25,19 @@ export default function WorkerBookingSearchPage() {
     setSearching(true);
     setHasSearched(true);
 
-    const token = localStorage.getItem('pondfish_worker_token');
-    if (!token) {
-      router.replace('/worker/login');
-      return;
-    }
-
     try {
       const res = await fetch(`/api/v1/worker/bookings/search?q=${encodeURIComponent(searchTerm.trim())}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       });
 
       const json = await res.json();
       if (!res.ok || !json.success) {
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('pondfish_worker_token');
+          localStorage.removeItem('pondfish_worker_info');
+          router.replace('/worker/login');
+          return;
+        }
         setError(json.error?.message || 'Search failed.');
         return;
       }
