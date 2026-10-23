@@ -378,68 +378,120 @@ test('Phase 3 Realtime & Transaction-Display Security Suite (Real WebSocket Inte
   });
 
   // ---------------------------------------------------------------------------
-  // 8. TV Feed Access & Payload Field Privacy Validation
+  // 8. End-to-End TV Privacy, Store-Specific Routing, and Fail-Closed Verification
   // ---------------------------------------------------------------------------
-  await t.test('8. TV feed access and payload fields match explicitly chosen public/private policy', async () => {
-    // 8.1 Test public policy payload fields (data minimization)
-    const rawTx = {
+  await t.test('8. End-to-end TV privacy: Full broadcast path, field minimization, cross-store non-delivery, and fail-closed routing', async () => {
+    // 8.1 Setup real TV displays for Store A and Store B, plus a Customer socket
+    const wsTvStoreA = await connectClient(baseUrl);
+    const wsTvStoreB = await connectClient(baseUrl);
+    const wsCustomer = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${customer1Token}` },
+    });
+
+    await wsTvStoreA.waitForMessage((m) => m.type === 'connection_established');
+    await wsTvStoreB.waitForMessage((m) => m.type === 'connection_established');
+    await wsCustomer.waitForMessage((m) => m.type === 'connection_established');
+
+    // Subscribe Store A TV to its store channel
+    wsTvStoreA.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_a' }));
+    await wsTvStoreA.waitForMessage((m) => m.type === 'subscribed' && m.channel === 'tv:store:store_a');
+
+    // Subscribe Store B TV to its store channel
+    wsTvStoreB.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_b' }));
+    await wsTvStoreB.waitForMessage((m) => m.type === 'subscribed' && m.channel === 'tv:store:store_b');
+
+    // 8.2 Construct a raw transaction with full sensitive customer & payment details
+    const rawTxA = {
       id: '550e8400-e29b-41d4-a716-446655440000',
-      transactionNumber: 'TXN-20261024-001',
-      bookingCode: 'BK789',
-      customerName: '9876543210', // Phone number as name -> Must be masked!
-      finalPaidAmount: 520.5,
+      transactionNumber: 'TXN-STOREA-20261024-001',
+      bookingCode: 'BKA123',
+      customerName: '+91 9876543210', // Phone number as name -> Must be masked to Valued Customer!
+      finalPaidAmount: 850.5,
       createdAt: new Date().toISOString(),
-      items: [{ fishName: 'Rohu', quantityKg: 2.5 }],
-      // Fields that MUST NOT leak:
-      mobileNumber: '9876543210',
-      customerEmail: 'customer@test.com',
-      razorpayPaymentId: 'pay_secret123',
-      razorpayOrderId: 'order_secret456',
-      workerId: 'worker_private_id',
+      items: [{ fishName: 'Tiger Prawns', quantityKg: 1.5 }],
+      // SENSITIVE FIELDS THAT MUST NEVER LEAK ACROSS REALTIME:
+      customerPhone: '+91 9876543210',
+      customerEmail: 'secret.customer@example.com',
+      razorpayPaymentId: 'pay_secret_token_12345',
+      razorpayOrderId: 'order_secret_token_67890',
+      workerId: 'worker_private_uuid_888',
+      subCreditBalance: 2500,
+      cardLast4: '1111',
     };
 
-    const normalized = tvFeedEngine.normalizeTVPayload(rawTx);
+    // Normalize through TV Feed engine
+    const normalizedA = tvFeedEngine.normalizeTVPayload(rawTxA);
 
-    // Verify allowed fields
-    assert.strictEqual(normalized.transactionNumber, 'TXN-20261024-001');
-    assert.strictEqual(normalized.billNumber, '#BK789');
-    assert.strictEqual(normalized.customerName, 'Valued Customer', 'Phone number must be masked to Valued Customer');
-    assert.strictEqual(normalized.paidAmount, 521);
-    assert.strictEqual(normalized.items.length, 1);
-    assert.strictEqual(normalized.items[0].fishName, 'Rohu');
+    // Broadcast through authoritative RealtimeBroadcastEngine for Store A
+    const broadcastResult = realtimeBroadcastEngine.broadcastTransaction(normalizedA, { storeId: 'store_a' });
+    assert.strictEqual(broadcastResult.deliveredCount >= 1, true, 'Delivered to Store A TV');
 
-    // Verify disallowed fields do not exist in normalized payload
-    assert.strictEqual(normalized.mobileNumber, undefined);
-    assert.strictEqual(normalized.customerEmail, undefined);
-    assert.strictEqual(normalized.razorpayPaymentId, undefined);
-    assert.strictEqual(normalized.razorpayOrderId, undefined);
-    assert.strictEqual(normalized.workerId, undefined);
+    // 8.3 Verify Store A TV receives the transaction with expected display fields
+    const receivedA = await wsTvStoreA.waitForMessage((m) => m.event === 'successful_transaction');
+    assert.strictEqual(receivedA.data.transactionNumber, 'TXN-STOREA-20261024-001');
+    assert.strictEqual(receivedA.data.billNumber, '#BKA123');
+    assert.strictEqual(receivedA.data.customerName, 'Valued Customer', 'Phone number must be masked to Valued Customer');
+    assert.strictEqual(receivedA.data.paidAmount, 851);
+    assert.strictEqual(receivedA.data.items.length, 1);
+    assert.strictEqual(receivedA.data.items[0].fishName, 'Tiger Prawns');
 
-    // 8.2 Test TV feed delivery to real WebSocket TV client
-    const wsTV = await connectClient(baseUrl);
-    await wsTV.waitForMessage((m) => m.type === 'connection_established');
+    // Verify all sensitive customer/payment fields are strictly ABSENT on wire payload
+    assert.strictEqual(receivedA.data.customerPhone, undefined, 'customerPhone must be absent');
+    assert.strictEqual(receivedA.data.customerEmail, undefined, 'customerEmail must be absent');
+    assert.strictEqual(receivedA.data.razorpayPaymentId, undefined, 'razorpayPaymentId must be absent');
+    assert.strictEqual(receivedA.data.razorpayOrderId, undefined, 'razorpayOrderId must be absent');
+    assert.strictEqual(receivedA.data.workerId, undefined, 'workerId must be absent');
+    assert.strictEqual(receivedA.data.subCreditBalance, undefined, 'subCreditBalance must be absent');
+    assert.strictEqual(receivedA.data.cardLast4, undefined, 'cardLast4 must be absent');
 
-    realtimeBroadcastEngine.broadcastTransaction(normalized);
-    const receivedTx = await wsTV.waitForMessage((m) => m.event === 'successful_transaction');
-    assert.strictEqual(receivedTx.data.transactionNumber, 'TXN-20261024-001');
-    assert.strictEqual(receivedTx.data.customerName, 'Valued Customer');
+    await sleep(50);
 
-    wsTV.close();
+    // 8.4 Cross-Store Non-Delivery: Verify Store B TV received ZERO messages from Store A
+    const msgsB = wsTvStoreB.getReceivedMessages();
+    assert.strictEqual(
+      msgsB.some((m) => m.data?.transactionNumber === 'TXN-STOREA-20261024-001'),
+      false,
+      'Store B TV must NEVER receive Store A transactions'
+    );
 
-    // 8.3 Test configurable TV auth policy: When PONDFISH_TV_AUTH_REQUIRED=true, anonymous TV access is blocked
+    // 8.5 Customer Isolation: Verify Customer socket received ZERO messages from TV transaction broadcast
+    const msgsCust = wsCustomer.getReceivedMessages();
+    assert.strictEqual(
+      msgsCust.some((m) => m.event === 'successful_transaction'),
+      false,
+      'Customer socket must NEVER receive store TV transaction broadcasts'
+    );
+
+    // 8.6 Missing Store Identity Fail-Closed:
+    // If storeId is missing and cannot be determined from environment, fail closed without global broadcast
+    const savedStoreId = process.env.PONDFISH_STORE_ID;
+    delete process.env.PONDFISH_STORE_ID;
+    try {
+      const undeterminedResult = realtimeBroadcastEngine.broadcastTransaction(normalizedA, { storeId: null });
+      assert.strictEqual(undeterminedResult.deliveredCount, 0, 'Must deliver to 0 clients when store is undetermined');
+      assert.strictEqual(undeterminedResult.reason, 'UNDETERMINED_STORE', 'Must report UNDETERMINED_STORE reason');
+    } finally {
+      if (savedStoreId) process.env.PONDFISH_STORE_ID = savedStoreId;
+    }
+
+    // 8.7 Configurable TV Auth Policy: When PONDFISH_TV_AUTH_REQUIRED=true, anonymous TV access is blocked
     process.env.PONDFISH_TV_AUTH_REQUIRED = 'true';
     try {
       const wsGatedAnon = await connectClient(baseUrl);
       const initGated = await wsGatedAnon.waitForMessage((m) => m.type === 'connection_established');
       assert.strictEqual(initGated.channels.length, 0, 'Anonymous has no default channels when TV auth required');
 
-      wsGatedAnon.send(JSON.stringify({ type: 'subscribe', channel: 'tv:transactions' }));
+      wsGatedAnon.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_a' }));
       const gatedErr = await wsGatedAnon.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
-      assert.strictEqual(gatedErr.channel, 'tv:transactions');
+      assert.strictEqual(gatedErr.channel, 'tv:store:store_a');
       wsGatedAnon.close();
     } finally {
       delete process.env.PONDFISH_TV_AUTH_REQUIRED;
     }
+
+    wsTvStoreA.close();
+    wsTvStoreB.close();
+    wsCustomer.close();
   });
 
   // ---------------------------------------------------------------------------
