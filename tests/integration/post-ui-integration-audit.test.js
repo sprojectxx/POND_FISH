@@ -26,8 +26,21 @@ const {
 } = require('../../lib/engines/worker');
 const workerRepository = require('../../lib/db/repositories/workerRepository');
 const gpsTrackingEngine = require('../../lib/engines/gps-tracking');
+const gpsRepository = require('../../lib/db/repositories/gpsRepository');
+const db = require('../../lib/db/pool');
 
 console.log('=== PONDFISH POST-UI INTEGRATION AUDIT TEST SUITE ===\n');
+
+// Capture initial environment to guarantee test isolation and full teardown
+const savedInitialEnv = {
+  DATABASE_URL: process.env.DATABASE_URL,
+  NODE_ENV: process.env.NODE_ENV,
+  JWT_SECRET: process.env.JWT_SECRET,
+  ALLOW_TEST_SESSION_FALLBACK: process.env.ALLOW_TEST_SESSION_FALLBACK,
+};
+
+// Guarantee synthetic audit tests NEVER connect to or mutate any configured database
+delete process.env.DATABASE_URL;
 
 let passed = 0;
 const TEST_JWT_SECRET = 'pondfish-test-suite-secure-jwt-secret-key-2026';
@@ -123,32 +136,34 @@ console.log('\n[Test Group 2] Disabled Worker Account Enforcement');
   const disabledWorkerId = 'worker-uuid-disabled-99';
   const origFind = workerRepository.findWorkerById;
 
-  // Mock repository response
-  workerRepository.findWorkerById = async (id) => {
-    if (id === disabledWorkerId) {
-      return { id: disabledWorkerId, name: 'Inactive Staff', mobile: '9123456789', active: false };
-    }
-    return null;
-  };
-
-  const sessionId = 'session-disabled-test';
-  const token = generateWorkerSessionToken({ id: disabledWorkerId, name: 'Inactive Staff' }, sessionId);
-
-  let disabledError = null;
   try {
-    await verifyWorkerSessionAsync(token);
-  } catch (err) {
-    disabledError = err;
+    // Mock repository response
+    workerRepository.findWorkerById = async (id) => {
+      if (id === disabledWorkerId) {
+        return { id: disabledWorkerId, name: 'Inactive Staff', mobile: '9123456789', active: false };
+      }
+      return null;
+    };
+
+    const sessionId = 'session-disabled-test';
+    const token = generateWorkerSessionToken({ id: disabledWorkerId, name: 'Inactive Staff' }, sessionId);
+
+    let disabledError = null;
+    try {
+      await verifyWorkerSessionAsync(token);
+    } catch (err) {
+      disabledError = err;
+    }
+
+    assert.ok(disabledError, 'Disabled account must throw');
+    assert.strictEqual(disabledError.code, 'WORKER_ACCOUNT_DISABLED');
+    assert.strictEqual(disabledError.status, 403);
+    passed++;
+    console.log('  ✓ 2.1 verifyWorkerSessionAsync strictly rejects disabled worker accounts with status 403');
+  } finally {
+    // Restore repository
+    workerRepository.findWorkerById = origFind;
   }
-
-  // Restore repository
-  workerRepository.findWorkerById = origFind;
-
-  assert.ok(disabledError, 'Disabled account must throw');
-  assert.strictEqual(disabledError.code, 'WORKER_ACCOUNT_DISABLED');
-  assert.strictEqual(disabledError.status, 403);
-  passed++;
-  console.log('  ✓ 2.1 verifyWorkerSessionAsync strictly rejects disabled worker accounts with status 403');
 }
 
 // ---------------------------------------------------------------------------
@@ -179,20 +194,21 @@ console.log('\n[Test Group 3] Cross-Portal Role Boundary Isolation');
 console.log('\n[Test Group 4] Public API Truthfulness & Fake Data Elimination');
 {
   // Test 4.1: Customer Live Tracking Contract
-  let trackingData = null;
+  const origGetJourney = gpsRepository.getActiveCustomerJourney;
   try {
-    trackingData = await gpsTrackingEngine.getCustomerLiveTracking();
-  } catch {
-    // If DB is offline, verify fallback shape
-    trackingData = { active: false, message: 'No live delivery currently published for customer tracking.' };
-  }
+    gpsRepository.getActiveCustomerJourney = async () => null;
+    const trackingData = await gpsTrackingEngine.getCustomerLiveTracking();
 
-  assert.strictEqual(typeof trackingData.active, 'boolean');
-  // Ensure no sensitive driver internals are leaked to public
-  assert.strictEqual(trackingData.driverMobile, undefined);
-  assert.strictEqual(trackingData.licensePlate, undefined);
-  passed++;
-  console.log('  ✓ 4.1 gpsTrackingEngine.getCustomerLiveTracking conforms to customer-safe public telemetry schema');
+    assert.strictEqual(typeof trackingData.active, 'boolean');
+    assert.strictEqual(trackingData.active, false);
+    // Ensure no sensitive driver internals are leaked to public
+    assert.strictEqual(trackingData.driverMobile, undefined);
+    assert.strictEqual(trackingData.licensePlate, undefined);
+    passed++;
+    console.log('  ✓ 4.1 gpsTrackingEngine.getCustomerLiveTracking conforms to customer-safe public telemetry schema');
+  } finally {
+    gpsRepository.getActiveCustomerJourney = origGetJourney;
+  }
 
   // Test 4.2: Verify unapproved lib/supabase-client.js is deleted
   const supabaseClientPath = path.join(__dirname, '../../lib/supabase-client.js');
@@ -267,102 +283,104 @@ console.log('\n[Test Group 7] Worker Login Token Concealment & Scoped API Respon
   const origFindByMobile = workerRepository.findWorkerByMobile;
   const origVerifyPw = workerRepository.verifyPassword;
 
-  workerRepository.findWorkerByMobile = async (mobile) => ({
-    id: 'worker-login-audit-1',
-    name: 'Suresh Staff',
-    mobile_number: mobile,
-    active: true,
-    password_hash: 'mock-hash',
-  });
-  workerRepository.verifyPassword = () => true;
+  try {
+    workerRepository.findWorkerByMobile = async (mobile) => ({
+      id: 'worker-login-audit-1',
+      name: 'Suresh Staff',
+      mobile_number: mobile,
+      active: true,
+      password_hash: 'mock-hash',
+    });
+    workerRepository.verifyPassword = () => true;
 
-  // 7.1 Standard Browser Login: MUST NOT return token in response body
-  const browserReq = createMockRequest({
-    pathname: '/api/v1/worker/auth/login',
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-  });
-  browserReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
+    // 7.1 Standard Browser Login: MUST NOT return token in response body
+    const browserReq = createMockRequest({
+      pathname: '/api/v1/worker/auth/login',
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    });
+    browserReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
 
-  const browserRes = await loginRoute.POST(browserReq);
-  assert.strictEqual(browserRes.status, 200);
-  const browserBody = await browserRes.json();
-  assert.strictEqual(browserBody.success, true);
-  assert.ok(browserBody.data.worker, 'Worker profile must be returned');
-  assert.ok(browserBody.data.sessionId, 'SessionId must be returned');
-  assert.strictEqual(browserBody.data.token, undefined, 'Session token MUST NOT be returned in JSON payload for browser clients');
+    const browserRes = await loginRoute.POST(browserReq);
+    assert.strictEqual(browserRes.status, 200);
+    const browserBody = await browserRes.json();
+    assert.strictEqual(browserBody.success, true);
+    assert.ok(browserBody.data.worker, 'Worker profile must be returned');
+    assert.ok(browserBody.data.sessionId, 'SessionId must be returned');
+    assert.strictEqual(browserBody.data.token, undefined, 'Session token MUST NOT be returned in JSON payload for browser clients');
 
-  const setCookieHeader = browserRes.cookies.get('worker_session');
-  assert.ok(setCookieHeader, 'worker_session cookie must be set');
-  assert.strictEqual(setCookieHeader.httpOnly, true, 'worker_session cookie must be HttpOnly');
+    const setCookieHeader = browserRes.cookies.get('worker_session');
+    assert.ok(setCookieHeader, 'worker_session cookie must be set');
+    assert.strictEqual(setCookieHeader.httpOnly, true, 'worker_session cookie must be HttpOnly');
 
-  // 7.2 Adversarial & Token-Request Flags/Headers MUST NEVER Disclose Bearer Token
-  // Attempt 1: body returnToken: true
-  const tokenFlagReq = createMockRequest({
-    pathname: '/api/v1/worker/auth/login',
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-  });
-  tokenFlagReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', returnToken: true });
-  const tokenFlagRes = await loginRoute.POST(tokenFlagReq);
-  assert.strictEqual(tokenFlagRes.status, 200);
-  const tokenFlagBody = await tokenFlagRes.json();
-  assert.strictEqual(tokenFlagBody.data.token, undefined, 'returnToken flag must never disclose bearer token');
+    // 7.2 Adversarial & Token-Request Flags/Headers MUST NEVER Disclose Bearer Token
+    // Attempt 1: body returnToken: true
+    const tokenFlagReq = createMockRequest({
+      pathname: '/api/v1/worker/auth/login',
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    });
+    tokenFlagReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', returnToken: true });
+    const tokenFlagRes = await loginRoute.POST(tokenFlagReq);
+    assert.strictEqual(tokenFlagRes.status, 200);
+    const tokenFlagBody = await tokenFlagRes.json();
+    assert.strictEqual(tokenFlagBody.data.token, undefined, 'returnToken flag must never disclose bearer token');
 
-  // Attempt 2: body clientType: 'api'
-  const clientTypeReq = createMockRequest({
-    pathname: '/api/v1/worker/auth/login',
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-  });
-  clientTypeReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', clientType: 'api' });
-  const clientTypeRes = await loginRoute.POST(clientTypeReq);
-  assert.strictEqual(clientTypeRes.status, 200);
-  const clientTypeBody = await clientTypeRes.json();
-  assert.strictEqual(clientTypeBody.data.token, undefined, 'clientType body field must never disclose bearer token');
+    // Attempt 2: body clientType: 'api'
+    const clientTypeReq = createMockRequest({
+      pathname: '/api/v1/worker/auth/login',
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    });
+    clientTypeReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', clientType: 'api' });
+    const clientTypeRes = await loginRoute.POST(clientTypeReq);
+    assert.strictEqual(clientTypeRes.status, 200);
+    const clientTypeBody = await clientTypeRes.json();
+    assert.strictEqual(clientTypeBody.data.token, undefined, 'clientType body field must never disclose bearer token');
 
-  // Attempt 3: header x-client-type: api
-  const headerApiReq = createMockRequest({
-    pathname: '/api/v1/worker/auth/login',
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-client-type': 'api' },
-  });
-  headerApiReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
-  const headerApiRes = await loginRoute.POST(headerApiReq);
-  assert.strictEqual(headerApiRes.status, 200);
-  const headerApiBody = await headerApiRes.json();
-  assert.strictEqual(headerApiBody.data.token, undefined, 'x-client-type header must never disclose bearer token');
+    // Attempt 3: header x-client-type: api
+    const headerApiReq = createMockRequest({
+      pathname: '/api/v1/worker/auth/login',
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-client-type': 'api' },
+    });
+    headerApiReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
+    const headerApiRes = await loginRoute.POST(headerApiReq);
+    assert.strictEqual(headerApiRes.status, 200);
+    const headerApiBody = await headerApiRes.json();
+    assert.strictEqual(headerApiBody.data.token, undefined, 'x-client-type header must never disclose bearer token');
 
-  // Attempt 4: header x-auth-mode: token
-  const headerAuthModeReq = createMockRequest({
-    pathname: '/api/v1/worker/auth/login',
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-auth-mode': 'token' },
-  });
-  headerAuthModeReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
-  const headerAuthModeRes = await loginRoute.POST(headerAuthModeReq);
-  assert.strictEqual(headerAuthModeRes.status, 200);
-  const headerAuthModeBody = await headerAuthModeRes.json();
-  assert.strictEqual(headerAuthModeBody.data.token, undefined, 'x-auth-mode header must never disclose bearer token');
+    // Attempt 4: header x-auth-mode: token
+    const headerAuthModeReq = createMockRequest({
+      pathname: '/api/v1/worker/auth/login',
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-auth-mode': 'token' },
+    });
+    headerAuthModeReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123' });
+    const headerAuthModeRes = await loginRoute.POST(headerAuthModeReq);
+    assert.strictEqual(headerAuthModeRes.status, 200);
+    const headerAuthModeBody = await headerAuthModeRes.json();
+    assert.strictEqual(headerAuthModeBody.data.token, undefined, 'x-auth-mode header must never disclose bearer token');
 
-  // Attempt 5: Combined headers and body flags
-  const combinedReq = createMockRequest({
-    pathname: '/api/v1/worker/auth/login',
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-client-type': 'api', 'x-auth-mode': 'token' },
-  });
-  combinedReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', returnToken: true, clientType: 'api' });
-  const combinedRes = await loginRoute.POST(combinedReq);
-  assert.strictEqual(combinedRes.status, 200);
-  const combinedBody = await combinedRes.json();
-  assert.strictEqual(combinedBody.data.token, undefined, 'Combined flags must never disclose bearer token');
-  assert.ok(combinedRes.cookies.get('worker_session'), 'HttpOnly session cookie must be set');
+    // Attempt 5: Combined headers and body flags
+    const combinedReq = createMockRequest({
+      pathname: '/api/v1/worker/auth/login',
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-client-type': 'api', 'x-auth-mode': 'token' },
+    });
+    combinedReq.json = async () => ({ mobileNumber: '9876543210', password: 'ValidPassword123', returnToken: true, clientType: 'api' });
+    const combinedRes = await loginRoute.POST(combinedReq);
+    assert.strictEqual(combinedRes.status, 200);
+    const combinedBody = await combinedRes.json();
+    assert.strictEqual(combinedBody.data.token, undefined, 'Combined flags must never disclose bearer token');
+    assert.ok(combinedRes.cookies.get('worker_session'), 'HttpOnly session cookie must be set');
 
-  workerRepository.findWorkerByMobile = origFindByMobile;
-  workerRepository.verifyPassword = origVerifyPw;
-
-  passed++;
-  console.log('  ✓ 7.1 Browser worker login strictly conceals token; all token-request flags and caller-supplied headers rejected');
+    passed++;
+    console.log('  ✓ 7.1 Browser worker login strictly conceals token; all token-request flags and caller-supplied headers rejected');
+  } finally {
+    workerRepository.findWorkerByMobile = origFindByMobile;
+    workerRepository.verifyPassword = origVerifyPw;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -370,37 +388,63 @@ console.log('\n[Test Group 7] Worker Login Token Concealment & Scoped API Respon
 // ---------------------------------------------------------------------------
 console.log('\n[Test Group 8] In-Memory Session Fallback Guard Hardening');
 {
-  // 8.1 Accidental NODE_ENV=test in deployed environment (without ALLOW_TEST_SESSION_FALLBACK)
-  delete process.env.ALLOW_TEST_SESSION_FALLBACK;
-  let missingGuardErr = null;
+  const origNodeEnv = process.env.NODE_ENV;
+  const origAllowFallback = process.env.ALLOW_TEST_SESSION_FALLBACK;
+  const origDbUrl = process.env.DATABASE_URL;
+
   try {
-    await loadWorkerSessionRegistry();
-  } catch (err) {
-    missingGuardErr = err;
+    // Explicitly isolate from any database URL to exercise the no-database fallback guard path
+    delete process.env.DATABASE_URL;
+
+    // 8.1 Accidental NODE_ENV=test in deployed environment (without ALLOW_TEST_SESSION_FALLBACK)
+    delete process.env.ALLOW_TEST_SESSION_FALLBACK;
+    process.env.NODE_ENV = 'test';
+    let missingGuardErr = null;
+    try {
+      await loadWorkerSessionRegistry();
+    } catch (err) {
+      missingGuardErr = err;
+    }
+    assert.ok(missingGuardErr, 'Accidental NODE_ENV=test without explicit guard must fail closed');
+    assert.strictEqual(missingGuardErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+    assert.strictEqual(missingGuardErr.status, 500);
+
+    // 8.2 Production runtime strictly rejects in-memory fallback even if guard was set
+    process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
+    process.env.NODE_ENV = 'production';
+    let prodErr = null;
+    try {
+      await loadWorkerSessionRegistry();
+    } catch (err) {
+      prodErr = err;
+    }
+    assert.ok(prodErr, 'Production environment must strictly reject in-memory session registry');
+    assert.strictEqual(prodErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+    assert.strictEqual(prodErr.status, 500);
+
+    // 8.3 Development runtime strictly rejects in-memory fallback even if guard was set
+    process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
+    process.env.NODE_ENV = 'development';
+    let devErr = null;
+    try {
+      await loadWorkerSessionRegistry();
+    } catch (err) {
+      devErr = err;
+    }
+    assert.ok(devErr, 'Development environment must strictly reject in-memory session registry');
+    assert.strictEqual(devErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+    assert.strictEqual(devErr.status, 500);
+
+    passed++;
+    console.log('  ✓ 8.1 In-memory session fallback strictly fails closed in production, development, and unflagged test environments');
+  } finally {
+    if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
+    else delete process.env.NODE_ENV;
+    if (origAllowFallback !== undefined) process.env.ALLOW_TEST_SESSION_FALLBACK = origAllowFallback;
+    else delete process.env.ALLOW_TEST_SESSION_FALLBACK;
+    if (origDbUrl !== undefined) process.env.DATABASE_URL = origDbUrl;
+    else delete process.env.DATABASE_URL;
   }
-  assert.ok(missingGuardErr, 'Accidental NODE_ENV=test without explicit guard must fail closed');
-  assert.strictEqual(missingGuardErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
-  assert.strictEqual(missingGuardErr.status, 500);
-
-  // 8.2 Production runtime strictly rejects in-memory fallback even if guard was set
-  process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
-  process.env.NODE_ENV = 'production';
-  let prodErr = null;
-  try {
-    await loadWorkerSessionRegistry();
-  } catch (err) {
-    prodErr = err;
-  }
-  assert.ok(prodErr, 'Production environment must strictly reject in-memory session registry');
-  assert.strictEqual(prodErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
-  assert.strictEqual(prodErr.status, 500);
-
-  // Restore test configuration
-  process.env.NODE_ENV = 'test';
-  process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
-
-  passed++;
-  console.log('  ✓ 8.1 Accidental NODE_ENV=test without explicit guard strictly fails closed; production rejects in-memory fallback');
 }
 
 // ---------------------------------------------------------------------------
@@ -448,40 +492,42 @@ console.log('\n[Test Group 10] Worker Logout Server Revocation Failure Contract'
 
   const logoutRoute = loadRoute('../../app/api/v1/worker/auth/logout/route.js');
   const workerEngine = require('../../lib/engines/worker');
-  const pool = require('../../lib/db/pool');
 
   // 10.1 Durable Revocation Failure (500): Cookie MUST NOT be cleared
   const origDbUrl = process.env.DATABASE_URL;
-  process.env.DATABASE_URL = 'postgresql://invalid-host-will-fail:5432/pondfish';
-
-  const origWithTx = pool.withTransaction;
-  pool.withTransaction = async () => {
-    throw new Error('Database transaction failed during session deletion');
-  };
-
+  const origWithTx = db.withTransaction;
   const token = workerEngine.generateWorkerSessionToken({ id: 'w-fail-log', name: 'Staff' }, 'sess-fail-logout');
 
-  const failedLogoutReq = createMockRequest({
-    pathname: '/api/v1/worker/auth/logout',
-    method: 'POST',
-    cookies: { worker_session: token },
-  });
+  try {
+    process.env.DATABASE_URL = 'mock://isolated-test-revocation-failure';
+    db.withTransaction = async () => {
+      const err = new Error('Database transaction failed during session deletion');
+      err.code = 'TRANSACTION_FAILURE';
+      throw err;
+    };
 
-  const failedLogoutRes = await logoutRoute.POST(failedLogoutReq);
+    const failedLogoutReq = createMockRequest({
+      pathname: '/api/v1/worker/auth/logout',
+      method: 'POST',
+      cookies: { worker_session: token },
+    });
 
-  pool.withTransaction = origWithTx;
-  if (origDbUrl) process.env.DATABASE_URL = origDbUrl;
-  else delete process.env.DATABASE_URL;
+    const failedLogoutRes = await logoutRoute.POST(failedLogoutReq);
 
-  assert.strictEqual(failedLogoutRes.status, 500, 'Logout route must return 500 on revocation failure');
-  const failedLogoutBody = await failedLogoutRes.json();
-  assert.strictEqual(failedLogoutBody.success, false);
-  assert.strictEqual(failedLogoutBody.error.code, 'LOGOUT_FAILED');
-  assert.strictEqual(
-    failedLogoutRes.cookies.get('worker_session'),
-    undefined,
-    'Session cookie MUST NOT be cleared when server-side revocation fails (avoids false success and preserves retry credentials)'
-  );
+    assert.strictEqual(failedLogoutRes.status, 500, 'Logout route must return 500 on revocation failure');
+    const failedLogoutBody = await failedLogoutRes.json();
+    assert.strictEqual(failedLogoutBody.success, false);
+    assert.strictEqual(failedLogoutBody.error.code, 'LOGOUT_FAILED');
+    assert.strictEqual(
+      failedLogoutRes.cookies.get('worker_session'),
+      undefined,
+      'Session cookie MUST NOT be cleared when server-side revocation fails (avoids false success and preserves retry credentials)'
+    );
+  } finally {
+    db.withTransaction = origWithTx;
+    if (origDbUrl !== undefined) process.env.DATABASE_URL = origDbUrl;
+    else delete process.env.DATABASE_URL;
+  }
 
   // 10.2 Confirmed Server-Side Revocation (200): Cookie is invalidated
   const successfulLogoutReq = createMockRequest({
@@ -608,45 +654,102 @@ console.log('\n[Test Group 11] Worker Session Registry Fail-Closed Verification 
 
     // 11.5 Registry/database read failure produces a fail-closed error, not successful authentication
     const origDbUrl = process.env.DATABASE_URL;
-    process.env.DATABASE_URL = 'postgresql://invalid-host-will-fail:5432/pondfish';
-    const pool = require('../../lib/db/pool');
-    const origQuery = pool.query;
-    pool.query = async () => {
-      throw new Error('Database read failure: query timeout');
-    };
-
+    const origQuery = db.query;
     let readFailErr = null;
     try {
+      process.env.DATABASE_URL = 'mock://isolated-test-db-read-failure';
+      db.query = async () => {
+        const queryErr = new Error('Database read failure: query timeout');
+        queryErr.code = 'ETIMEDOUT';
+        throw queryErr;
+      };
+
       await verifyWorkerSessionAsync(validToken);
     } catch (err) {
       readFailErr = err;
     } finally {
-      pool.query = origQuery;
-      if (origDbUrl) process.env.DATABASE_URL = origDbUrl;
+      db.query = origQuery;
+      if (origDbUrl !== undefined) process.env.DATABASE_URL = origDbUrl;
       else delete process.env.DATABASE_URL;
     }
 
-    assert.ok(readFailErr, 'Database read failure must throw error');
+    assert.ok(readFailErr, 'Simulated database read failure must throw error');
     assert.strictEqual(readFailErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
     assert.strictEqual(readFailErr.status, 500);
     passed++;
-    console.log('  ✓ 11.5 Database read failure strictly produces fail-closed 500 error, never false authentication');
+    console.log('  ✓ 11.5 Simulated database query read failure strictly produces fail-closed 500 error (SESSION_REGISTRY_UNAVAILABLE), never authenticating worker');
 
     // 11.6 Intentional test-only fallback works ONLY under explicit allowed configuration
-    delete process.env.ALLOW_TEST_SESSION_FALLBACK;
-    let fallbackGuardErr = null;
+    const origNodeEnv = process.env.NODE_ENV;
+    const origAllowFallback = process.env.ALLOW_TEST_SESSION_FALLBACK;
+    const origFallbackDbUrl = process.env.DATABASE_URL;
     try {
-      await loadWorkerSessionRegistry();
-    } catch (err) {
-      fallbackGuardErr = err;
-    } finally {
+      // Guarantee no-database configuration path
+      delete process.env.DATABASE_URL;
+
+      // Positive case: Allowed under NODE_ENV=test and ALLOW_TEST_SESSION_FALLBACK='true'
+      process.env.NODE_ENV = 'test';
       process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
+      const allowedReg = await loadWorkerSessionRegistry();
+      assert.strictEqual(typeof allowedReg, 'object', 'Fallback registry must return object in permitted test environment');
+
+      // Negative case 1: Missing fallback flag in test environment fails closed
+      delete process.env.ALLOW_TEST_SESSION_FALLBACK;
+      let missingFlagErr = null;
+      try {
+        await loadWorkerSessionRegistry();
+      } catch (err) {
+        missingFlagErr = err;
+      }
+      assert.ok(missingFlagErr, 'Missing test fallback flag must fail closed');
+      assert.strictEqual(missingFlagErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+      assert.strictEqual(missingFlagErr.status, 500);
+
+      let mutateMissingFlagErr = null;
+      try {
+        await mutateWorkerSessionRegistry((reg) => {});
+      } catch (err) {
+        mutateMissingFlagErr = err;
+      }
+      assert.ok(mutateMissingFlagErr, 'Mutating without fallback flag must fail closed');
+      assert.strictEqual(mutateMissingFlagErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+      assert.strictEqual(mutateMissingFlagErr.status, 500);
+
+      // Negative case 2: Production runtime strictly fails closed even with fallback flag set
+      process.env.ALLOW_TEST_SESSION_FALLBACK = 'true';
+      process.env.NODE_ENV = 'production';
+      let prodFallbackErr = null;
+      try {
+        await loadWorkerSessionRegistry();
+      } catch (err) {
+        prodFallbackErr = err;
+      }
+      assert.ok(prodFallbackErr, 'Production runtime must strictly fail closed');
+      assert.strictEqual(prodFallbackErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+      assert.strictEqual(prodFallbackErr.status, 500);
+
+      // Negative case 3: Development runtime strictly fails closed even with fallback flag set
+      process.env.NODE_ENV = 'development';
+      let devFallbackErr = null;
+      try {
+        await loadWorkerSessionRegistry();
+      } catch (err) {
+        devFallbackErr = err;
+      }
+      assert.ok(devFallbackErr, 'Development runtime must strictly fail closed');
+      assert.strictEqual(devFallbackErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
+      assert.strictEqual(devFallbackErr.status, 500);
+
+      passed++;
+      console.log('  ✓ 11.6 Test-only in-memory fallback works strictly under explicit ALLOW_TEST_SESSION_FALLBACK=true in test environment, failing closed in all other runtime configurations');
+    } finally {
+      if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
+      else delete process.env.NODE_ENV;
+      if (origAllowFallback !== undefined) process.env.ALLOW_TEST_SESSION_FALLBACK = origAllowFallback;
+      else delete process.env.ALLOW_TEST_SESSION_FALLBACK;
+      if (origFallbackDbUrl !== undefined) process.env.DATABASE_URL = origFallbackDbUrl;
+      else delete process.env.DATABASE_URL;
     }
-    assert.ok(fallbackGuardErr, 'Missing test fallback flag must fail closed');
-    assert.strictEqual(fallbackGuardErr.code, 'SESSION_REGISTRY_UNAVAILABLE');
-    assert.strictEqual(fallbackGuardErr.status, 500);
-    passed++;
-    console.log('  ✓ 11.6 Test-only in-memory fallback works strictly under explicit ALLOW_TEST_SESSION_FALLBACK guard');
 
   } finally {
     workerRepository.findWorkerById = origFind;
@@ -658,7 +761,31 @@ console.log('\n[Test Group 11] Worker Session Registry Fail-Closed Verification 
   console.log('======================================================\n');
 }
 
-runAuditTests().catch((err) => {
-  console.error('\n[AUDIT TEST SUITE ERROR]', err);
-  process.exit(1);
-});
+runAuditTests()
+  .catch((err) => {
+    console.error('\n[AUDIT TEST SUITE ERROR]', err);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    // Restore initial environment unconditionally
+    if (savedInitialEnv.DATABASE_URL !== undefined) {
+      process.env.DATABASE_URL = savedInitialEnv.DATABASE_URL;
+    } else {
+      delete process.env.DATABASE_URL;
+    }
+    if (savedInitialEnv.NODE_ENV !== undefined) {
+      process.env.NODE_ENV = savedInitialEnv.NODE_ENV;
+    } else {
+      delete process.env.NODE_ENV;
+    }
+    if (savedInitialEnv.JWT_SECRET !== undefined) {
+      process.env.JWT_SECRET = savedInitialEnv.JWT_SECRET;
+    } else {
+      delete process.env.JWT_SECRET;
+    }
+    if (savedInitialEnv.ALLOW_TEST_SESSION_FALLBACK !== undefined) {
+      process.env.ALLOW_TEST_SESSION_FALLBACK = savedInitialEnv.ALLOW_TEST_SESSION_FALLBACK;
+    } else {
+      delete process.env.ALLOW_TEST_SESSION_FALLBACK;
+    }
+  });
