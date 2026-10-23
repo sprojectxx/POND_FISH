@@ -332,6 +332,29 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
     }
   });
 
+// Projects rows strictly according to the SELECT columns in sql to catch omitted query columns
+function projectColumns(sql, row) {
+  if (!row) return row;
+  const match = sql.match(/SELECT\s+(.*?)\s+FROM/is);
+  if (!match) return { ...row };
+  const rawCols = match[1].split(',');
+  const colNames = rawCols.map(c => {
+    const trimmed = c.trim();
+    const asMatch = trimmed.match(/\s+AS\s+([a-zA-Z0-9_]+)/i);
+    if (asMatch) return asMatch[1];
+    const dotParts = trimmed.split('.');
+    return dotParts[dotParts.length - 1].trim();
+  });
+  if (colNames.includes('*')) return { ...row };
+  const projected = {};
+  for (const col of colNames) {
+    if (col in row) {
+      projected[col] = row[col];
+    }
+  }
+  return projected;
+}
+
   // -------------------------------------------------------------------------
   // 2. Subscription Idempotency, Replay & Constraint Protection
   // -------------------------------------------------------------------------
@@ -434,47 +457,7 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
     });
   });
 
-  await t.test('2.4 activateOrRenewSubscription rejects cross-customer payment replay', async () => {
-    await withMockPgClient(async (sql, params) => {
-      if (sql.includes('FROM subscription_plans')) {
-        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
-      }
-      if (sql.includes('FROM payments')) {
-        return {
-          rows: [
-            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-victim-1', booking_id: null, transaction_id: null, created_at: new Date() },
-          ],
-        };
-      }
-      if (sql.includes('FROM customer_subscriptions')) {
-        // Linked subscription belongs to cust-VICTIM, not cust-ATTACKER
-        return {
-          rows: [
-            { id: 'sub-victim-1', customer_id: 'cust-VICTIM', plan_id: 'plan-1', credit_balance: 500, ledger_id: 'ledg-1', ledger_amount: 500, ledger_resulting_balance: 500 },
-          ],
-        };
-      }
-      return { rows: [] };
-    }, async () => {
-      await assert.rejects(
-        async () => {
-          await subscriptionRepository.activateOrRenewSubscription({
-            customerId: 'cust-ATTACKER',
-            planId: 'plan-1',
-            razorpayOrderId: 'order_1',
-            razorpayPaymentId: 'pay_1',
-            razorpaySignature: 'sig',
-          });
-        },
-        (err) => {
-          assert.strictEqual(err.code, 'PAYMENT_CUSTOMER_MISMATCH');
-          return true;
-        }
-      );
-    });
-  });
-
-  await t.test('2.5 activateOrRenewSubscription safe replay returns linked subscription with zero duplicate writes', async () => {
+  await t.test('2.4 activateOrRenewSubscription safe replay returns linked subscription with zero duplicate writes', async () => {
     const executedWrites = [];
     const now = new Date();
 
@@ -520,7 +503,87 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
     });
   });
 
-  await t.test('2.6 Two purchases of the same plan close together must never cause one payment to resolve to the other purchase', async () => {
+  await t.test('2.5 activateOrRenewSubscription rejects cross-customer payment replay', async () => {
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        return {
+          rows: [
+            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-victim-1', booking_id: null, transaction_id: null, created_at: new Date() },
+          ],
+        };
+      }
+      if (sql.includes('FROM customer_subscriptions')) {
+        // Linked subscription belongs to cust-VICTIM, not cust-ATTACKER
+        return {
+          rows: [
+            { id: 'sub-victim-1', customer_id: 'cust-VICTIM', plan_id: 'plan-1', credit_balance: 500, ledger_id: 'ledg-1', ledger_amount: 500, ledger_resulting_balance: 500 },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await subscriptionRepository.activateOrRenewSubscription({
+            customerId: 'cust-ATTACKER',
+            planId: 'plan-1',
+            razorpayOrderId: 'order_1',
+            razorpayPaymentId: 'pay_1',
+            razorpaySignature: 'sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_CUSTOMER_MISMATCH');
+          return true;
+        }
+      );
+    });
+  });
+
+  await t.test('2.6 activateOrRenewSubscription rejects plan mismatch on replayed payment', async () => {
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-silver', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        return {
+          rows: [
+            { id: 'pay-1', razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', amount: 500, status: 'SUCCESS', subscription_id: 'sub-gold-1', booking_id: null, transaction_id: null, created_at: new Date() },
+          ],
+        };
+      }
+      if (sql.includes('FROM customer_subscriptions')) {
+        // Linked subscription was created for plan-gold, not requested plan-silver
+        return {
+          rows: [
+            { id: 'sub-gold-1', customer_id: 'cust-1', plan_id: 'plan-gold', credit_balance: 500, ledger_id: 'ledg-1', ledger_amount: 500, ledger_resulting_balance: 500 },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await subscriptionRepository.activateOrRenewSubscription({
+            customerId: 'cust-1',
+            planId: 'plan-silver',
+            razorpayOrderId: 'order_1',
+            razorpayPaymentId: 'pay_1',
+            razorpaySignature: 'sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_PLAN_MISMATCH');
+          return true;
+        }
+      );
+    });
+  });
+
+  await t.test('2.7 Two purchases of the same plan close together must never cause one payment to resolve to the other purchase', async () => {
     // Payment 2 was created for Sub B. It must strictly resolve to Sub B, never falling back to Sub A
     await withMockPgClient(async (sql, params) => {
       if (sql.includes('FROM subscription_plans')) {
@@ -570,7 +633,7 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
     });
   });
 
-  await t.test('2.7 A replay with no provable payment-to-subscription relationship must fail closed', async () => {
+  await t.test('2.8 A replay with no provable payment-to-subscription relationship must fail closed', async () => {
     await withMockPgClient(async (sql, params) => {
       if (sql.includes('FROM subscription_plans')) {
         return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
@@ -586,7 +649,6 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
               amount: 500,
               status: 'SUCCESS',
               subscription_id: null,
-              notes: null,
               booking_id: null,
               transaction_id: null,
               created_at: new Date(),
@@ -603,6 +665,60 @@ test('Phase 2 Payment & Checkout Integrity Suite', async (t) => {
             planId: 'plan-1',
             razorpayOrderId: 'order_unprovable_1',
             razorpayPaymentId: 'pay_unprovable_1',
+            razorpaySignature: 'sig',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'PAYMENT_SUBSCRIPTION_UNPROVABLE');
+          return true;
+        }
+      );
+    });
+  });
+
+  await t.test('2.9 Query projection: when DB has valid relationship but SELECT omits column, query does not retrieve it and fails closed', async () => {
+    // Database table has a payment row containing subscription_id: 'sub-db-1'
+    const dbStoredPayment = {
+      id: 'pay-db-1',
+      transaction_id: null,
+      booking_id: null,
+      razorpay_order_id: 'order_proj_1',
+      razorpay_payment_id: 'pay_proj_1',
+      amount: 500,
+      method: 'RAZORPAY',
+      status: 'SUCCESS',
+      subscription_id: 'sub-db-1', // Present in DB table, but will the query retrieve it?
+      created_at: new Date(),
+    };
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM subscription_plans')) {
+        return { rows: [{ id: 'plan-1', active: true, price: '500.00', credit_amount: '500.00', validity_days: 30 }] };
+      }
+      if (sql.includes('FROM payments')) {
+        // Enforce actual query shape: project only columns present in the SQL SELECT clause
+        const projected = projectColumns(sql, dbStoredPayment);
+        // Notice: because the verified schema query does NOT select subscription_id, projected.subscription_id is undefined!
+        return { rows: [projected] };
+      }
+      if (sql.includes('FROM customer_subscriptions')) {
+        return {
+          rows: [
+            { id: 'sub-db-1', customer_id: 'cust-1', plan_id: 'plan-1', credit_balance: 500, ledger_id: 'ledg-1', ledger_amount: 500, ledger_resulting_balance: 500 },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      // Because the production query on the verified schema does not retrieve subscription_id,
+      // it cannot prove the relationship and must fail closed rather than guessing.
+      await assert.rejects(
+        async () => {
+          await subscriptionRepository.activateOrRenewSubscription({
+            customerId: 'cust-1',
+            planId: 'plan-1',
+            razorpayOrderId: 'order_proj_1',
+            razorpayPaymentId: 'pay_proj_1',
             razorpaySignature: 'sig',
           });
         },
