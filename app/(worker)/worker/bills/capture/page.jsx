@@ -87,12 +87,6 @@ function BillCaptureContent() {
     setProcessing(true);
     setError(null);
 
-    const token = localStorage.getItem('pondfish_worker_token');
-    if (!token) {
-      router.replace('/worker/login');
-      return;
-    }
-
     try {
       const formData = new FormData();
       formData.append('customerId', customerId);
@@ -104,14 +98,18 @@ function BillCaptureContent() {
 
       const res = await fetch('/api/v1/worker/bills/scan', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
         body: formData,
       });
 
       const json = await res.json();
       if (!res.ok || !json.success) {
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('pondfish_worker_token');
+          localStorage.removeItem('pondfish_worker_info');
+          router.replace('/worker/login');
+          return;
+        }
         setError(json.error?.message || 'Bill OCR extraction failed. Please try again or re-scan.');
         setProcessing(false);
         return;

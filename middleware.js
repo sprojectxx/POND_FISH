@@ -50,20 +50,29 @@ function verifyJwt(token) {
 }
 
 export function middleware(request) {
-  const { pathname } = request.nextUrl;
+  const rawPathname = request.nextUrl.pathname;
+  // Normalize path: decode URI components and strip trailing slash for consistent route matching
+  let pathname = rawPathname;
+  try {
+    pathname = decodeURIComponent(rawPathname);
+  } catch {}
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    pathname = pathname.slice(0, -1);
+  }
 
   // Let static files, Next.js internals, and public assets pass through
+  const isProtectedPath = pathname.startsWith('/admin') || pathname.startsWith('/worker') || pathname.startsWith('/api');
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||
-    pathname.includes('.')
+    (!isProtectedPath && pathname.includes('.'))
   ) {
     return NextResponse.next();
   }
 
   // Session token extraction from cookies or Authorization header
   const authHeader = request.headers.get('authorization');
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
+  const bearerToken = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7).trim() : null;
   const adminCookie = request.cookies.get('admin_session')?.value;
   const workerCookie = request.cookies.get('worker_session')?.value || request.cookies.get('pf_session')?.value;
 
@@ -137,6 +146,43 @@ export function middleware(request) {
           error: {
             code: 'FORBIDDEN',
             message: 'Administrative privileges required.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    return NextResponse.next();
+  }
+
+  // 1b. Worker API Route Guard
+  if (pathname.startsWith('/api/v1/worker')) {
+    // Whitelist explicitly public worker endpoints
+    if (pathname === '/api/v1/worker/auth/login' || pathname === '/api/v1/worker/auth/logout') {
+      return NextResponse.next();
+    }
+
+    if (!workerToken) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Worker authentication required.',
+          },
+        },
+        { status: 401 }
+      );
+    }
+
+    const workerPayload = verifyJwt(workerToken);
+    if (!workerPayload || workerPayload.role !== 'WORKER') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Worker privileges required.',
           },
         },
         { status: 403 }

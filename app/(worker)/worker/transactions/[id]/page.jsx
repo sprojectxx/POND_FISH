@@ -25,16 +25,16 @@ function TransactionResultContent() {
     setLoading(true);
     setError(null);
 
-    const token = localStorage.getItem('pondfish_worker_token');
-    if (!token) {
-      router.replace('/worker/login');
-      return;
-    }
-
     try {
       const res = await fetch(`/api/v1/worker/transactions/${transactionId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       });
+
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('pondfish_worker_info');
+        router.replace('/worker/login');
+        return;
+      }
 
       const json = await res.json();
       if (!res.ok || !json.success) {

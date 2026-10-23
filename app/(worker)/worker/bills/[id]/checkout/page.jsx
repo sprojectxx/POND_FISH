@@ -34,19 +34,19 @@ function BillCheckoutContent() {
     setLoading(true);
     setError(null);
 
-    const token = localStorage.getItem('pondfish_worker_token');
-    if (!token) {
-      router.replace('/worker/login');
-      return;
-    }
-
     try {
       // 1. Fetch bill details
       const billRes = await fetch(`/api/v1/worker/bills/${billId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       });
       const billJson = await billRes.json();
       if (!billRes.ok || !billJson.success) {
+        if (billRes.status === 401 || billRes.status === 403) {
+          localStorage.removeItem('pondfish_worker_token');
+          localStorage.removeItem('pondfish_worker_info');
+          router.replace('/worker/login');
+          return;
+        }
         setError(billJson.error?.message || 'Unable to load bill.');
         setLoading(false);
         return;
@@ -59,8 +59,8 @@ function BillCheckoutContent() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ items: billJson.data.items || [] }),
       });
       const prevJson = await previewRes.json();
@@ -89,12 +89,6 @@ function BillCheckoutContent() {
     setError(null);
     setShowConfirmModal(false);
 
-    const token = localStorage.getItem('pondfish_worker_token');
-    if (!token) {
-      router.replace('/worker/login');
-      return;
-    }
-
     try {
       const finalPayable = preview?.finalPayable || 0;
       const targetMethod = finalPayable === 0 ? 'SUBSCRIPTION_ONLY' : paymentMethod;
@@ -110,8 +104,8 @@ function BillCheckoutContent() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 

@@ -34,11 +34,16 @@ export async function POST(request) {
     return response;
   } catch (error) {
     console.error('[API ERROR] POST /api/v1/worker/auth/logout:', error.message);
-    const response = NextResponse.json({
-      success: true,
-      message: 'Worker logged out successfully.',
-      timestamp: new Date().toISOString(),
-    });
+    const response = NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'LOGOUT_FAILED',
+          message: 'Unable to revoke worker session reliably due to a server error.',
+        },
+      },
+      { status: 500 }
+    );
     response.cookies.set('worker_session', '', {
       path: '/',
       httpOnly: true,

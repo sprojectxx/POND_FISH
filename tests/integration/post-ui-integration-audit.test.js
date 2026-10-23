@@ -30,6 +30,7 @@ console.log('=== PONDFISH POST-UI INTEGRATION AUDIT TEST SUITE ===\n');
 let passed = 0;
 const TEST_JWT_SECRET = 'pondfish-test-suite-secure-jwt-secret-key-2026';
 process.env.JWT_SECRET = TEST_JWT_SECRET;
+process.env.NODE_ENV = 'test';
 
 function createMockRequest({ pathname = '/', cookies = {}, headers = {}, method = 'GET', search = '' } = {}) {
   const url = new URL(`http://localhost:3000${pathname}${search}`);

@@ -66,12 +66,6 @@ export default function WorkerQrScannerPage() {
     setScanError(null);
     setVerifying(true);
 
-    const workerToken = localStorage.getItem('pondfish_worker_token');
-    if (!workerToken) {
-      router.replace('/worker/login');
-      return;
-    }
-
     try {
       const cleanToken = tokenToVerify.trim();
 
@@ -79,7 +73,7 @@ export default function WorkerQrScannerPage() {
       if (cleanToken.startsWith('PF-BK-') || !cleanToken.startsWith('PFQR.')) {
         // Fallback direct booking code search
         const searchRes = await fetch(`/api/v1/worker/bookings/search?q=${encodeURIComponent(cleanToken)}`, {
-          headers: { Authorization: `Bearer ${workerToken}` },
+          credentials: 'include',
         });
         const searchJson = await searchRes.json();
         if (searchJson.success && searchJson.data?.length > 0) {
@@ -92,13 +86,19 @@ export default function WorkerQrScannerPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${workerToken}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ qrCodeData: cleanToken }),
       });
 
       const json = await res.json();
       if (!res.ok || !json.success) {
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('pondfish_worker_token');
+          localStorage.removeItem('pondfish_worker_info');
+          router.replace('/worker/login');
+          return;
+        }
         setScanError(json.error?.message || 'Invalid QR code. Please ask the customer for the correct booking QR.');
         return;
       }

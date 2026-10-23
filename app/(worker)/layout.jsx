@@ -46,20 +46,26 @@ export default function WorkerLayout({ children }) {
       }
     }
 
-    // Verify session with backend via credentials (cookie) and optional Bearer header
-    const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_token') : null;
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    // Purge any legacy token from browser storage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('pondfish_worker_token');
+    }
 
+    // Verify session with backend via secure HttpOnly cookie
     fetch('/api/v1/worker/auth/me', {
-      headers,
       credentials: 'include',
     })
       .then((res) => {
-        if (res.status === 401 || res.status === 403) {
-          localStorage.removeItem('pondfish_worker_token');
-          localStorage.removeItem('pondfish_worker_info');
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('pondfish_worker_token');
+            localStorage.removeItem('pondfish_worker_info');
+            setWorker(null);
+            router.replace('/worker/login');
+            return null;
+          }
+          // Invalidate active authenticated state when server-side verification fails
           setWorker(null);
-          router.replace('/worker/login');
           return null;
         }
         return res.json();
@@ -68,6 +74,8 @@ export default function WorkerLayout({ children }) {
         if (json && json.success && json.data?.worker) {
           setWorker(json.data.worker);
           localStorage.setItem('pondfish_worker_info', JSON.stringify(json.data.worker));
+        } else if (json) {
+          setWorker(null);
         }
       })
       .catch((err) => {
@@ -81,11 +89,8 @@ export default function WorkerLayout({ children }) {
 
   async function handleLogout() {
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('pondfish_worker_token') : null;
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       await fetch('/api/v1/worker/auth/logout', {
         method: 'POST',
-        headers,
         credentials: 'include',
       });
     } catch {}
