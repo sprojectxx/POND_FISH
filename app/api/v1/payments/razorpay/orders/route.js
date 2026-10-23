@@ -38,11 +38,12 @@ export async function POST(request) {
 
     let authoritativeAmount = 0;
     const notes = { customerId: session.customerId };
+    let preview = null;
 
     if (billId) {
       // Physical Bill Purchase (Slice 10)
       const { calculatePhysicalBillPreview } = require('../../../../../../lib/engines/billing-correction');
-      const preview = await calculatePhysicalBillPreview({
+      preview = await calculatePhysicalBillPreview({
         billId,
         customerId: session.customerId,
         items: body?.items || [],
@@ -53,7 +54,7 @@ export async function POST(request) {
       notes.type = 'BILL_PURCHASE';
     } else {
       // Online Cart Booking (Slice 4)
-      const preview = await previewCheckout(session.customerId);
+      preview = await previewCheckout(session.customerId);
       authoritativeAmount = preview.summary.finalPayableAmount;
       notes.type = 'BOOKING';
       notes.itemCount = String(preview.items?.length || 0);
