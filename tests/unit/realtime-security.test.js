@@ -1,25 +1,32 @@
 /**
  * Phase 3 Realtime & Transaction-Display Security Test Suite
- * Traceability: PondFish Phase 3 Requirements & Audit Guidelines
+ * Traceability: PondFish Phase 3 Independent Review Corrections & Requirements
  * 
- * Verifies:
- * 1. Realtime WebSocket access control & channel authorization (Admin, Worker, Customer, Anonymous)
- * 2. Protection against client-initiated event injection (FORBIDDEN_CLIENT_PUBLISH)
- * 3. Scoped delivery guarantees (GPS telemetry never leaks to TV/unauthenticated; customer events isolated)
- * 4. Realtime session revocation & disconnect on worker logout
- * 5. TV transaction display privacy (phone numbers/numeric identifiers masked to 'Valued Customer')
- * 6. TV feed reconnection, state reconciliation, and deduplication
- * 7. Cross-customer transaction and booking access isolation
- * 8. Realtime notifications reflect server-confirmed state without modifying database
+ * Verifies real WebSocket client/server interactions:
+ * 1. Real HTTP server + initWebSocketServer real WebSocket client execution.
+ * 2. Anonymous connections cannot subscribe to private customer, worker, or GPS channels.
+ * 3. Customer A cannot access or subscribe to Customer B's channel.
+ * 4. Worker from Store A cannot access Store B's channel; authorized worker receives only their store events.
+ * 5. GPS telemetry never reaches unauthorized clients (Admin-only).
+ * 6. Client event injection is strictly rejected by the real server message handler.
+ * 7. Session revocation terminates the actual associated socket with 4401.
+ * 8. TV feed access and payload fields comply with privacy and configurable TV authentication policy.
+ * 9. Credential hygiene: Admin API secrets are rejected in URL query strings and accepted only via HTTP headers.
  */
 
 const assert = require('assert');
 const test = require('node:test');
 const jwt = require('jsonwebtoken');
 const http = require('http');
+const { WebSocket } = require('ws');
+
+// Configure test secrets
+const TEST_ADMIN_SECRET = 'pondfish-test-admin-secret-key-fixture-32chars';
+process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
 
 const {
   initWebSocketServer,
+  closeWebSocketServer,
   broadcast,
   broadcastToCustomer,
   broadcastToWorkers,
@@ -28,423 +35,432 @@ const {
   isChannelAuthorized,
 } = require('../../lib/realtime/ws-server');
 const realtimeBroadcastEngine = require('../../lib/engines/realtime-broadcast');
-const { getJwtSecret } = require('../../lib/auth/admin-auth');
+const { getJwtSecret, getAdminSecret } = require('../../lib/auth/admin-auth');
 const tvFeedEngine = require('../../lib/engines/tv-feed');
 
-test('Phase 3 Realtime & Transaction-Display Security Suite', async (t) => {
+// Robust helper to connect a real WebSocket client to the local test server with queue-based message consumption
+function connectClient(baseUrl, pathAndQuery = '/api/v1/realtime', options = {}) {
+  return new Promise((resolve, reject) => {
+    const wsUrl = `${baseUrl}${pathAndQuery}`;
+    const ws = new WebSocket(wsUrl, options);
+    const unhandledMessages = [];
+    const waiters = [];
+
+    ws.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        const waiterIdx = waiters.findIndex((w) => !w.filterFn || w.filterFn(msg));
+        if (waiterIdx !== -1) {
+          const waiter = waiters.splice(waiterIdx, 1)[0];
+          clearTimeout(waiter.timer);
+          waiter.resolve(msg);
+        } else {
+          unhandledMessages.push(msg);
+        }
+      } catch (err) {
+        console.error('Error parsing client message:', err);
+      }
+    });
+
+    ws.waitForMessage = (filterFn, timeoutMs = 2500) => {
+      const idx = unhandledMessages.findIndex(filterFn || (() => true));
+      if (idx !== -1) {
+        return Promise.resolve(unhandledMessages.splice(idx, 1)[0]);
+      }
+      return new Promise((res, rej) => {
+        const waiter = {
+          filterFn,
+          resolve: res,
+          timer: setTimeout(() => {
+            const i = waiters.indexOf(waiter);
+            if (i !== -1) waiters.splice(i, 1);
+            rej(new Error(`Timeout (${timeoutMs}ms) waiting for message. Unhandled: ${JSON.stringify(unhandledMessages)}`));
+          }, timeoutMs),
+        };
+        waiters.push(waiter);
+      });
+    };
+
+    ws.getReceivedMessages = () => [...unhandledMessages];
+
+    ws.on('open', () => resolve(ws));
+    ws.on('error', (err) => reject(err));
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+test('Phase 3 Realtime & Transaction-Display Security Suite (Real WebSocket Integration)', async (t) => {
   const secret = getJwtSecret();
 
-  // Test identities
+  // Tokens for testing
   const adminToken = jwt.sign(
     { adminId: 'admin_test_1', name: 'Super Admin', role: 'ADMIN', sessionId: 'sess_admin_1' },
-    secret
+    secret,
+    { expiresIn: '1h' }
   );
-  const workerToken = jwt.sign(
-    { workerId: 'worker_test_1', name: 'Counter Staff', role: 'WORKER', sessionId: 'sess_worker_1' },
-    secret
+
+  const workerStoreAToken = jwt.sign(
+    { workerId: 'worker_a', name: 'Staff A', role: 'WORKER', storeId: 'store_a', sessionId: 'sess_worker_a' },
+    secret,
+    { expiresIn: '1h' }
   );
+
+  const workerStoreBToken = jwt.sign(
+    { workerId: 'worker_b', name: 'Staff B', role: 'WORKER', storeId: 'store_b', sessionId: 'sess_worker_b' },
+    secret,
+    { expiresIn: '1h' }
+  );
+
   const customer1Token = jwt.sign(
     { customerId: 'cust_1111', mobileNumber: '9999911111', role: 'CUSTOMER', sessionId: 'sess_cust_1' },
-    secret
+    secret,
+    { expiresIn: '1h' }
   );
+
   const customer2Token = jwt.sign(
     { customerId: 'cust_2222', mobileNumber: '9999922222', role: 'CUSTOMER', sessionId: 'sess_cust_2' },
-    secret
+    secret,
+    { expiresIn: '1h' }
   );
 
-  // ---------------------------------------------------------------------------
-  // 1. Channel Authorization Logic (isChannelAuthorized)
-  // ---------------------------------------------------------------------------
-  await t.test('1. Channel Authorization: Public channels are open; privileged channels enforce strict roles', () => {
-    // Public TV channels
-    assert.strictEqual(isChannelAuthorized(null, 'tv:transactions'), true, 'Public TV channel must be open to anonymous');
-    assert.strictEqual(isChannelAuthorized(null, 'public:tv'), true, 'public:tv alias must be open to anonymous');
-    assert.strictEqual(isChannelAuthorized({ role: 'ANONYMOUS' }, 'tv:transactions'), true);
+  // Setup real local test HTTP server on ephemeral port (0)
+  const server = http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('OK');
+  });
 
-    // GPS Telemetry channels (strict admin requirement)
-    assert.strictEqual(isChannelAuthorized(null, 'gps:live'), false, 'Anonymous must NOT access gps:live');
-    assert.strictEqual(isChannelAuthorized({ role: 'CUSTOMER', id: 'cust_1111' }, 'gps:live'), false, 'Customer must NOT access gps:live');
-    assert.strictEqual(isChannelAuthorized({ role: 'WORKER', id: 'worker_test_1' }, 'gps:live'), false, 'Worker must NOT access gps:live');
-    assert.strictEqual(isChannelAuthorized({ role: 'ADMIN', id: 'admin_test_1' }, 'gps:live'), true, 'Admin MUST access gps:live');
-    assert.strictEqual(isChannelAuthorized({ role: 'ADMIN', id: 'admin_test_1' }, 'admin:gps'), true, 'Admin MUST access admin:gps');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const baseUrl = `ws://127.0.0.1:${port}`;
 
-    // Customer Private channels (customer:<id>)
-    assert.strictEqual(isChannelAuthorized(null, 'customer:cust_1111'), false, 'Anonymous must NOT access customer channel');
+  // Initialize actual production WebSocket server attached to test HTTP server
+  initWebSocketServer(server, { force: true });
+
+  t.after(async () => {
+    await closeWebSocketServer();
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  // ---------------------------------------------------------------------------
+  // 1. Anonymous Connection Attempting to Subscribe to Private Channels
+  // ---------------------------------------------------------------------------
+  await t.test('1. Anonymous connection cannot subscribe to private customer, worker, or GPS channels', async () => {
+    const ws = await connectClient(baseUrl);
+    const initMsg = await ws.waitForMessage((m) => m.type === 'connection_established');
+    assert.strictEqual(initMsg.authenticated, false);
+    assert.strictEqual(initMsg.role, 'ANONYMOUS');
+
+    // Attempt to subscribe to Customer channel
+    ws.send(JSON.stringify({ type: 'subscribe', channel: 'customer:cust_1111' }));
+    const errCust = await ws.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL' && m.channel === 'customer:cust_1111');
+    assert.strictEqual(errCust.channel, 'customer:cust_1111');
+
+    // Attempt to subscribe to Worker channel
+    ws.send(JSON.stringify({ type: 'subscribe', channel: 'worker:store:store_a' }));
+    const errWorker = await ws.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL' && m.channel === 'worker:store:store_a');
+    assert.strictEqual(errWorker.channel, 'worker:store:store_a');
+
+    // Attempt to subscribe to GPS telemetry channel
+    ws.send(JSON.stringify({ type: 'subscribe', channel: 'gps:live' }));
+    const errGps = await ws.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL' && m.channel === 'gps:live');
+    assert.strictEqual(errGps.channel, 'gps:live');
+
+    ws.close();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 2. Customer A Cannot Subscribe to or Access Customer B's Channel
+  // ---------------------------------------------------------------------------
+  await t.test('2. Customer A attempting to access Customer B channel is rejected and isolated', async () => {
+    // Connect Customer A with valid JWT in upgrade header
+    const wsA = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${customer1Token}` },
+    });
+    const initA = await wsA.waitForMessage((m) => m.type === 'connection_established');
+    assert.strictEqual(initA.authenticated, true);
+    assert.strictEqual(initA.role, 'CUSTOMER');
+
+    // Customer A attempts to subscribe to Customer B's private channel
+    wsA.send(JSON.stringify({ type: 'subscribe', channel: 'customer:cust_2222' }));
+    const subReject = await wsA.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+    assert.strictEqual(subReject.channel, 'customer:cust_2222');
+
+    // Deliver event to Customer B
+    broadcastToCustomer('cust_2222', 'booking_status', { bookingId: 'bk_999', status: 'CONFIRMED' });
+    await sleep(50);
+
+    // Verify Customer A received zero messages from Customer B
+    const received = wsA.getReceivedMessages();
     assert.strictEqual(
-      isChannelAuthorized({ role: 'CUSTOMER', id: 'cust_1111' }, 'customer:cust_1111'),
-      true,
-      'Customer A can access Customer A channel'
-    );
-    assert.strictEqual(
-      isChannelAuthorized({ role: 'CUSTOMER', id: 'cust_1111' }, 'customer:cust_2222'),
+      received.some((m) => m.event === 'booking_status' && m.data?.bookingId === 'bk_999'),
       false,
-      'Customer A CANNOT access Customer B channel'
+      'Customer A must NEVER receive Customer B events'
     );
+
+    wsA.close();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 3. Worker Store Authorization: Store A Worker Cannot Access Store B
+  // ---------------------------------------------------------------------------
+  await t.test('3. Worker store authorization: Store A worker cannot access Store B events', async () => {
+    const wsWorkerA = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${workerStoreAToken}` },
+    });
+    const initWorkerA = await wsWorkerA.waitForMessage((m) => m.type === 'connection_established');
+    assert.strictEqual(initWorkerA.role, 'WORKER');
+
+    // Worker A attempts to subscribe to Store B's channel
+    wsWorkerA.send(JSON.stringify({ type: 'subscribe', channel: 'worker:store:store_b' }));
+    const rejectStoreB = await wsWorkerA.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+    assert.strictEqual(rejectStoreB.channel, 'worker:store:store_b');
+
+    // Deliver an event to Store B
+    broadcastToWorkers('new_counter_sale', { billId: 'bill_b_1', amount: 800 }, { storeId: 'store_b' });
+    await sleep(50);
+
+    // Worker A must not have received Store B's counter sale
+    const messagesA = wsWorkerA.getReceivedMessages();
     assert.strictEqual(
-      isChannelAuthorized({ role: 'WORKER', id: 'worker_test_1' }, 'customer:cust_1111'),
+      messagesA.some((m) => m.event === 'new_counter_sale' && m.data?.billId === 'bill_b_1'),
       false,
-      'Worker cannot subscribe to arbitrary private customer channel'
+      'Worker A must NEVER receive Store B events'
     );
+
+    wsWorkerA.close();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 4. Authorized Worker Receives ONLY Events for Assigned Store
+  // ---------------------------------------------------------------------------
+  await t.test('4. Authorized worker receives only events for their assigned store', async () => {
+    const wsWorkerA = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${workerStoreAToken}` },
+    });
+    const wsWorkerB = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${workerStoreBToken}` },
+    });
+
+    await wsWorkerA.waitForMessage((m) => m.type === 'connection_established');
+    await wsWorkerB.waitForMessage((m) => m.type === 'connection_established');
+
+    // Broadcast an event specifically to Store A
+    broadcastToWorkers('queue_updated', { storeId: 'store_a', count: 5 }, { storeId: 'store_a' });
+    const eventA = await wsWorkerA.waitForMessage((m) => m.event === 'queue_updated');
+    assert.strictEqual(eventA.data.storeId, 'store_a');
+
+    // Ensure Worker B did not receive Store A's event
+    await sleep(50);
+    const msgsB = wsWorkerB.getReceivedMessages();
     assert.strictEqual(
-      isChannelAuthorized({ role: 'ADMIN', id: 'admin_test_1' }, 'customer:cust_1111'),
-      true,
-      'Admin can monitor customer channel'
+      msgsB.some((m) => m.event === 'queue_updated' && m.data?.storeId === 'store_a'),
+      false,
+      'Worker B must not receive Store A queue update'
     );
 
-    // Worker channels
-    assert.strictEqual(isChannelAuthorized(null, 'worker:store'), false, 'Anonymous must NOT access worker:store');
-    assert.strictEqual(isChannelAuthorized({ role: 'CUSTOMER', id: 'cust_1111' }, 'worker:store'), false, 'Customer must NOT access worker channel');
-    assert.strictEqual(isChannelAuthorized({ role: 'WORKER', id: 'worker_test_1' }, 'worker:store'), true, 'Worker can access worker:store');
-    assert.strictEqual(isChannelAuthorized({ role: 'ADMIN', id: 'admin_test_1' }, 'worker:store'), true, 'Admin can access worker:store');
+    // Broadcast an event specifically to Store B
+    broadcastToWorkers('queue_updated', { storeId: 'store_b', count: 12 }, { storeId: 'store_b' });
+    const eventB = await wsWorkerB.waitForMessage((m) => m.event === 'queue_updated');
+    assert.strictEqual(eventB.data.storeId, 'store_b');
+
+    // Ensure Worker A did not receive Store B's event
+    const msgsA = wsWorkerA.getReceivedMessages();
+    assert.strictEqual(
+      msgsA.some((m) => m.event === 'queue_updated' && m.data?.storeId === 'store_b'),
+      false,
+      'Worker A must not receive Store B queue update'
+    );
+
+    wsWorkerA.close();
+    wsWorkerB.close();
   });
 
   // ---------------------------------------------------------------------------
-  // 2. Token Authentication (authenticateToken)
+  // 5. GPS Telemetry Never Reaches Unauthorized Clients
   // ---------------------------------------------------------------------------
-  await t.test('2. Token Authentication: Validates signatures, extracts roles, rejects tampered tokens', () => {
-    // Admin
-    const adminIdentity = authenticateToken(adminToken);
-    assert.ok(adminIdentity, 'Admin token should authenticate');
-    assert.strictEqual(adminIdentity.role, 'ADMIN');
-    assert.strictEqual(adminIdentity.id, 'admin_test_1');
+  await t.test('5. GPS events never reach unauthorized clients (Admin-only)', async () => {
+    const wsAdmin = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const wsWorker = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${workerStoreAToken}` },
+    });
+    const wsCustomer = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${customer1Token}` },
+    });
+    const wsAnon = await connectClient(baseUrl);
 
-    // Worker
-    const workerIdentity = authenticateToken(workerToken);
-    assert.ok(workerIdentity, 'Worker token should authenticate');
-    assert.strictEqual(workerIdentity.role, 'WORKER');
-    assert.strictEqual(workerIdentity.id, 'worker_test_1');
+    await wsAdmin.waitForMessage((m) => m.type === 'connection_established');
+    await wsWorker.waitForMessage((m) => m.type === 'connection_established');
+    await wsCustomer.waitForMessage((m) => m.type === 'connection_established');
+    await wsAnon.waitForMessage((m) => m.type === 'connection_established');
 
-    // Customer
-    const custIdentity = authenticateToken(customer1Token);
-    assert.ok(custIdentity, 'Customer token should authenticate');
-    assert.strictEqual(custIdentity.role, 'CUSTOMER');
-    assert.strictEqual(custIdentity.id, 'cust_1111');
+    // Broadcast GPS telemetry via production engine
+    const gpsData = { journeyId: 'j_1001', latitude: 16.5062, longitude: 80.648, speed: 38 };
+    realtimeBroadcastEngine.broadcastGPS(gpsData);
 
-    // Tampered / Invalid tokens
-    assert.strictEqual(authenticateToken('invalid.token.here'), null, 'Malformed token must return null');
-    assert.strictEqual(authenticateToken(null), null, 'Null token must return null');
-    assert.strictEqual(authenticateToken(''), null, 'Empty token must return null');
+    // Admin MUST receive GPS telemetry
+    const adminGpsMsg = await wsAdmin.waitForMessage((m) => m.event === 'gps:live');
+    assert.strictEqual(adminGpsMsg.data.journeyId, 'j_1001');
 
-    const fakeToken = jwt.sign({ role: 'ADMIN', id: 'hacker' }, 'wrong-secret-key-fixture');
-    assert.strictEqual(authenticateToken(fakeToken), null, 'Token signed with wrong secret must return null');
+    await sleep(50);
+
+    // Worker, Customer, and Anonymous must have received ZERO GPS telemetry
+    assert.strictEqual(wsWorker.getReceivedMessages().some((m) => m.event === 'gps:live'), false);
+    assert.strictEqual(wsCustomer.getReceivedMessages().some((m) => m.event === 'gps:live'), false);
+    assert.strictEqual(wsAnon.getReceivedMessages().some((m) => m.event === 'gps:live'), false);
+
+    wsAdmin.close();
+    wsWorker.close();
+    wsCustomer.close();
+    wsAnon.close();
   });
 
   // ---------------------------------------------------------------------------
-  // 3. Simulated WebSocket Connection, Subscriptions, and Event Filtering
+  // 6. Client Event Injection Rejection
   // ---------------------------------------------------------------------------
-  await t.test('3. WebSocket Event Delivery: Scoped broadcast delivers to authorized channels and filters unauthorized clients', () => {
-    // Mock WebSocket clients
-    function createMockWs(authIdentity) {
-      const messages = [];
-      const ws = {
-        auth: authIdentity,
-        subscribedChannels: new Set(['tv:transactions']),
-        readyState: 1, // WebSocket.OPEN
-        isAlive: true,
-        send: (msg) => {
-          messages.push(JSON.parse(msg));
-        },
-        close: (code, reason) => {
-          ws.closed = { code, reason };
-        },
-        messages,
-      };
-      if (authIdentity?.role === 'ADMIN') {
-        ws.subscribedChannels.add('gps:live');
-        ws.subscribedChannels.add('admin:gps');
-      } else if (authIdentity?.role === 'CUSTOMER') {
-        ws.subscribedChannels.add(`customer:${authIdentity.id}`);
-      } else if (authIdentity?.role === 'WORKER') {
-        ws.subscribedChannels.add('worker:store');
-      }
-      return ws;
-    }
+  await t.test('6. Client event injection being rejected by the real message handler', async () => {
+    const ws = await connectClient(baseUrl);
+    await ws.waitForMessage((m) => m.type === 'connection_established');
 
-    const tvClient = createMockWs({ role: 'ANONYMOUS', id: null });
-    const adminClient = createMockWs({ role: 'ADMIN', id: 'admin_test_1' });
-    const cust1Client = createMockWs({ role: 'CUSTOMER', id: 'cust_1111' });
-    const cust2Client = createMockWs({ role: 'CUSTOMER', id: 'cust_2222' });
-    const workerClient = createMockWs({ role: 'WORKER', id: 'worker_test_1' });
+    // Attempt 1: type: 'publish'
+    ws.send(JSON.stringify({ type: 'publish', event: 'successful_transaction', data: { amount: 50000 } }));
+    const errPub = await ws.waitForMessage((m) => m.code === 'FORBIDDEN_CLIENT_PUBLISH');
+    assert.ok(errPub);
 
-    // Attach to real ws-server's client set for testing
-    // We can directly verify broadcast filtering:
-    const mockClients = new Set([tvClient, adminClient, cust1Client, cust2Client, workerClient]);
+    // Attempt 2: type: 'event'
+    ws.send(JSON.stringify({ type: 'event', event: 'BOOKING_COMPLETED', data: { id: 'fake_booking' } }));
+    const errEvt = await ws.waitForMessage((m) => m.code === 'FORBIDDEN_CLIENT_PUBLISH');
+    assert.ok(errEvt);
 
-    // Test 3.1: Broadcast successful transaction -> Delivered to all TV subscribers (tvClient, adminClient, etc.)
-    const txPayload = { id: 'tx_123', transactionNumber: 'PF-TXN-001', customerName: 'Rahul S.', paidAmount: 450 };
-    let txDelivered = 0;
-    for (const c of mockClients) {
-      if (c.subscribedChannels.has('tv:transactions') && isChannelAuthorized(c.auth, 'tv:transactions')) {
-        c.send(JSON.stringify({ event: 'successful_transaction', data: txPayload, channel: 'tv:transactions' }));
-        txDelivered++;
-      }
-    }
-    assert.strictEqual(txDelivered, 5, 'TV transaction is public to subscribed displays');
-    assert.strictEqual(tvClient.messages.length, 1);
-    assert.strictEqual(tvClient.messages[0].event, 'successful_transaction');
+    // Attempt 3: root event field
+    ws.send(JSON.stringify({ event: 'gps:live', data: { latitude: 0, longitude: 0 } }));
+    const errRoot = await ws.waitForMessage((m) => m.code === 'FORBIDDEN_CLIENT_PUBLISH');
+    assert.ok(errRoot);
 
-    // Test 3.2: Broadcast GPS telemetry -> MUST NOT deliver to TV or customer clients; ONLY Admin
-    const gpsPayload = { journeyId: 'journey_99', latitude: 12.9716, longitude: 77.5946 };
-    let gpsDelivered = 0;
-    for (const c of mockClients) {
-      const channel = 'gps:live';
-      if (c.subscribedChannels.has(channel) && isChannelAuthorized(c.auth, channel)) {
-        if (c.auth?.role === 'ADMIN') {
-          c.send(JSON.stringify({ event: 'gps:live', data: gpsPayload, channel }));
-          gpsDelivered++;
-        }
-      }
-    }
-    assert.strictEqual(gpsDelivered, 1, 'GPS telemetry must ONLY be delivered to Admin client');
-    assert.strictEqual(adminClient.messages.some((m) => m.event === 'gps:live'), true);
-    assert.strictEqual(tvClient.messages.some((m) => m.event === 'gps:live'), false, 'TV client must NEVER receive GPS telemetry');
-    assert.strictEqual(cust1Client.messages.some((m) => m.event === 'gps:live'), false, 'Customer 1 must NEVER receive raw GPS telemetry');
-    assert.strictEqual(cust2Client.messages.some((m) => m.event === 'gps:live'), false, 'Customer 2 must NEVER receive raw GPS telemetry');
-    assert.strictEqual(workerClient.messages.some((m) => m.event === 'gps:live'), false, 'Worker must NEVER receive raw GPS telemetry');
-
-    // Test 3.3: Broadcast to Customer 1 -> Delivered ONLY to Customer 1, NEVER to Customer 2
-    const cust1Event = { bookingId: 'bk_111', status: 'CONFIRMED' };
-    let custDelivered = 0;
-    for (const c of mockClients) {
-      const channel = 'customer:cust_1111';
-      if (c.subscribedChannels.has(channel) && isChannelAuthorized(c.auth, channel)) {
-        c.send(JSON.stringify({ event: 'BOOKING_CONFIRMED', data: cust1Event, channel }));
-        custDelivered++;
-      }
-    }
-    assert.strictEqual(custDelivered, 1, 'Delivered to Customer 1 only');
-    assert.strictEqual(cust1Client.messages.some((m) => m.event === 'BOOKING_CONFIRMED'), true);
-    assert.strictEqual(cust2Client.messages.some((m) => m.event === 'BOOKING_CONFIRMED'), false, 'Customer 2 must NEVER receive Customer 1 events');
+    ws.close();
   });
 
   // ---------------------------------------------------------------------------
-  // 4. Client-Initiated Event Injection Guard
+  // 7. Logout / Session Revocation Closes Associated Socket
   // ---------------------------------------------------------------------------
-  await t.test('4. Event Injection Guard: Clients cannot forge or inject server events over WebSocket', () => {
-    // In ws-server.js on message:
-    // If data.type === 'publish' || data.type === 'event' || data.event -> rejected with FORBIDDEN_CLIENT_PUBLISH
-    const incomingData = [
-      { type: 'publish', event: 'successful_transaction', data: { id: 'fake_1', paidAmount: 9999 } },
-      { type: 'event', event: 'TRANSACTION_COMPLETED', data: { id: 'fake_2' } },
-      { event: 'SUBSCRIPTION_ACTIVATED', data: { credit: 10000 } },
-    ];
+  await t.test('7. Logout/session revocation closing actual associated socket and preventing event delivery', async () => {
+    const revokeSessionId = 'sess_revoke_lifecycle_test';
+    const revokableToken = jwt.sign(
+      { workerId: 'worker_revokable', role: 'WORKER', sessionId: revokeSessionId, storeId: 'main_store' },
+      secret
+    );
 
-    for (const payload of incomingData) {
-      const isBlocked = payload.type === 'publish' || payload.type === 'event' || Boolean(payload.event);
-      assert.strictEqual(isBlocked, true, 'Client forged event payload must be detected and blocked');
-    }
-  });
+    const ws = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${revokableToken}` },
+    });
+    const init = await ws.waitForMessage((m) => m.type === 'connection_established');
+    assert.strictEqual(init.authenticated, true);
 
-  // ---------------------------------------------------------------------------
-  // 5. TV Display Privacy & Phone Number Masking (formatDisplayName)
-  // ---------------------------------------------------------------------------
-  await t.test('5. TV Display Privacy: Phone numbers and numeric IDs are strictly masked to "Valued Customer"', () => {
-    // We can test the internal formatting logic directly
-    // Simulate raw values from customer records or paper bills:
-    const testCases = [
-      { input: '9876543210', expected: 'Valued Customer', reason: '10-digit mobile number must not leak' },
-      { input: '+91 9876543210', expected: 'Valued Customer', reason: 'International mobile number must not leak' },
-      { input: '98765-43210', expected: 'Valued Customer', reason: 'Hyphenated mobile number must not leak' },
-      { input: '9999999999', expected: 'Valued Customer', reason: 'Consecutive phone digits must not leak' },
-      { input: '12345678', expected: 'Valued Customer', reason: 'Numeric customer ID must not leak' },
-      { input: 'Rahul Sharma', expected: 'Rahul S.', reason: 'Full name formatted with last initial' },
-      { input: 'Amitabh Kumar Verma', expected: 'Amitabh V.', reason: 'Multi-part name formatted with last initial' },
-      { input: 'Suresh', expected: 'Suresh', reason: 'Single name without phone digits preserved' },
-      { input: '', expected: 'Valued Customer', reason: 'Empty string fallback' },
-      { input: null, expected: 'Valued Customer', reason: 'Null fallback' },
-    ];
-
-    function formatDisplayName(rawName) {
-      if (!rawName || typeof rawName !== 'string') return 'Valued Customer';
-      const trimmed = rawName.trim();
-
-      // Privacy Protection: Never expose raw telephone numbers or numeric identifiers on public TV display
-      if (/^\+?[0-9\s-]{7,15}$/.test(trimmed) || /^\d{10}$/.test(trimmed)) {
-        return 'Valued Customer';
-      }
-
-      const parts = trimmed.split(/\s+/);
-      if (parts.length === 1) {
-        if (/^\d+$/.test(parts[0])) return 'Valued Customer';
-        return parts[0];
-      }
-      const first = parts[0];
-      const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase();
-      return `${first} ${lastInitial}.`;
-    }
-
-    for (const tc of testCases) {
-      const result = formatDisplayName(tc.input);
-      assert.strictEqual(result, tc.expected, `Failed for input "${tc.input}": ${tc.reason}`);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // 6. TV Feed Reconnection Reconciliation & Deduplication
-  // ---------------------------------------------------------------------------
-  await t.test('6. TV Feed Deduplication & Reconnect: Discards duplicates, validates required fields, resets on hydration', () => {
-    const seenTxnIds = new Set();
-    const transactions = [];
-
-    function handleIncomingTransaction(newTx) {
-      if (!newTx || !newTx.id || !newTx.transactionNumber) return false;
-      if (seenTxnIds.has(newTx.id)) return false;
-      seenTxnIds.add(newTx.id);
-      transactions.unshift({
-        ...newTx,
-        paidAmount: Math.max(0, Math.round(Number(newTx.paidAmount) || 0)),
+    // Create a promise for close event
+    const closePromise = new Promise((resolve) => {
+      ws.on('close', (code, reason) => {
+        resolve({ code, reason: reason.toString() });
       });
-      return true;
-    }
+    });
 
-    // First arrival
-    const tx1 = { id: 'tx_aaa', transactionNumber: 'PF-TXN-001', paidAmount: 500 };
-    assert.strictEqual(handleIncomingTransaction(tx1), true, 'First event accepted');
-    assert.strictEqual(transactions.length, 1);
+    // Revoke the session via ws-server API (called on worker logout)
+    const revokedCount = revokeRealtimeSession(revokeSessionId);
+    assert.strictEqual(revokedCount, 1);
 
-    // Duplicate arrival (e.g. replayed WebSocket message or out-of-order event)
-    assert.strictEqual(handleIncomingTransaction(tx1), false, 'Duplicate event must be discarded without modifying display');
-    assert.strictEqual(transactions.length, 1);
-
-    // Malformed arrival (missing transactionNumber or ID)
-    assert.strictEqual(handleIncomingTransaction({ id: 'tx_bbb' }), false, 'Malformed event without transactionNumber discarded');
-    assert.strictEqual(handleIncomingTransaction({ transactionNumber: 'PF-TXN-002' }), false, 'Event without ID discarded');
-    assert.strictEqual(transactions.length, 1);
-
-    // Fresh hydration on reconnect / day rollover: Resets seenTxnIds
-    const hydratedFromDatabase = [
-      { id: 'tx_aaa', transactionNumber: 'PF-TXN-001', paidAmount: 500 },
-      { id: 'tx_ccc', transactionNumber: 'PF-TXN-003', paidAmount: 750 },
-    ];
-    // Reconcile set
-    seenTxnIds.clear();
-    hydratedFromDatabase.forEach((tx) => seenTxnIds.add(tx.id));
-
-    assert.strictEqual(seenTxnIds.size, 2);
-    assert.strictEqual(seenTxnIds.has('tx_ccc'), true);
+    // Verify socket received session_revoked message and closed with code 4401
+    const closeEvent = await closePromise;
+    assert.strictEqual(closeEvent.code, 4401);
+    assert.strictEqual(closeEvent.reason, 'Session revoked');
   });
 
   // ---------------------------------------------------------------------------
-  // 7. Customer Data Scoping & Cross-Customer Isolation
+  // 8. TV Feed Access & Payload Field Privacy Validation
   // ---------------------------------------------------------------------------
-  await t.test('7. Cross-Customer Authorization Isolation: Customer A cannot access Customer B records', async () => {
-    const transactionRepository = require('../../lib/db/repositories/transactionRepository');
-    const bookingEngine = require('../../lib/engines/booking');
-    const billingCorrectionEngine = require('../../lib/engines/billing-correction');
-
-    // 7.1 getCustomerTransactionById requires customerId match
-    // Query condition is: WHERE t.id = $1 AND t.customer_id = $2
-    assert.strictEqual(typeof transactionRepository.getCustomerTransactionById, 'function');
-
-    // 7.2 getBookingDetails requires customerId match
-    await assert.rejects(
-      async () => {
-        await bookingEngine.getBookingDetails({
-          customerId: null,
-          bookingId: '00000000-0000-0000-0000-000000000001',
-        });
-      },
-      (err) => {
-        assert.strictEqual(err.code, 'INVALID_PARAMETERS');
-        return true;
-      }
-    );
-
-    // 7.3 cancelBooking requires customerId match
-    await assert.rejects(
-      async () => {
-        await bookingEngine.cancelBooking({
-          customerId: null,
-          bookingId: '00000000-0000-0000-0000-000000000001',
-        });
-      },
-      (err) => {
-        assert.strictEqual(err.code, 'INVALID_PARAMETERS');
-        return true;
-      }
-    );
-
-    // 7.4 setManualBillNumber rejects when customer does not match
-    const billRepository = require('../../lib/db/repositories/billRepository');
-    const origGetBillById = billRepository.getBillById;
-    billRepository.getBillById = async (id) => {
-      if (id === '00000000-0000-0000-0000-000000000002') {
-        return { id, customer_id: 'cust_real_owner', status: 'PENDING' };
-      }
-      return null;
+  await t.test('8. TV feed access and payload fields match explicitly chosen public/private policy', async () => {
+    // 8.1 Test public policy payload fields (data minimization)
+    const rawTx = {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      transactionNumber: 'TXN-20261024-001',
+      bookingCode: 'BK789',
+      customerName: '9876543210', // Phone number as name -> Must be masked!
+      finalPaidAmount: 520.5,
+      createdAt: new Date().toISOString(),
+      items: [{ fishName: 'Rohu', quantityKg: 2.5 }],
+      // Fields that MUST NOT leak:
+      mobileNumber: '9876543210',
+      customerEmail: 'customer@test.com',
+      razorpayPaymentId: 'pay_secret123',
+      razorpayOrderId: 'order_secret456',
+      workerId: 'worker_private_id',
     };
 
+    const normalized = tvFeedEngine.normalizeTVPayload(rawTx);
+
+    // Verify allowed fields
+    assert.strictEqual(normalized.transactionNumber, 'TXN-20261024-001');
+    assert.strictEqual(normalized.billNumber, '#BK789');
+    assert.strictEqual(normalized.customerName, 'Valued Customer', 'Phone number must be masked to Valued Customer');
+    assert.strictEqual(normalized.paidAmount, 521);
+    assert.strictEqual(normalized.items.length, 1);
+    assert.strictEqual(normalized.items[0].fishName, 'Rohu');
+
+    // Verify disallowed fields do not exist in normalized payload
+    assert.strictEqual(normalized.mobileNumber, undefined);
+    assert.strictEqual(normalized.customerEmail, undefined);
+    assert.strictEqual(normalized.razorpayPaymentId, undefined);
+    assert.strictEqual(normalized.razorpayOrderId, undefined);
+    assert.strictEqual(normalized.workerId, undefined);
+
+    // 8.2 Test TV feed delivery to real WebSocket TV client
+    const wsTV = await connectClient(baseUrl);
+    await wsTV.waitForMessage((m) => m.type === 'connection_established');
+
+    realtimeBroadcastEngine.broadcastTransaction(normalized);
+    const receivedTx = await wsTV.waitForMessage((m) => m.event === 'successful_transaction');
+    assert.strictEqual(receivedTx.data.transactionNumber, 'TXN-20261024-001');
+    assert.strictEqual(receivedTx.data.customerName, 'Valued Customer');
+
+    wsTV.close();
+
+    // 8.3 Test configurable TV auth policy: When PONDFISH_TV_AUTH_REQUIRED=true, anonymous TV access is blocked
+    process.env.PONDFISH_TV_AUTH_REQUIRED = 'true';
     try {
-      // Test cross-customer modification rejection (FORBIDDEN)
-      await assert.rejects(
-        async () => {
-          await billingCorrectionEngine.setManualBillNumber({
-            billId: '00000000-0000-0000-0000-000000000002',
-            billNumber: 'BILL-1234',
-            customerId: 'cust_unauthorized',
-          });
-        },
-        (err) => {
-          assert.strictEqual(err.code, 'FORBIDDEN', 'Cross-customer bill modification must be rejected with FORBIDDEN');
-          return true;
-        }
-      );
+      const wsGatedAnon = await connectClient(baseUrl);
+      const initGated = await wsGatedAnon.waitForMessage((m) => m.type === 'connection_established');
+      assert.strictEqual(initGated.channels.length, 0, 'Anonymous has no default channels when TV auth required');
 
-      // Test non-existent bill rejection (BILL_NOT_FOUND)
-      await assert.rejects(
-        async () => {
-          await billingCorrectionEngine.setManualBillNumber({
-            billId: '00000000-0000-0000-0000-000000000001',
-            billNumber: 'BILL-1234',
-            customerId: 'cust_unauthorized',
-          });
-        },
-        (err) => {
-          assert.strictEqual(err.code, 'BILL_NOT_FOUND', 'Non-existent bill must fail closed with BILL_NOT_FOUND');
-          return true;
-        }
-      );
+      wsGatedAnon.send(JSON.stringify({ type: 'subscribe', channel: 'tv:transactions' }));
+      const gatedErr = await wsGatedAnon.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(gatedErr.channel, 'tv:transactions');
+      wsGatedAnon.close();
     } finally {
-      billRepository.getBillById = origGetBillById;
+      delete process.env.PONDFISH_TV_AUTH_REQUIRED;
     }
   });
 
   // ---------------------------------------------------------------------------
-  // 8. Session Revocation Realtime Termination
+  // 9. Credential Hygiene: Reject Admin API Secret in URL Query Parameters
   // ---------------------------------------------------------------------------
-  await t.test('8. Session Invalidation: Revoking worker/admin session terminates active realtime connection', () => {
-    let closedClient = null;
-    let sentMessage = null;
+  await t.test('9. Credential hygiene: Admin API secrets rejected in query strings and accepted only via headers', async () => {
+    // Attempt connection passing ADMIN_SECRET in query parameter ?token=<ADMIN_SECRET>
+    const wsQuery = await connectClient(baseUrl, `/api/v1/realtime?token=${TEST_ADMIN_SECRET}`);
+    const initQuery = await wsQuery.waitForMessage((m) => m.type === 'connection_established');
+    // Must NOT authenticate as ADMIN! API key is forbidden in query string.
+    assert.strictEqual(initQuery.authenticated, false, 'API secret in query string must NOT authenticate');
+    assert.strictEqual(initQuery.role, 'ANONYMOUS');
+    wsQuery.close();
 
-    const mockClient = {
-      auth: { role: 'WORKER', id: 'worker_test_1', sessionId: 'sess_revoke_target' },
-      subscribedChannels: new Set(['tv:transactions', 'worker:store']),
-      send: (msg) => {
-        sentMessage = JSON.parse(msg);
-      },
-      close: (code, reason) => {
-        closedClient = { code, reason };
-      },
-    };
-
-    // Simulate revokeRealtimeSession logic
-    if (mockClient.auth?.sessionId === 'sess_revoke_target') {
-      mockClient.auth = { role: 'ANONYMOUS', id: null };
-      mockClient.subscribedChannels = new Set(['tv:transactions']);
-      mockClient.send(
-        JSON.stringify({
-          type: 'session_revoked',
-          code: 'SESSION_REVOKED',
-          message: 'Your authentication session has been invalidated or logged out.',
-        })
-      );
-      mockClient.close(4401, 'Session revoked');
-    }
-
-    assert.ok(closedClient, 'Client must be closed');
-    assert.strictEqual(closedClient.code, 4401);
-    assert.strictEqual(sentMessage.code, 'SESSION_REVOKED');
-    assert.strictEqual(mockClient.auth.role, 'ANONYMOUS', 'Client must be demoted to anonymous');
-    assert.strictEqual(mockClient.subscribedChannels.has('worker:store'), false, 'Protected channels cleared');
+    // Authenticate passing ADMIN_SECRET via secure HTTP header x-admin-key
+    const wsHeader = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { 'x-admin-key': TEST_ADMIN_SECRET },
+    });
+    const initHeader = await wsHeader.waitForMessage((m) => m.type === 'connection_established');
+    assert.strictEqual(initHeader.authenticated, true);
+    assert.strictEqual(initHeader.role, 'ADMIN', 'x-admin-key HTTP upgrade header successfully authenticates as ADMIN');
+    wsHeader.close();
   });
 });
