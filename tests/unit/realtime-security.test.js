@@ -126,6 +126,18 @@ test('Phase 3 Realtime & Transaction-Display Security Suite (Real WebSocket Inte
     { expiresIn: '1h' }
   );
 
+  const tvNoStoreToken = jwt.sign(
+    { displayId: 'tv_display_nostore', role: 'TV', sessionId: 'sess_tv_nostore' },
+    secret,
+    { expiresIn: '1h' }
+  );
+
+  const workerNoStoreToken = jwt.sign(
+    { workerId: 'worker_nostore', name: 'Staff NoStore', role: 'WORKER', sessionId: 'sess_worker_nostore' },
+    secret,
+    { expiresIn: '1h' }
+  );
+
   const customer1Token = jwt.sign(
     { customerId: 'cust_1111', mobileNumber: '9999911111', role: 'CUSTOMER', sessionId: 'sess_cust_1' },
     secret,
@@ -729,5 +741,157 @@ test('Phase 3 Realtime & Transaction-Display Security Suite (Real WebSocket Inte
 
     if (savedStoreId) process.env.PONDFISH_STORE_ID = savedStoreId;
     else delete process.env.PONDFISH_STORE_ID;
+  });
+
+  // ---------------------------------------------------------------------------
+  // 12. Strict Authenticated Store Identity & Conflicting Identity Protection
+  // ---------------------------------------------------------------------------
+  await t.test('12. Authenticated TV and Worker with missing storeId fail closed and reject environment fallback; conflicting store identities fail closed', async () => {
+    const savedStoreId = process.env.PONDFISH_STORE_ID;
+    process.env.PONDFISH_STORE_ID = 'store_a';
+
+    try {
+      // 12.1 Authenticated TV with missing storeId cannot subscribe to store-scoped TV channels
+      const wsTvNoStore = await connectClient(baseUrl, '/api/v1/realtime', {
+        headers: { Authorization: `Bearer ${tvNoStoreToken}` },
+      });
+      const initTvNoStore = await wsTvNoStore.waitForMessage((m) => m.type === 'connection_established');
+      assert.strictEqual(initTvNoStore.role, 'TV');
+      assert.strictEqual(initTvNoStore.channels.length, 0, 'TV client with missing storeId receives zero default store channels');
+
+      // Attempt to subscribe to store_a
+      wsTvNoStore.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_a' }));
+      const rejectTvA = await wsTvNoStore.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(rejectTvA.channel, 'tv:store:store_a');
+
+      // Attempt to subscribe to main_store
+      wsTvNoStore.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:main_store' }));
+      const rejectTvMain = await wsTvNoStore.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(rejectTvMain.channel, 'tv:store:main_store');
+
+      // 12.2 Authenticated Worker with missing storeId cannot subscribe to store-scoped worker channels
+      const wsWorkerNoStore = await connectClient(baseUrl, '/api/v1/realtime', {
+        headers: { Authorization: `Bearer ${workerNoStoreToken}` },
+      });
+      const initWorkerNoStore = await wsWorkerNoStore.waitForMessage((m) => m.type === 'connection_established');
+      assert.strictEqual(initWorkerNoStore.role, 'WORKER');
+      assert.strictEqual(initWorkerNoStore.channels.length, 0, 'Worker client with missing storeId receives zero default store channels');
+
+      // Attempt to subscribe to worker:store:store_a
+      wsWorkerNoStore.send(JSON.stringify({ type: 'subscribe', channel: 'worker:store:store_a' }));
+      const rejectWorkerA = await wsWorkerNoStore.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(rejectWorkerA.channel, 'worker:store:store_a');
+
+      // Attempt to subscribe to worker:store
+      wsWorkerNoStore.send(JSON.stringify({ type: 'subscribe', channel: 'worker:store' }));
+      const rejectWorkerGeneric = await wsWorkerNoStore.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(rejectWorkerGeneric.channel, 'worker:store');
+
+      // Attempt to subscribe to tv:store:store_a
+      wsWorkerNoStore.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_a' }));
+      const rejectWorkerTv = await wsWorkerNoStore.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(rejectWorkerTv.channel, 'tv:store:store_a');
+
+      // 12.3 Neither client type receives a store transaction through server-wide environment fallback
+      // Even with process.env.PONDFISH_STORE_ID = 'store_a' set in the process,
+      // authenticated TV and Worker missing storeId must NEVER be assigned store_a by fallback.
+      const wsTvScopedA = await connectClient(baseUrl, '/api/v1/realtime', {
+        headers: { Authorization: `Bearer ${tvStoreAToken}` },
+      });
+      const wsWorkerScopedA = await connectClient(baseUrl, '/api/v1/realtime', {
+        headers: { Authorization: `Bearer ${workerStoreAToken}` },
+      });
+
+      await wsTvScopedA.waitForMessage((m) => m.type === 'connection_established');
+      await wsWorkerScopedA.waitForMessage((m) => m.type === 'connection_established');
+
+      // Broadcast valid store_a transaction
+      const txStoreA = tvFeedEngine.normalizeTVPayload({
+        id: '44444444-5555-6666-7777-888888888888',
+        transactionNumber: 'TXN-STRICT-STOREA-101',
+        finalPaidAmount: 750,
+        items: [{ fishName: 'Pomfret', quantityKg: 1 }],
+      });
+
+      const broadcastRes = realtimeBroadcastEngine.broadcastTransaction(txStoreA, { storeId: 'store_a' });
+      assert.strictEqual(broadcastRes.deliveredCount >= 1, true);
+
+      // 12.4 Correctly scoped TV client receives the event
+      const receivedTvA = await wsTvScopedA.waitForMessage((m) => m.event === 'successful_transaction');
+      assert.strictEqual(receivedTvA.data.transactionNumber, 'TXN-STRICT-STOREA-101');
+
+      await sleep(50);
+
+      // Verify TV client with missing storeId received ZERO messages
+      const msgsTvNoStore = wsTvNoStore.getReceivedMessages();
+      assert.strictEqual(
+        msgsTvNoStore.some((m) => m.data?.transactionNumber === 'TXN-STRICT-STOREA-101'),
+        false,
+        'Authenticated TV without storeId must NEVER receive store transaction via env fallback'
+      );
+
+      // Verify Worker client with missing storeId received ZERO messages
+      const msgsWorkerNoStore = wsWorkerNoStore.getReceivedMessages();
+      assert.strictEqual(
+        msgsWorkerNoStore.some((m) => m.data?.transactionNumber === 'TXN-STRICT-STOREA-101'),
+        false,
+        'Authenticated Worker without storeId must NEVER receive store transaction via env fallback'
+      );
+
+      // Test worker event delivery: correctly scoped worker receives, worker without storeId does not
+      broadcastToWorkers('counter_queue_alert', { queueSize: 4 }, { storeId: 'store_a' });
+      const receivedWorkerA = await wsWorkerScopedA.waitForMessage((m) => m.event === 'counter_queue_alert');
+      assert.strictEqual(receivedWorkerA.data.queueSize, 4);
+
+      await sleep(50);
+      const workerNoStoreAlerts = wsWorkerNoStore.getReceivedMessages();
+      assert.strictEqual(
+        workerNoStoreAlerts.some((m) => m.event === 'counter_queue_alert'),
+        false,
+        'Worker without storeId must NEVER receive store worker events'
+      );
+
+      // 12.5 Conflicting options.storeId and data.storeId fail closed
+      const conflictingTx = {
+        id: '55555555-6666-7777-8888-999999999999',
+        transactionNumber: 'TXN-CONFLICT-001',
+        storeId: 'store_b', // Payload asserts Store B
+        finalPaidAmount: 300,
+        items: [{ fishName: 'Catla', quantityKg: 1 }],
+      };
+
+      const conflictRes = realtimeBroadcastEngine.broadcastTransaction(conflictingTx, {
+        storeId: 'store_a', // Options asserts Store A -> CONFLICT!
+      });
+      assert.strictEqual(conflictRes.deliveredCount, 0, 'Must deliver to 0 clients on conflicting store IDs');
+      assert.strictEqual(conflictRes.reason, 'CONFLICTING_STORE_IDENTITY', 'Must report CONFLICTING_STORE_IDENTITY reason');
+
+      await sleep(50);
+      const postConflictMsgs = wsTvScopedA.getReceivedMessages();
+      assert.strictEqual(
+        postConflictMsgs.some((m) => m.data?.transactionNumber === 'TXN-CONFLICT-001'),
+        false,
+        'Conflicting store transaction must NEVER be broadcast to any client'
+      );
+
+      // Verify non-conflicting explicit identities work
+      const nonConflictTx = {
+        id: '66666666-7777-8888-9999-000000000000',
+        transactionNumber: 'TXN-HARMONIOUS-001',
+        storeId: 'store_a',
+        finalPaidAmount: 400,
+        items: [{ fishName: 'Prawns', quantityKg: 0.5 }],
+      };
+      const nonConflictRes = realtimeBroadcastEngine.broadcastTransaction(nonConflictTx, { storeId: 'store_a' });
+      assert.strictEqual(nonConflictRes.deliveredCount >= 1, true);
+
+      wsTvNoStore.close();
+      wsWorkerNoStore.close();
+      wsTvScopedA.close();
+      wsWorkerScopedA.close();
+    } finally {
+      if (savedStoreId) process.env.PONDFISH_STORE_ID = savedStoreId;
+      else delete process.env.PONDFISH_STORE_ID;
+    }
   });
 });
