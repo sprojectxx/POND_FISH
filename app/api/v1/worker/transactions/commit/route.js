@@ -93,11 +93,26 @@ export async function POST(request) {
       );
     }
 
-    // Call authoritative business engine with worker ID
+    // Worker Store Scoping: Prevent workers from finalizing bills from other stores
+    if (bill.store_id && worker.storeId && bill.store_id !== worker.storeId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Unauthorized: This bill belongs to a different store.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    // Call authoritative business engine with worker ID and store ID
     const transaction = await finalizePhysicalPurchaseAtomic({
       billId,
       customerId: authoritativeCustomerId,
       workerId: worker.id,
+      workerStoreId: worker.storeId || bill.store_id || null,
       paymentMethod: paymentMethod.toUpperCase(),
       razorpayPaymentId,
       razorpayOrderId,
@@ -120,10 +135,10 @@ export async function POST(request) {
   } catch (error) {
     let status = error.status || 500;
     if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED' || error.code === 'WORKER_NOT_FOUND') status = 401;
-    else if (error.code === 'FORBIDDEN' || error.code === 'WORKER_ACCOUNT_DISABLED' || error.code === 'CUSTOMER_BILL_MISMATCH') status = 403;
+    else if (error.code === 'FORBIDDEN' || error.code === 'WORKER_ACCOUNT_DISABLED' || error.code === 'CUSTOMER_BILL_MISMATCH' || error.code === 'STORE_MISMATCH') status = 403;
     else if (error.code === 'BILL_NOT_FOUND' || error.code === 'CUSTOMER_NOT_FOUND') status = 404;
     else if (error.code === 'BILL_ALREADY_PROCESSED') status = 409;
-    else if (error.code === 'BILL_NUMBER_MISSING' || error.code === 'INVALID_PAYMENT_SIGNATURE' || error.code === 'PAYMENT_REQUIRED' || error.code === 'BILL_ID_REQUIRED' || error.code === 'CUSTOMER_ID_REQUIRED') status = 400;
+    else if (error.code === 'BILL_NUMBER_MISSING' || error.code === 'INVALID_PAYMENT_SIGNATURE' || error.code === 'PAYMENT_REQUIRED' || error.code === 'BILL_ID_REQUIRED' || error.code === 'CUSTOMER_ID_REQUIRED' || error.code === 'BILL_REVIEW_REQUIRED' || error.code === 'INVALID_ITEM_QUANTITY' || error.code === 'INVALID_FISH_ITEM' || error.code === 'NO_ITEMS_FOUND') status = 400;
 
     console.error('[API ERROR] POST /api/v1/worker/transactions/commit:', error.message);
     return NextResponse.json(

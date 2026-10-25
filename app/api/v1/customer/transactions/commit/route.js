@@ -103,9 +103,13 @@ export async function POST(request) {
     else if (error.code === 'PAYMENT_GATEWAY_NOT_CONFIGURED') status = 503;
     else if (
       error.code === 'BILL_NUMBER_MISSING' ||
+      error.code === 'BILL_REVIEW_REQUIRED' ||
       error.code === 'INVALID_PAYMENT_SIGNATURE' ||
       error.code === 'PAYMENT_ORDER_NOT_FOUND' ||
-      error.code === 'PAYMENT_AMOUNT_MISMATCH'
+      error.code === 'PAYMENT_AMOUNT_MISMATCH' ||
+      error.code === 'INVALID_ITEM_QUANTITY' ||
+      error.code === 'INVALID_FISH_ITEM' ||
+      error.code === 'NO_ITEMS_FOUND'
     ) status = 400;
     else if (error.code === 'INSUFFICIENT_INVENTORY' || error.code === 'INSUFFICIENT_SUBSCRIPTION_CREDIT') status = 409;
 

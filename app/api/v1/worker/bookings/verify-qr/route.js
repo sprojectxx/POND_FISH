@@ -12,7 +12,8 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
-    await authenticateWorkerAsync(request);
+    const session = await authenticateWorkerAsync(request);
+    const worker = session?.worker;
     const body = await request.json().catch(() => ({}));
     const { qrCodeData } = body;
 
@@ -29,7 +30,9 @@ export async function POST(request) {
       );
     }
 
-    const booking = await verifyBookingQr(qrCodeData);
+    const booking = await verifyBookingQr(qrCodeData, {
+      workerStoreId: worker?.storeId || worker?.store_id || null,
+    });
 
     return NextResponse.json({
       success: true,
@@ -39,6 +42,19 @@ export async function POST(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    if (error.code === 'STORE_MISMATCH') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: error.message || 'This booking belongs to a different store.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
     if (
       error.code === 'UNAUTHORIZED' ||
       error.code === 'FORBIDDEN' ||

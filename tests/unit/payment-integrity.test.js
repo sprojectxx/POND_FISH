@@ -931,7 +931,7 @@ function projectColumns(sql, row) {
               id: 'bill-123',
               customer_id: 'cust-pos-1',
               manual_bill_id: 'BILL-999',
-              status: 'CAPTURED',
+              status: 'CONFIRMED',
               extracted_text: null,
             }],
           };
@@ -1003,7 +1003,7 @@ function projectColumns(sql, row) {
               id: 'bill-exact-1',
               customer_id: 'cust-pos-1',
               manual_bill_id: 'BILL-1001',
-              status: 'CAPTURED',
+              status: 'CONFIRMED',
               extracted_text: null,
             }],
           };

@@ -34,7 +34,7 @@ async function authenticateWorkerRequest(request) {
 
 export async function GET(request, { params }) {
   try {
-    await authenticateWorkerRequest(request);
+    const worker = await authenticateWorkerRequest(request);
     const billId = params?.id;
 
     if (!billId) {
@@ -49,6 +49,20 @@ export async function GET(request, { params }) {
       return NextResponse.json(
         { success: false, error: { code: 'BILL_NOT_FOUND', message: 'Bill record not found.' } },
         { status: 404 }
+      );
+    }
+
+    // Worker Store Scoping: Prevent workers from accessing bills from other stores
+    if (bill.store_id && worker.storeId && bill.store_id !== worker.storeId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Unauthorized: This bill belongs to a different store.',
+          },
+        },
+        { status: 403 }
       );
     }
 
@@ -155,6 +169,20 @@ export async function PATCH(request, { params }) {
       return NextResponse.json(
         { success: false, error: { code: 'BILL_NOT_FOUND', message: 'Bill record not found.' } },
         { status: 404 }
+      );
+    }
+
+    // Worker Store Scoping: Prevent workers from modifying bills from other stores
+    if (bill.store_id && worker.storeId && bill.store_id !== worker.storeId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Unauthorized: This bill belongs to a different store.',
+          },
+        },
+        { status: 403 }
       );
     }
 

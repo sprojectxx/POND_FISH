@@ -59,6 +59,20 @@ export async function POST(request, { params }) {
       );
     }
 
+    // Worker Store Scoping: Prevent workers from previewing bills from other stores
+    if (bill.store_id && worker.storeId && bill.store_id !== worker.storeId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Unauthorized: This bill belongs to a different store.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
     // Resolve fish items
     let resolvedItems = [];
     if (Array.isArray(items) && items.length > 0) {
@@ -79,20 +93,33 @@ export async function POST(request, { params }) {
       }
     }
 
-    if (resolvedItems.length === 0) {
+    if (resolvedItems.length === 0 && bill.extracted_text) {
       const allFish = await fishRepository.getAllFish({ availabilityOnly: false });
-      if (allFish.length > 0) {
-        const sample = allFish[0];
-        const samplePrice = parseFloat(sample.unit_price ?? sample.unitPrice ?? 0);
+      const { parseBillItems } = require('../../../../../../../lib/engines/bill-ocr');
+      const parsed = parseBillItems(bill.extracted_text, allFish);
+      for (const p of parsed.items || []) {
         resolvedItems.push({
-          fishId: sample.id,
-          fishName: sample.name,
-          quantity: 1.0,
-          quantityKg: 1.0,
-          unitPrice: samplePrice,
-          subtotal: samplePrice,
+          fishId: p.fishId,
+          fishName: p.fishName,
+          quantity: p.quantityKg,
+          quantityKg: p.quantityKg,
+          unitPrice: p.unitPrice,
+          subtotal: p.subtotal,
         });
       }
+    }
+
+    if (resolvedItems.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'NO_ITEMS_FOUND',
+            message: 'No fish items identified for this bill. Please review and specify items.',
+          },
+        },
+        { status: 400 }
+      );
     }
 
     const grossTotal = resolvedItems.reduce((acc, it) => acc + (it.subtotal || 0), 0);

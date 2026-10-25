@@ -104,12 +104,28 @@ export async function POST(request, { params }) {
       );
     }
 
+    if (bill.status === 'REJECTED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'BILL_REJECTED',
+            message: 'This bill was rejected due to unreadable quality. Please recapture the photo or enter details manually.',
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // Persist human confirmation status in PostgreSQL
+    const updatedBill = await billRepository.updateBillStatus(null, bill.id, 'CONFIRMED');
+
     return NextResponse.json({
       success: true,
       data: {
-        bill_id: bill.id,
+        bill_id: updatedBill.id,
         bill_number: effectiveBillNumber,
-        status: 'CONFIRMED',
+        status: updatedBill.status || 'CONFIRMED',
         message: 'Bill verified and ready for payment finalization.',
       },
       timestamp: new Date().toISOString(),

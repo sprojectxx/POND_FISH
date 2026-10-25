@@ -125,11 +125,13 @@ export async function POST(request) {
       );
     }
 
-    // Process bill through existing Tesseract OCR engine
+    // Process bill through existing Tesseract OCR engine with worker and store attribution
     const extractionResult = await processBillImage({
       customerId: customer.id,
       imageInput,
       imageUrl,
+      workerId: worker.id,
+      storeId: worker.storeId || null,
     });
 
     // Record worker action in immutable audit logs
@@ -143,6 +145,7 @@ export async function POST(request) {
         payload: {
           workerId: worker.id,
           workerName: worker.name,
+          storeId: worker.storeId || null,
           customerId: customer.id,
           customerName: customer.name,
           billNumber: extractionResult.billNumber,

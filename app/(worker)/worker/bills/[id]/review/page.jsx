@@ -98,19 +98,40 @@ function BillReviewContent() {
     }
   };
 
-  const handleProceedToCheckout = () => {
+  const handleProceedToCheckout = async () => {
     const activeBillNum = billNumber || billData?.billNumber;
     if (!activeBillNum || !activeBillNum.trim()) {
       setError('A valid Bill ID is required before proceeding to checkout. Please enter the Bill ID from the paper slip.');
       return;
     }
 
-    const query = new URLSearchParams({
-      customerId: customerId || billData?.customerId || '',
-      customerName: billData?.customerName || '',
-    });
+    setLoading(true);
+    setError(null);
 
-    router.push(`/worker/bills/${billId}/checkout?${query.toString()}`);
+    try {
+      // Authoritative human review confirmation prior to checkout finalization
+      const res = await fetch(`/api/v1/worker/bills/${billId}/confirm`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setError(json.error?.message || 'Failed to confirm bill review. Please check details.');
+        setLoading(false);
+        return;
+      }
+
+      const query = new URLSearchParams({
+        customerId: customerId || billData?.customerId || '',
+        customerName: billData?.customerName || '',
+      });
+
+      router.push(`/worker/bills/${billId}/checkout?${query.toString()}`);
+    } catch {
+      setError('Failed to confirm bill before checkout. Please check connection and retry.');
+      setLoading(false);
+    }
   };
 
   if (loading) {
