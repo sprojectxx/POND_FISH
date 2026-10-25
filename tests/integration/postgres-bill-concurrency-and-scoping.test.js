@@ -57,6 +57,9 @@ test('PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite',
   process.env.DATABASE_URL = connectionString;
   const posFinalizationEngine = require('../../lib/engines/pos-finalization');
   const billRepository = require('../../lib/db/repositories/billRepository');
+  const workerEngine = require('../../lib/engines/worker');
+  const workerRepository = require('../../lib/db/repositories/workerRepository');
+  const bookingRepository = require('../../lib/db/repositories/bookingRepository');
 
   let client;
   try {
@@ -77,6 +80,7 @@ test('PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite',
   const cleanupCustomerIds = [];
   const cleanupWorkerIds = [];
   const cleanupFishIds = [];
+  const cleanupBookingIds = [];
 
   t.after(async () => {
     try {
@@ -92,6 +96,10 @@ test('PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite',
         await pool.query('DELETE FROM inventory WHERE fish_id = ANY($1)', [cleanupFishIds]);
         await pool.query('DELETE FROM fish WHERE id = ANY($1)', [cleanupFishIds]);
       }
+      if (cleanupBookingIds.length > 0) {
+        await pool.query('DELETE FROM booking_items WHERE booking_id = ANY($1)', [cleanupBookingIds]);
+        await pool.query('DELETE FROM bookings WHERE id = ANY($1)', [cleanupBookingIds]);
+      }
       if (cleanupCustomerIds.length > 0) {
         await pool.query('DELETE FROM customers WHERE id = ANY($1)', [cleanupCustomerIds]);
       }
@@ -103,6 +111,10 @@ test('PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite',
     } finally {
       if (client) client.release();
       await pool.end();
+      try {
+        const dbPoolModule = require('../../lib/db/pool');
+        await dbPoolModule.getPool().end();
+      } catch (_) {}
     }
   });
 
@@ -357,5 +369,151 @@ test('PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite',
     const winnerBill = billsCheck.rows.find(b => b.id === winningTx.bill_id || b.id === bill1Id || b.id === bill2Id);
     const statuses = billsCheck.rows.map(b => b.status).sort();
     assert.deepStrictEqual(statuses, ['CONFIRMED', 'PROCESSED'], 'One bill should be PROCESSED and the other CONFIRMED');
+  });
+
+  // --------------------------------------------------------------------------
+  // 5. Worker database store reassignment prevents old token from authorizing previous store
+  // --------------------------------------------------------------------------
+  await t.test('5. Worker database store reassignment prevents old token from authorizing previous store', async () => {
+    const rawMobile = `9${Math.floor(100000000 + Math.random() * 900000000)}`;
+    const passwordHash = workerRepository.hashPassword('Worker@1234');
+
+    // Create worker assigned to store_reassign_live_a
+    const workerRes = await pool.query(`
+      INSERT INTO workers (id, name, mobile_number, password_hash, store_id, active, created_at, updated_at)
+      VALUES (gen_random_uuid(), 'Live Reassigned Worker', $1, $2, 'store_reassign_live_a', true, NOW(), NOW())
+      RETURNING id, name, mobile_number, store_id, active;
+    `, [rawMobile, passwordHash]);
+    const liveWorker = workerRes.rows[0];
+    cleanupWorkerIds.push(liveWorker.id);
+
+    // Authenticate worker against live DB
+    const auth = await workerEngine.authenticateWorker({
+      mobileNumber: rawMobile,
+      password: 'Worker@1234',
+    });
+    assert.ok(auth.token);
+    assert.strictEqual(auth.worker.id, liveWorker.id);
+
+    // Initial session resolves to store_reassign_live_a
+    const session1 = await workerEngine.verifyWorkerSessionAsync(auth.token);
+    assert.strictEqual(session1.storeId, 'store_reassign_live_a');
+    assert.strictEqual(session1.worker.store_id, 'store_reassign_live_a');
+
+    // Reassign worker in PostgreSQL to store_reassign_live_b
+    await pool.query(`
+      UPDATE workers
+      SET store_id = 'store_reassign_live_b', updated_at = NOW()
+      WHERE id = $1;
+    `, [liveWorker.id]);
+
+    // Using the SAME JWT token, session verification MUST resolve store_reassign_live_b
+    const session2 = await workerEngine.verifyWorkerSessionAsync(auth.token);
+    assert.strictEqual(session2.storeId, 'store_reassign_live_b', 'Authoritative DB record must override JWT payload claim');
+    assert.strictEqual(session2.worker.store_id, 'store_reassign_live_b');
+
+    // Attempt to finalize physical purchase on Store A bill with old token must be rejected with 403 STORE_MISMATCH
+    const billRes = await pool.query(`
+      INSERT INTO bills (id, customer_id, bill_number, image_url, status, store_id, created_at)
+      VALUES (gen_random_uuid(), $1, $2, '/uploads/bills/reassign_test.jpg', 'CONFIRMED', 'store_reassign_live_a', NOW())
+      RETURNING id;
+    `, [testCustomerId, `REASSIGN-${Date.now()}`]);
+    const billId = billRes.rows[0].id;
+    cleanupBillIds.push(billId);
+
+    await assert.rejects(
+      async () => {
+        await posFinalizationEngine.finalizePhysicalPurchaseAtomic({
+          billId,
+          customerId: testCustomerId,
+          workerId: liveWorker.id,
+          workerStoreId: session2.storeId, // 'store_reassign_live_b'
+          paymentMethod: 'CASH',
+          items: [{ fishId: testFishId, quantityKg: 0.5 }],
+        });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
+
+    // When worker's store is cleared to NULL in PostgreSQL
+    await pool.query(`
+      UPDATE workers
+      SET store_id = NULL, updated_at = NOW()
+      WHERE id = $1;
+    `, [liveWorker.id]);
+
+    const session3 = await workerEngine.verifyWorkerSessionAsync(auth.token);
+    assert.strictEqual(session3.storeId, null, 'Unassigned worker in DB must resolve session storeId to null');
+  });
+
+  // --------------------------------------------------------------------------
+  // 6. Live booking creation persists store_id, and cross-store worker is rejected with 403
+  // --------------------------------------------------------------------------
+  await t.test('6. Live booking creation persists store_id, and cross-store worker is rejected with 403', async () => {
+    const bookingCode = `BK-INT-${Date.now().toString().slice(-6)}`;
+    const expiresAt = new Date(Date.now() + 48 * 3600000);
+
+    // Insert booking using bookingRepository with explicit store_id
+    const liveBooking = await bookingRepository.createBooking(pool, {
+      customerId: testCustomerId,
+      bookingCode,
+      qrCodeData: 'mock-qr-live-integration',
+      totalAmount: 200,
+      subCreditUsed: 0,
+      razorpayPaid: 200,
+      status: 'CONFIRMED',
+      expiresAt,
+      storeId: 'store_live_booking_alpha',
+    });
+    cleanupBookingIds.push(liveBooking.id);
+
+    // Verify persisted store_id in PostgreSQL table
+    const dbRow = await pool.query(`
+      SELECT id, booking_code, store_id, status
+      FROM bookings
+      WHERE id = $1;
+    `, [liveBooking.id]);
+    assert.strictEqual(dbRow.rows.length, 1);
+    assert.strictEqual(dbRow.rows[0].store_id, 'store_live_booking_alpha', 'bookings.store_id must be persisted in database');
+
+    // Fetch through findBookingById
+    const fetched = await bookingRepository.findBookingById(liveBooking.id, testCustomerId, pool);
+    assert.strictEqual(fetched.store_id, 'store_live_booking_alpha');
+
+    // Attempt by worker at store_live_booking_beta MUST be rejected with 403 STORE_MISMATCH
+    await assert.rejects(
+      async () => {
+        await workerEngine.completeBookingOrder({
+          bookingId: liveBooking.id,
+          workerId: testWorkerId,
+          workerStoreId: 'store_live_booking_beta',
+        });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
+
+    // Worker with no store assignment fails closed with 403 STORE_MISMATCH
+    await assert.rejects(
+      async () => {
+        await workerEngine.completeBookingOrder({
+          bookingId: liveBooking.id,
+          workerId: testWorkerId,
+          workerStoreId: null,
+        });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
   });
 });

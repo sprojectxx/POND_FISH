@@ -83,6 +83,7 @@ export async function POST(request) {
     const booking = await createBooking({
       customerId: session.customerId,
       paymentVerification: body.paymentVerification || null,
+      storeId: body.storeId || body.store_id || null,
     });
 
     return NextResponse.json(

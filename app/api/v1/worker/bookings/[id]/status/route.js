@@ -13,6 +13,19 @@ export const dynamic = 'force-dynamic';
 export async function PATCH(request, { params }) {
   try {
     const session = await authenticateWorkerAsync(request);
+    const workerStoreId = session?.worker?.store_id || session?.worker?.storeId || session?.storeId || null;
+    if (!workerStoreId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Worker has no authoritative store assignment.',
+          },
+        },
+        { status: 403 }
+      );
+    }
     const bookingId = params.id;
     const body = await request.json().catch(() => ({}));
     const { status } = body;
@@ -33,6 +46,7 @@ export async function PATCH(request, { params }) {
     const updatedBooking = await updateBookingPreparationStatus({
       bookingId,
       workerId: session.workerId,
+      workerStoreId,
     });
 
     return NextResponse.json({
@@ -60,6 +74,19 @@ export async function PATCH(request, { params }) {
           },
         },
         { status }
+      );
+    }
+
+    if (error.code === 'STORE_MISMATCH') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: error.message || 'Worker is not authorized for this store resource.',
+          },
+        },
+        { status: 403 }
       );
     }
 

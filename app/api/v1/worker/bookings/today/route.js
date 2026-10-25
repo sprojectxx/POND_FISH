@@ -12,14 +12,15 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    await authenticateWorkerAsync(request);
+    const session = await authenticateWorkerAsync(request);
+    const storeId = session?.worker?.store_id || session?.worker?.storeId || session?.storeId || null;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || null;
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
     const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10));
 
-    const result = await getTodayBookingsQueue({ status, limit, offset });
+    const result = await getTodayBookingsQueue({ status, limit, offset, storeId });
 
     return NextResponse.json({
       success: true,

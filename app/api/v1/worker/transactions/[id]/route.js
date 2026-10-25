@@ -11,6 +11,7 @@ const { verifyWorkerSessionAsync, extractWorkerToken } = require('../../../../..
 const workerRepository = require('../../../../../../lib/db/repositories/workerRepository');
 const transactionRepository = require('../../../../../../lib/db/repositories/transactionRepository');
 const billRepository = require('../../../../../../lib/db/repositories/billRepository');
+const bookingRepository = require('../../../../../../lib/db/repositories/bookingRepository');
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,14 @@ async function authenticateWorkerRequest(request) {
 export async function GET(request, { params }) {
   try {
     const worker = await authenticateWorkerRequest(request);
+    const workerStoreId = worker?.store_id || worker?.storeId || null;
+    if (!workerStoreId) {
+      return NextResponse.json(
+        { success: false, error: { code: 'STORE_MISMATCH', message: 'Worker has no authoritative store assignment.' } },
+        { status: 403 }
+      );
+    }
+
     const transactionId = params?.id;
 
     if (!transactionId) {
@@ -48,11 +57,25 @@ export async function GET(request, { params }) {
     }
 
     let billNumber = null;
-    if (tx.bill_id || tx.billId) {
-      const bill = await billRepository.getBillById(tx.bill_id || tx.billId);
+    let resourceStoreId = null;
+    if (tx.billId || tx.bill_id) {
+      const bill = await billRepository.getBillById(tx.billId || tx.bill_id);
       if (bill) {
         billNumber = bill.manual_bill_id || bill.bill_number;
+        resourceStoreId = bill.store_id || null;
       }
+    } else if (tx.bookingId || tx.booking_id) {
+      const booking = await bookingRepository.findBookingById(tx.bookingId || tx.booking_id);
+      if (booking) {
+        resourceStoreId = booking.store_id || null;
+      }
+    }
+
+    if (!resourceStoreId || String(resourceStoreId).trim() !== String(workerStoreId).trim()) {
+      return NextResponse.json(
+        { success: false, error: { code: 'STORE_MISMATCH', message: 'Worker is not authorized for this store resource.' } },
+        { status: 403 }
+      );
     }
 
     return NextResponse.json({
