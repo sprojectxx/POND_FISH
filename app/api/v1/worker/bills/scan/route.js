@@ -33,6 +33,19 @@ async function authenticateWorkerRequest(request) {
 export async function POST(request) {
   try {
     const worker = await authenticateWorkerRequest(request);
+    const effectiveWorkerStore = typeof worker.storeId === 'string' ? worker.storeId.trim() : (typeof worker.store_id === 'string' ? worker.store_id.trim() : '');
+    if (!effectiveWorkerStore) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Forbidden: Authenticated worker lacks a valid store assignment.',
+          },
+        },
+        { status: 403 }
+      );
+    }
     const contentType = request.headers.get('content-type') || '';
 
     let customerId = null;
@@ -131,7 +144,7 @@ export async function POST(request) {
       imageInput,
       imageUrl,
       workerId: worker.id,
-      storeId: worker.storeId || null,
+      storeId: effectiveWorkerStore,
     });
 
     // Record worker action in immutable audit logs
@@ -145,7 +158,7 @@ export async function POST(request) {
         payload: {
           workerId: worker.id,
           workerName: worker.name,
-          storeId: worker.storeId || null,
+          storeId: effectiveWorkerStore,
           customerId: customer.id,
           customerName: customer.name,
           billNumber: extractionResult.billNumber,

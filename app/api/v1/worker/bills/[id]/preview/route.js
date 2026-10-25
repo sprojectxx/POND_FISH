@@ -32,7 +32,7 @@ async function authenticateWorkerRequest(request) {
 
 export async function POST(request, { params }) {
   try {
-    await authenticateWorkerRequest(request);
+    const worker = await authenticateWorkerRequest(request);
     const billId = params?.id;
     const body = await request.json().catch(() => ({}));
     const items = body?.items || [];
@@ -59,14 +59,17 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Worker Store Scoping: Prevent workers from previewing bills from other stores
-    if (bill.store_id && worker.storeId && bill.store_id !== worker.storeId) {
+    // Worker Store Scoping: Enforce explicit, non-empty store identity on both worker and bill
+    const effectiveWorkerStore = typeof worker?.storeId === 'string' ? worker.storeId.trim() : (typeof worker?.store_id === 'string' ? worker.store_id.trim() : '');
+    const effectiveBillStore = typeof bill.store_id === 'string' ? bill.store_id.trim() : '';
+
+    if (!effectiveWorkerStore || !effectiveBillStore || effectiveWorkerStore !== effectiveBillStore) {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'STORE_MISMATCH',
-            message: 'Unauthorized: This bill belongs to a different store.',
+            message: 'Unauthorized: Missing or mismatched store identity for bill preview.',
           },
         },
         { status: 403 }

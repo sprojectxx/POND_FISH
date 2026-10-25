@@ -52,14 +52,17 @@ export async function GET(request, { params }) {
       );
     }
 
-    // Worker Store Scoping: Prevent workers from accessing bills from other stores
-    if (bill.store_id && worker.storeId && bill.store_id !== worker.storeId) {
+    // Worker Store Scoping: Enforce explicit, non-empty store identity on both worker and bill
+    const effectiveWorkerStore = typeof worker?.storeId === 'string' ? worker.storeId.trim() : (typeof worker?.store_id === 'string' ? worker.store_id.trim() : '');
+    const effectiveBillStore = typeof bill.store_id === 'string' ? bill.store_id.trim() : '';
+
+    if (!effectiveWorkerStore || !effectiveBillStore || effectiveWorkerStore !== effectiveBillStore) {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'STORE_MISMATCH',
-            message: 'Unauthorized: This bill belongs to a different store.',
+            message: 'Unauthorized: Missing or mismatched store identity for bill operation.',
           },
         },
         { status: 403 }
@@ -172,14 +175,17 @@ export async function PATCH(request, { params }) {
       );
     }
 
-    // Worker Store Scoping: Prevent workers from modifying bills from other stores
-    if (bill.store_id && worker.storeId && bill.store_id !== worker.storeId) {
+    // Worker Store Scoping: Enforce explicit, non-empty store identity on both worker and bill
+    const effectiveWorkerStore = typeof worker?.storeId === 'string' ? worker.storeId.trim() : (typeof worker?.store_id === 'string' ? worker.store_id.trim() : '');
+    const effectiveBillStore = typeof bill.store_id === 'string' ? bill.store_id.trim() : '';
+
+    if (!effectiveWorkerStore || !effectiveBillStore || effectiveWorkerStore !== effectiveBillStore) {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'STORE_MISMATCH',
-            message: 'Unauthorized: This bill belongs to a different store.',
+            message: 'Unauthorized: Missing or mismatched store identity for bill operation.',
           },
         },
         { status: 403 }

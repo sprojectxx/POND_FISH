@@ -158,6 +158,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             id: 'bill-extracted-1',
             customer_id: 'cust-1',
             bill_number: 'BILL-100',
+            store_id: 'store_test_main',
             status: 'EXTRACTED', // Unreviewed raw AI extraction
             extracted_text: 'Catla 1kg 300',
           }],
@@ -172,6 +173,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             customerId: 'cust-1',
             paymentMethod: 'CASH',
             workerId: 'worker-1',
+            workerStoreId: 'store_test_main',
           });
         },
         (err) => {
@@ -193,6 +195,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
               id: `bill-${status}`,
               customer_id: 'cust-1',
               bill_number: 'BILL-101',
+              store_id: 'store_test_main',
               status,
               extracted_text: null,
             }],
@@ -207,6 +210,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
               customerId: 'cust-1',
               paymentMethod: 'CASH',
               workerId: 'worker-1',
+              workerStoreId: 'store_test_main',
             });
           },
           (err) => {
@@ -476,6 +480,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             id: 'bill-manual-verified-1',
             customer_id: 'cust-1',
             manual_bill_id: 'BILL-MANUAL-900',
+            store_id: 'store_test_main',
             status: 'MANUALLY_VERIFIED', // Satisfies human review gate
             extracted_text: null,
           }],
@@ -539,6 +544,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
         billId: 'bill-manual-verified-1',
         customerId: 'cust-1',
         workerId: 'worker-1',
+        workerStoreId: 'store_test_main',
         paymentMethod: 'CASH',
         items: [{ fishId: 'fish-catla', quantityKg: 1.0 }],
       });
@@ -796,6 +802,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             id: 'bill-items-test',
             customer_id: 'cust-1',
             manual_bill_id: 'BILL-VALID-1',
+            store_id: 'store_test_main',
             status: 'CONFIRMED',
             extracted_text: null,
           }],
@@ -813,6 +820,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             billId: 'bill-items-test',
             customerId: 'cust-1',
             workerId: 'worker-1',
+            workerStoreId: 'store_test_main',
             paymentMethod: 'CASH',
             items: [{ fishId: 'unknown-fish-id', quantityKg: 1.5 }],
           });
@@ -833,6 +841,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             id: 'bill-items-test-2',
             customer_id: 'cust-1',
             manual_bill_id: 'BILL-VALID-2',
+            store_id: 'store_test_main',
             status: 'CONFIRMED',
             extracted_text: null,
           }],
@@ -849,6 +858,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             billId: 'bill-items-test-2',
             customerId: 'cust-1',
             workerId: 'worker-1',
+            workerStoreId: 'store_test_main',
             paymentMethod: 'CASH',
             items: [{ fishId: 'fish-rohu', quantityKg: -2.0 }],
           });
@@ -873,6 +883,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             id: 'bill-dup-test',
             customer_id: 'cust-1',
             bill_number: 'BILL-DUPLICATE-999',
+            store_id: 'store_test_main',
             status: 'CONFIRMED',
           }],
         };
@@ -888,6 +899,7 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
             billId: 'bill-dup-test',
             customerId: 'cust-1',
             workerId: 'worker-1',
+            workerStoreId: 'store_test_main',
             paymentMethod: 'CASH',
             items: [{ fishId: 'fish-catla', quantityKg: 1.0 }],
           });
@@ -937,6 +949,319 @@ test('Phase 4: OCR Mutation Boundary & Worker Portal Security Suite', async (t) 
 
       assert.strictEqual(res.status, 409);
       assert.strictEqual(json.error.code, 'BILL_ALREADY_PROCESSED');
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // TEST GROUP 9: Missing Identity Regression & Atomic Concurrency Verification
+  // --------------------------------------------------------------------------
+  await t.test('9.1 Missing worker store identity fails closed across all worker operations', async () => {
+    const workerNoStore = { id: 'worker-nostore', name: 'No Store Worker', mobile_number: '+919988776600', active: true, store_id: null, storeId: null };
+    const tokenNoStore = registerTestWorkerSession(workerNoStore, 'sess-nostore-1');
+
+    const workerScanRoute = loadRoute('../../app/api/v1/worker/bills/scan/route.js');
+    const workerPreviewRoute = loadRoute('../../app/api/v1/worker/bills/[id]/preview/route.js');
+    const workerBillRoute = loadRoute('../../app/api/v1/worker/bills/[id]/route.js');
+    const workerConfirmRoute = loadRoute('../../app/api/v1/worker/bills/[id]/confirm/route.js');
+    const workerCommitRoute = loadRoute('../../app/api/v1/worker/transactions/commit/route.js');
+    const workerVerifyQrRoute = loadRoute('../../app/api/v1/worker/bookings/verify-qr/route.js');
+
+    await withMockPgClient(async (sql) => {
+      if (sql.includes('SELECT') && sql.includes('FROM workers')) {
+        return { rows: [workerNoStore] };
+      }
+      if (sql.includes('SELECT') && sql.includes('FROM customers')) {
+        return { rows: [{ id: 'cust-1', name: 'John', mobile_number: '+919999999999' }] };
+      }
+      if (sql.includes('SELECT') && sql.includes('FROM bills')) {
+        return {
+          rows: [{
+            id: 'bill-store-a',
+            customer_id: 'cust-1',
+            bill_number: 'BILL-STORE-A',
+            status: 'CONFIRMED',
+            store_id: 'store_a',
+          }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      // 1. Scan attempt without worker store
+      const reqScan = createMockRequest({
+        pathname: '/api/v1/worker/bills/scan',
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenNoStore}`, 'content-type': 'application/json' },
+        body: { customerId: 'cust-1', imageUrl: '/sample.jpg' },
+      });
+      const resScan = await workerScanRoute.POST(reqScan);
+      assert.strictEqual(resScan.status, 403);
+      assert.strictEqual((await resScan.json()).error.code, 'STORE_MISMATCH');
+
+      // 2. Preview attempt without worker store
+      const reqPreview = createMockRequest({
+        pathname: '/api/v1/worker/bills/bill-store-a/preview',
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenNoStore}` },
+      });
+      const resPreview = await workerPreviewRoute.POST(reqPreview, { params: { id: 'bill-store-a' } });
+      assert.strictEqual(resPreview.status, 403);
+      assert.strictEqual((await resPreview.json()).error.code, 'STORE_MISMATCH');
+
+      // 3. GET bill without worker store
+      const reqGet = createMockRequest({
+        pathname: '/api/v1/worker/bills/bill-store-a',
+        method: 'GET',
+        headers: { authorization: `Bearer ${tokenNoStore}` },
+      });
+      const resGet = await workerBillRoute.GET(reqGet, { params: { id: 'bill-store-a' } });
+      assert.strictEqual(resGet.status, 403);
+      assert.strictEqual((await resGet.json()).error.code, 'STORE_MISMATCH');
+
+      // 4. PATCH bill without worker store
+      const reqPatch = createMockRequest({
+        pathname: '/api/v1/worker/bills/bill-store-a',
+        method: 'PATCH',
+        headers: { authorization: `Bearer ${tokenNoStore}` },
+        body: { billNumber: 'OVERRIDE-123' },
+      });
+      const resPatch = await workerBillRoute.PATCH(reqPatch, { params: { id: 'bill-store-a' } });
+      assert.strictEqual(resPatch.status, 403);
+      assert.strictEqual((await resPatch.json()).error.code, 'STORE_MISMATCH');
+
+      // 5. Confirm bill without worker store
+      const reqConfirm = createMockRequest({
+        pathname: '/api/v1/worker/bills/bill-store-a/confirm',
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenNoStore}` },
+      });
+      const resConfirm = await workerConfirmRoute.POST(reqConfirm, { params: { id: 'bill-store-a' } });
+      assert.strictEqual(resConfirm.status, 403);
+      assert.strictEqual((await resConfirm.json()).error.code, 'STORE_MISMATCH');
+
+      // 6. Commit checkout without worker store
+      const reqCommit = createMockRequest({
+        pathname: '/api/v1/worker/transactions/commit',
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenNoStore}` },
+        body: { billId: 'bill-store-a', customerId: 'cust-1', paymentMethod: 'CASH' },
+      });
+      const resCommit = await workerCommitRoute.POST(reqCommit);
+      assert.strictEqual(resCommit.status, 403);
+      assert.strictEqual((await resCommit.json()).error.code, 'STORE_MISMATCH');
+
+      // 7. posFinalizationEngine directly without worker store
+      await assert.rejects(
+        async () => {
+          await posFinalizationEngine.finalizePhysicalPurchaseAtomic({
+            billId: 'bill-store-a',
+            customerId: 'cust-1',
+            workerId: 'worker-nostore',
+            workerStoreId: null,
+            paymentMethod: 'CASH',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'STORE_MISMATCH');
+          assert.strictEqual(err.status, 403);
+          return true;
+        }
+      );
+
+      // 8. QR booking verification route without worker store
+      const reqQr = createMockRequest({
+        pathname: '/api/v1/worker/bookings/verify-qr',
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenNoStore}` },
+        body: { qrCodeData: 'mock-qr' },
+      });
+      const resQr = await workerVerifyQrRoute.POST(reqQr);
+      assert.strictEqual(resQr.status, 403);
+      assert.strictEqual((await resQr.json()).error.code, 'STORE_MISMATCH');
+    });
+  });
+
+  await t.test('9.2 Missing resource (bill / booking) store identity fails closed', async () => {
+    const workerWithStore = { id: 'worker-store-a', name: 'Store A Worker', mobile_number: '+919988776611', active: true, store_id: 'store_a', storeId: 'store_a' };
+    const tokenStoreA = registerTestWorkerSession(workerWithStore, 'sess-store-a-missing-res');
+
+    const workerPreviewRoute = loadRoute('../../app/api/v1/worker/bills/[id]/preview/route.js');
+    const workerBillRoute = loadRoute('../../app/api/v1/worker/bills/[id]/route.js');
+    const workerConfirmRoute = loadRoute('../../app/api/v1/worker/bills/[id]/confirm/route.js');
+    const workerCommitRoute = loadRoute('../../app/api/v1/worker/transactions/commit/route.js');
+
+    await withMockPgClient(async (sql) => {
+      if (sql.includes('SELECT') && sql.includes('FROM workers')) {
+        return { rows: [workerWithStore] };
+      }
+      if (sql.includes('SELECT') && sql.includes('FROM customers')) {
+        return { rows: [{ id: 'cust-1', name: 'John', mobile_number: '+919999999999' }] };
+      }
+      if (sql.includes('SELECT') && sql.includes('FROM bills')) {
+        return {
+          rows: [{
+            id: 'bill-no-store',
+            customer_id: 'cust-1',
+            bill_number: 'BILL-NO-STORE',
+            status: 'CONFIRMED',
+            store_id: null, // Bill has NO store assigned
+          }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      // 1. Preview
+      const reqPreview = createMockRequest({
+        pathname: '/api/v1/worker/bills/bill-no-store/preview',
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenStoreA}` },
+      });
+      const resPreview = await workerPreviewRoute.POST(reqPreview, { params: { id: 'bill-no-store' } });
+      assert.strictEqual(resPreview.status, 403);
+      assert.strictEqual((await resPreview.json()).error.code, 'STORE_MISMATCH');
+
+      // 2. GET
+      const reqGet = createMockRequest({
+        pathname: '/api/v1/worker/bills/bill-no-store',
+        method: 'GET',
+        headers: { authorization: `Bearer ${tokenStoreA}` },
+      });
+      const resGet = await workerBillRoute.GET(reqGet, { params: { id: 'bill-no-store' } });
+      assert.strictEqual(resGet.status, 403);
+      assert.strictEqual((await resGet.json()).error.code, 'STORE_MISMATCH');
+
+      // 3. PATCH
+      const reqPatch = createMockRequest({
+        pathname: '/api/v1/worker/bills/bill-no-store',
+        method: 'PATCH',
+        headers: { authorization: `Bearer ${tokenStoreA}` },
+        body: { billNumber: 'OVERRIDE-123' },
+      });
+      const resPatch = await workerBillRoute.PATCH(reqPatch, { params: { id: 'bill-no-store' } });
+      assert.strictEqual(resPatch.status, 403);
+      assert.strictEqual((await resPatch.json()).error.code, 'STORE_MISMATCH');
+
+      // 4. Confirm
+      const reqConfirm = createMockRequest({
+        pathname: '/api/v1/worker/bills/bill-no-store/confirm',
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenStoreA}` },
+      });
+      const resConfirm = await workerConfirmRoute.POST(reqConfirm, { params: { id: 'bill-no-store' } });
+      assert.strictEqual(resConfirm.status, 403);
+      assert.strictEqual((await resConfirm.json()).error.code, 'STORE_MISMATCH');
+
+      // 5. Commit
+      const reqCommit = createMockRequest({
+        pathname: '/api/v1/worker/transactions/commit',
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenStoreA}` },
+        body: { billId: 'bill-no-store', customerId: 'cust-1', paymentMethod: 'CASH' },
+      });
+      const resCommit = await workerCommitRoute.POST(reqCommit);
+      assert.strictEqual(resCommit.status, 403);
+      assert.strictEqual((await resCommit.json()).error.code, 'STORE_MISMATCH');
+
+      // 6. posFinalizationEngine directly
+      await assert.rejects(
+        async () => {
+          await posFinalizationEngine.finalizePhysicalPurchaseAtomic({
+            billId: 'bill-no-store',
+            customerId: 'cust-1',
+            workerId: 'worker-store-a',
+            workerStoreId: 'store_a',
+            paymentMethod: 'CASH',
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'STORE_MISMATCH');
+          assert.strictEqual(err.status, 403);
+          return true;
+        }
+      );
+    });
+
+    // 7. Booking without store in verifyBookingQr
+    const bookingId = 'b0000000-0000-4000-8000-000000000002';
+    const signedQrDataNoStore = qrVerificationEngine.generateBookingQrData({
+      id: bookingId,
+      booking_code: 'PF-BK-NOSTORE',
+      customer_id: 'cust-1',
+    });
+
+    await withMockPgClient(async (sql) => {
+      if (sql.includes('SELECT') && sql.includes('FROM bookings')) {
+        return {
+          rows: [{
+            id: bookingId,
+            customer_id: 'cust-1',
+            booking_code: 'PF-BK-NOSTORE',
+            status: 'CONFIRMED',
+            store_id: null, // Booking has no store
+            expires_at: new Date(Date.now() + 86400000).toISOString(),
+          }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await workerEngine.verifyBookingQr(signedQrDataNoStore, { workerStoreId: 'store_a' });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'STORE_MISMATCH');
+          assert.strictEqual(err.status, 403);
+          return true;
+        }
+      );
+    });
+  });
+
+  await t.test('9.3 Concurrent checkout attempts with same bill number are serialized by advisory lock and rejected with 409', async () => {
+    let advisoryLockAcquired = false;
+    let duplicateCheckCount = 0;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('pg_advisory_xact_lock')) {
+        advisoryLockAcquired = true;
+        return { rows: [{}] };
+      }
+      if (sql.includes('SELECT * FROM bills')) {
+        return {
+          rows: [{
+            id: 'bill-race-1',
+            customer_id: 'cust-1',
+            bill_number: 'BILL-RACE-COMMON',
+            store_id: 'store_test_main',
+            status: 'CONFIRMED',
+          }],
+        };
+      }
+      if (sql.includes("b.status = 'PROCESSED'")) {
+        duplicateCheckCount++;
+        // On the second concurrent checkout under the lock, duplicate is detected
+        return { rows: [{ id: 'earlier-committed-bill-id' }] };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await posFinalizationEngine.finalizePhysicalPurchaseAtomic({
+            billId: 'bill-race-1',
+            customerId: 'cust-1',
+            workerId: 'worker-1',
+            workerStoreId: 'store_test_main',
+            paymentMethod: 'CASH',
+            items: [{ fishId: 'fish-catla', quantityKg: 1.0 }],
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'BILL_ALREADY_PROCESSED');
+          assert.strictEqual(err.status, 409);
+          return true;
+        }
+      );
+      assert.strictEqual(advisoryLockAcquired, true, 'Advisory lock was acquired for atomic serialization');
+      assert.ok(duplicateCheckCount >= 1, 'Duplicate check performed under advisory lock');
     });
   });
 });

@@ -30,8 +30,22 @@ export async function POST(request) {
       );
     }
 
+    const effectiveWorkerStore = typeof worker?.storeId === 'string' ? worker.storeId.trim() : (typeof worker?.store_id === 'string' ? worker.store_id.trim() : (typeof session?.storeId === 'string' ? session.storeId.trim() : ''));
+    if (!effectiveWorkerStore) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Forbidden: Authenticated worker lacks a valid store assignment.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
     const booking = await verifyBookingQr(qrCodeData, {
-      workerStoreId: worker?.storeId || worker?.store_id || null,
+      workerStoreId: effectiveWorkerStore,
     });
 
     return NextResponse.json({

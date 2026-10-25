@@ -15,10 +15,12 @@ export async function POST(request, { params }) {
   try {
     const session = await authenticateWorkerAsync(request);
     const bookingId = params.id;
+    const workerStoreId = typeof session.storeId === 'string' ? session.storeId.trim() : (typeof session.worker?.store_id === 'string' ? session.worker.store_id.trim() : null);
 
     const result = await completeBookingOrder({
       bookingId,
       workerId: session.workerId,
+      workerStoreId,
     });
 
     return NextResponse.json(
@@ -31,6 +33,18 @@ export async function POST(request, { params }) {
       { status: 200 }
     );
   } catch (error) {
+    if (error.code === 'STORE_MISMATCH') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: error.message || 'This booking belongs to a different store.',
+          },
+        },
+        { status: 403 }
+      );
+    }
     if (
       error.code === 'UNAUTHORIZED' ||
       error.code === 'FORBIDDEN' ||

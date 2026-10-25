@@ -47,14 +47,17 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Worker Store Scoping: Prevent workers from confirming bills from other stores
-    if (bill.store_id && worker.storeId && bill.store_id !== worker.storeId) {
+    // Worker Store Scoping: Enforce explicit, non-empty store identity on both worker and bill
+    const effectiveWorkerStore = typeof worker?.storeId === 'string' ? worker.storeId.trim() : (typeof worker?.store_id === 'string' ? worker.store_id.trim() : '');
+    const effectiveBillStore = typeof bill.store_id === 'string' ? bill.store_id.trim() : '';
+
+    if (!effectiveWorkerStore || !effectiveBillStore || effectiveWorkerStore !== effectiveBillStore) {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'STORE_MISMATCH',
-            message: 'Unauthorized: This bill belongs to a different store.',
+            message: 'Unauthorized: Missing or mismatched store identity for bill confirmation.',
           },
         },
         { status: 403 }
@@ -119,7 +122,7 @@ export async function POST(request, { params }) {
     const updatedBill = await billRepository.confirmBill(null, bill.id, {
       status: 'CONFIRMED',
       workerId: worker.id,
-      storeId: worker.storeId || bill.store_id || null,
+      storeId: effectiveWorkerStore,
     });
 
     try {
@@ -132,7 +135,7 @@ export async function POST(request, { params }) {
         payload: {
           workerId: worker.id,
           workerName: worker.name,
-          storeId: worker.storeId || bill.store_id || null,
+          storeId: effectiveWorkerStore,
           billNumber: effectiveBillNumber,
           customerId: bill.customer_id,
         },
