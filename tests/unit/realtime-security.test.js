@@ -114,6 +114,18 @@ test('Phase 3 Realtime & Transaction-Display Security Suite (Real WebSocket Inte
     { expiresIn: '1h' }
   );
 
+  const tvStoreAToken = jwt.sign(
+    { displayId: 'tv_display_a', role: 'TV', storeId: 'store_a', sessionId: 'sess_tv_a' },
+    secret,
+    { expiresIn: '1h' }
+  );
+
+  const tvStoreBToken = jwt.sign(
+    { displayId: 'tv_display_b', role: 'TV', storeId: 'store_b', sessionId: 'sess_tv_b' },
+    secret,
+    { expiresIn: '1h' }
+  );
+
   const customer1Token = jwt.sign(
     { customerId: 'cust_1111', mobileNumber: '9999911111', role: 'CUSTOMER', sessionId: 'sess_cust_1' },
     secret,
@@ -382,8 +394,12 @@ test('Phase 3 Realtime & Transaction-Display Security Suite (Real WebSocket Inte
   // ---------------------------------------------------------------------------
   await t.test('8. End-to-end TV privacy: Full broadcast path, field minimization, cross-store non-delivery, and fail-closed routing', async () => {
     // 8.1 Setup real TV displays for Store A and Store B, plus a Customer socket
-    const wsTvStoreA = await connectClient(baseUrl);
-    const wsTvStoreB = await connectClient(baseUrl);
+    const wsTvStoreA = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${tvStoreAToken}` },
+    });
+    const wsTvStoreB = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${tvStoreBToken}` },
+    });
     const wsCustomer = await connectClient(baseUrl, '/api/v1/realtime', {
       headers: { Authorization: `Bearer ${customer1Token}` },
     });
@@ -514,5 +530,204 @@ test('Phase 3 Realtime & Transaction-Display Security Suite (Real WebSocket Inte
     assert.strictEqual(initHeader.authenticated, true);
     assert.strictEqual(initHeader.role, 'ADMIN', 'x-admin-key HTTP upgrade header successfully authenticates as ADMIN');
     wsHeader.close();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 10. Anonymous TV Store Authorization and Gated Policy Enforcement
+  // ---------------------------------------------------------------------------
+  await t.test('10. Anonymous TV store authorization: Scoped to configured kiosk store only, blocks other stores, and honors auth policy', async () => {
+    const savedStoreId = process.env.PONDFISH_STORE_ID;
+    process.env.PONDFISH_STORE_ID = 'store_a';
+    delete process.env.PONDFISH_TV_AUTH_REQUIRED;
+
+    try {
+      // 10.1 Anonymous kiosk for store_a can receive only tv:store:store_a
+      const wsAnonA = await connectClient(baseUrl);
+      const initAnonA = await wsAnonA.waitForMessage((m) => m.type === 'connection_established');
+      assert.strictEqual(initAnonA.role, 'ANONYMOUS');
+      assert.strictEqual(initAnonA.channels.includes('tv:store:store_a'), true);
+      assert.strictEqual(initAnonA.channels.includes('tv:store:store_b'), false);
+
+      // Verify that anonymous kiosk receives store_a transaction
+      const rawTxA = {
+        id: '11111111-2222-3333-4444-555555555555',
+        transactionNumber: 'TXN-ANON-STOREA-001',
+        finalPaidAmount: 500,
+        items: [{ fishName: 'Rohu', quantityKg: 2 }],
+      };
+      const normA = tvFeedEngine.normalizeTVPayload(rawTxA);
+      realtimeBroadcastEngine.broadcastTransaction(normA, { storeId: 'store_a' });
+      const receivedAnon = await wsAnonA.waitForMessage((m) => m.event === 'successful_transaction');
+      assert.strictEqual(receivedAnon.data.transactionNumber, 'TXN-ANON-STOREA-001');
+
+      // 10.2 The same client cannot subscribe to tv:store:store_b
+      wsAnonA.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_b' }));
+      const rejectAnonB = await wsAnonA.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(rejectAnonB.channel, 'tv:store:store_b');
+
+      // Also verify it cannot subscribe to global tv:transactions
+      wsAnonA.send(JSON.stringify({ type: 'subscribe', channel: 'tv:transactions' }));
+      const rejectGlobal = await wsAnonA.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(rejectGlobal.channel, 'tv:transactions');
+
+      wsAnonA.close();
+
+      // 10.3 An authenticated TV display assigned to store_a cannot subscribe to store_b
+      const wsTvA = await connectClient(baseUrl, '/api/v1/realtime', {
+        headers: { Authorization: `Bearer ${tvStoreAToken}` },
+      });
+      await wsTvA.waitForMessage((m) => m.type === 'connection_established');
+      wsTvA.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_b' }));
+      const rejectTvB = await wsTvA.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(rejectTvB.channel, 'tv:store:store_b');
+      wsTvA.close();
+
+      // 10.4 The policy remains correct with PONDFISH_TV_AUTH_REQUIRED=true
+      process.env.PONDFISH_TV_AUTH_REQUIRED = 'true';
+
+      // Anonymous client is blocked when auth is required
+      const wsGatedAnon = await connectClient(baseUrl);
+      const initGated = await wsGatedAnon.waitForMessage((m) => m.type === 'connection_established');
+      assert.strictEqual(initGated.channels.length, 0, 'No channels for anonymous client when auth is required');
+
+      wsGatedAnon.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_a' }));
+      const gatedErrA = await wsGatedAnon.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(gatedErrA.channel, 'tv:store:store_a');
+      wsGatedAnon.close();
+
+      // Authenticated TV assigned to store_a can subscribe to store_a
+      const wsGatedTvA = await connectClient(baseUrl, '/api/v1/realtime', {
+        headers: { Authorization: `Bearer ${tvStoreAToken}` },
+      });
+      await wsGatedTvA.waitForMessage((m) => m.type === 'connection_established');
+      wsGatedTvA.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_a' }));
+      const subbedGated = await wsGatedTvA.waitForMessage((m) => m.type === 'subscribed' && m.channel === 'tv:store:store_a');
+      assert.strictEqual(subbedGated.channel, 'tv:store:store_a');
+
+      // But authenticated TV assigned to store_a cannot subscribe to store_b
+      wsGatedTvA.send(JSON.stringify({ type: 'subscribe', channel: 'tv:store:store_b' }));
+      const gatedErrB = await wsGatedTvA.waitForMessage((m) => m.code === 'UNAUTHORIZED_CHANNEL');
+      assert.strictEqual(gatedErrB.channel, 'tv:store:store_b');
+      wsGatedTvA.close();
+    } finally {
+      if (savedStoreId) process.env.PONDFISH_STORE_ID = savedStoreId;
+      else delete process.env.PONDFISH_STORE_ID;
+      delete process.env.PONDFISH_TV_AUTH_REQUIRED;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // 11. Channel and Store-Filter Bypass Closure Verification
+  // ---------------------------------------------------------------------------
+  await t.test('11. Close global-channel and store-filter bypasses: Fail-closed on missing store, channel validation, and multi-role recipient isolation', async () => {
+    const savedStoreId = process.env.PONDFISH_STORE_ID;
+    delete process.env.PONDFISH_STORE_ID;
+    delete process.env.PONDFISH_TV_AUTH_REQUIRED;
+
+    const testTxData = tvFeedEngine.normalizeTVPayload({
+      id: '22222222-3333-4444-5555-666666666666',
+      transactionNumber: 'TXN-TEST-BYPASS-001',
+      finalPaidAmount: 999,
+      items: [{ fishName: 'Salmon', quantityKg: 1 }],
+    });
+
+    // 11.1 Missing store identity with an explicit options.channel fails closed
+    const resNoStoreChannel = realtimeBroadcastEngine.broadcastTransaction(testTxData, { channel: 'tv:transactions' });
+    assert.strictEqual(resNoStoreChannel.deliveredCount, 0, 'Must deliver to 0 clients when store is undetermined');
+    assert.strictEqual(resNoStoreChannel.reason, 'UNDETERMINED_STORE', 'Must report UNDETERMINED_STORE reason');
+
+    const resNoStoreSpecific = realtimeBroadcastEngine.broadcastTransaction(testTxData, { channel: 'tv:store:store_x' });
+    assert.strictEqual(resNoStoreSpecific.deliveredCount, 0, 'Must deliver to 0 clients with undetermined store');
+    assert.strictEqual(resNoStoreSpecific.reason, 'UNDETERMINED_STORE', 'Must fail closed despite store-like channel');
+
+    // 11.2 A caller attempting to route a Store A transaction through tv:transactions is blocked
+    const resGlobalAttempt = realtimeBroadcastEngine.broadcastTransaction(testTxData, {
+      storeId: 'store_a',
+      channel: 'tv:transactions',
+    });
+    assert.strictEqual(resGlobalAttempt.deliveredCount, 0, 'Must not broadcast when channel mismatches store');
+    assert.strictEqual(resGlobalAttempt.reason, 'STORE_CHANNEL_MISMATCH', 'Must reject mismatched channel');
+
+    // Also test attempting to route Store A transaction to Store B channel
+    const resMismatchStore = realtimeBroadcastEngine.broadcastTransaction(testTxData, {
+      storeId: 'store_a',
+      channel: 'tv:store:store_b',
+    });
+    assert.strictEqual(resMismatchStore.deliveredCount, 0);
+    assert.strictEqual(resMismatchStore.reason, 'STORE_CHANNEL_MISMATCH');
+
+    // 11.3 Multi-recipient isolation: Transaction targeting Store A NEVER reaches Store B TV, Store B workers, or Store B anonymous kiosk
+    // Connect Store A intended display
+    const wsTvA = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${tvStoreAToken}` },
+    });
+    // Connect Store B TV display
+    const wsTvB = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${tvStoreBToken}` },
+    });
+    // Connect Store B Worker
+    const wsWorkerB = await connectClient(baseUrl, '/api/v1/realtime', {
+      headers: { Authorization: `Bearer ${workerStoreBToken}` },
+    });
+    // Connect Store B Anonymous Kiosk (configured for store_b)
+    process.env.PONDFISH_STORE_ID = 'store_b';
+    const wsKioskB = await connectClient(baseUrl);
+
+    await wsTvA.waitForMessage((m) => m.type === 'connection_established');
+    await wsTvB.waitForMessage((m) => m.type === 'connection_established');
+    await wsWorkerB.waitForMessage((m) => m.type === 'connection_established');
+    const initKioskB = await wsKioskB.waitForMessage((m) => m.type === 'connection_established');
+
+    // Verify Store B kiosk has only tv:store:store_b
+    assert.strictEqual(initKioskB.channels.includes('tv:store:store_b'), true);
+
+    // Broadcast valid Store A transaction
+    const txStoreA = tvFeedEngine.normalizeTVPayload({
+      id: '33333333-4444-5555-6666-777777777777',
+      transactionNumber: 'TXN-TARGET-STOREA-888',
+      finalPaidAmount: 1200,
+      items: [{ fishName: 'Hilsa', quantityKg: 1.5 }],
+    });
+
+    const deliveryRes = realtimeBroadcastEngine.broadcastTransaction(txStoreA, { storeId: 'store_a' });
+    assert.strictEqual(deliveryRes.deliveredCount >= 1, true, 'Delivered to Store A intended display');
+
+    // 11.4 Correct delivery to Store A intended display
+    const msgA = await wsTvA.waitForMessage((m) => m.event === 'successful_transaction');
+    assert.strictEqual(msgA.data.transactionNumber, 'TXN-TARGET-STOREA-888');
+
+    await sleep(50);
+
+    // Verify Store B TV received ZERO messages
+    const msgsTvB = wsTvB.getReceivedMessages();
+    assert.strictEqual(
+      msgsTvB.some((m) => m.data?.transactionNumber === 'TXN-TARGET-STOREA-888'),
+      false,
+      'Store B TV must NEVER receive Store A transaction'
+    );
+
+    // Verify Store B Worker received ZERO messages
+    const msgsWorkerB = wsWorkerB.getReceivedMessages();
+    assert.strictEqual(
+      msgsWorkerB.some((m) => m.data?.transactionNumber === 'TXN-TARGET-STOREA-888'),
+      false,
+      'Store B Worker must NEVER receive Store A transaction'
+    );
+
+    // Verify Store B Anonymous Kiosk received ZERO messages
+    const msgsKioskB = wsKioskB.getReceivedMessages();
+    assert.strictEqual(
+      msgsKioskB.some((m) => m.data?.transactionNumber === 'TXN-TARGET-STOREA-888'),
+      false,
+      'Store B Anonymous Kiosk must NEVER receive Store A transaction'
+    );
+
+    wsTvA.close();
+    wsTvB.close();
+    wsWorkerB.close();
+    wsKioskB.close();
+
+    if (savedStoreId) process.env.PONDFISH_STORE_ID = savedStoreId;
+    else delete process.env.PONDFISH_STORE_ID;
   });
 });
