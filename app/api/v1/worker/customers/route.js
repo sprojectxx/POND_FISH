@@ -27,7 +27,20 @@ async function authenticateWorkerRequest(request) {
 
 export async function GET(request) {
   try {
-    await authenticateWorkerRequest(request);
+    const worker = await authenticateWorkerRequest(request);
+    const effectiveWorkerStore = typeof worker?.storeId === 'string' ? worker.storeId.trim() : (typeof worker?.store_id === 'string' ? worker.store_id.trim() : '');
+    if (!effectiveWorkerStore) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Forbidden: Worker lacks a valid authoritative store assignment.',
+          },
+        },
+        { status: 403 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || searchParams.get('q') || searchParams.get('phone') || '';

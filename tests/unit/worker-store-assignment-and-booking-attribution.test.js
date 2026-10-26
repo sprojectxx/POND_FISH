@@ -290,6 +290,10 @@ test('Phase 4 Blocker 1 & 2 Security Remediation Suite', async (t) => {
     const workerDetailsRoute = loadRoute('../../app/api/v1/worker/bookings/[id]/route.js');
     const workerStatusRoute = loadRoute('../../app/api/v1/worker/bookings/[id]/status/route.js');
     const workerTxRoute = loadRoute('../../app/api/v1/worker/transactions/[id]/route.js');
+    const workerTodayRoute = loadRoute('../../app/api/v1/worker/bookings/today/route.js');
+    const workerSearchRoute = loadRoute('../../app/api/v1/worker/bookings/search/route.js');
+    const workerCompleteRoute = loadRoute('../../app/api/v1/worker/bookings/[id]/complete/route.js');
+    const workerCustomersRoute = loadRoute('../../app/api/v1/worker/customers/route.js');
 
     const workerId = 'a0000000-0000-4000-8000-000000000005';
     const sessionId = 'session-no-store';
@@ -320,9 +324,6 @@ test('Phase 4 Blocker 1 & 2 Security Remediation Suite', async (t) => {
       // 1. GET /api/v1/worker/bookings/[id]
       const resDetails = await workerDetailsRoute.GET(req, { params: { id: 'b0000000-0000-4000-8000-000000000001' } });
       const bodyDetails = await resDetails.json();
-      if (resDetails.status !== 403) {
-        console.log('[DEBUG 1.5] status:', resDetails.status, 'body:', bodyDetails);
-      }
       assert.strictEqual(resDetails.status, 403);
       assert.strictEqual(bodyDetails.error.code, 'STORE_MISMATCH');
 
@@ -341,6 +342,138 @@ test('Phase 4 Blocker 1 & 2 Security Remediation Suite', async (t) => {
       assert.strictEqual(resTx.status, 403);
       const bodyTx = await resTx.json();
       assert.strictEqual(bodyTx.error.code, 'STORE_MISMATCH');
+
+      // 4. GET /api/v1/worker/bookings/today (Booking Queue)
+      const resToday = await workerTodayRoute.GET({ ...req, url: 'http://localhost/api/v1/worker/bookings/today' });
+      assert.strictEqual(resToday.status, 403);
+      const bodyToday = await resToday.json();
+      assert.strictEqual(bodyToday.error.code, 'STORE_MISMATCH');
+
+      // 5. GET /api/v1/worker/bookings/search (Booking Search)
+      const resSearch = await workerSearchRoute.GET({ ...req, url: 'http://localhost/api/v1/worker/bookings/search?q=test' });
+      assert.strictEqual(resSearch.status, 403);
+      const bodySearch = await resSearch.json();
+      assert.strictEqual(bodySearch.error.code, 'STORE_MISMATCH');
+
+      // 6. POST /api/v1/worker/bookings/[id]/complete
+      const resComplete = await workerCompleteRoute.POST(req, { params: { id: 'b0000000-0000-4000-8000-000000000001' } });
+      assert.strictEqual(resComplete.status, 403);
+      const bodyComplete = await resComplete.json();
+      assert.strictEqual(bodyComplete.error.code, 'STORE_MISMATCH');
+
+      // 7. GET /api/v1/worker/customers
+      const resCust = await workerCustomersRoute.GET({ ...req, url: 'http://localhost/api/v1/worker/customers?q=John' });
+      assert.strictEqual(resCust.status, 403);
+      const bodyCust = await resCust.json();
+      assert.strictEqual(bodyCust.error.code, 'STORE_MISMATCH');
+    });
+  });
+
+  await t.test('1.6 Repository store-scoped methods fail closed when store scope is absent and prevent cross-store access', async () => {
+    // 1. Missing or blank storeId in listWorkerBookingsToday fails closed
+    await assert.rejects(
+      async () => {
+        await bookingRepository.listWorkerBookingsToday({ storeId: null });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
+
+    await assert.rejects(
+      async () => {
+        await bookingRepository.listWorkerBookingsToday({ storeId: '   ' });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
+
+    // 2. Missing or blank storeId in searchWorkerBookings fails closed
+    await assert.rejects(
+      async () => {
+        await bookingRepository.searchWorkerBookings('test', { storeId: null });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
+
+    await assert.rejects(
+      async () => {
+        await bookingRepository.searchWorkerBookings('test', { storeId: '' });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
+
+    // 3. Worker engine queue and search helpers fail closed when storeId is absent
+    await assert.rejects(
+      async () => {
+        await workerEngine.getTodayBookingsQueue({ storeId: null });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
+
+    await assert.rejects(
+      async () => {
+        await workerEngine.searchBookings({ query: 'test', storeId: null });
+      },
+      (err) => {
+        assert.strictEqual(err.code, 'STORE_MISMATCH');
+        assert.strictEqual(err.status, 403);
+        return true;
+      }
+    );
+
+    // 4. Verifying cross-store scoping in repository: Store A query strictly filters by Store A
+    let capturedCountsParams = null;
+    let capturedListParams = null;
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('COUNT(*) FILTER') && sql.includes('WHERE store_id = $1')) {
+        capturedCountsParams = params;
+        return {
+          rows: [{
+            confirmed_count: 5,
+            pending_collection_count: 2,
+            completed_today_count: 3,
+            expired_count: 0,
+            total_count: 10,
+          }],
+        };
+      }
+      if (sql.includes('FROM bookings b') && sql.includes('WHERE b.store_id = $1')) {
+        capturedListParams = params;
+        return {
+          rows: [{
+            id: 'b-store-a-1',
+            store_id: 'store_a',
+            booking_code: 'BK-A-01',
+            status: 'CONFIRMED',
+          }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      const res = await bookingRepository.listWorkerBookingsToday({ storeId: 'store_a' });
+      assert.strictEqual(capturedCountsParams[0], 'store_a', 'Counts must be strictly scoped to store_a');
+      assert.strictEqual(capturedListParams[0], 'store_a', 'List query must be strictly scoped to store_a');
+      assert.strictEqual(res.counts.total, 10);
+      assert.strictEqual(res.bookings.length, 1);
+      assert.strictEqual(res.bookings[0].store_id, 'store_a');
     });
   });
 
@@ -433,8 +566,13 @@ test('Phase 4 Blocker 1 & 2 Security Remediation Suite', async (t) => {
     let insertedStoreId = null;
 
     await withMockPgClient(async (sql, params) => {
-      if (sql.includes('SELECT 1 FROM workers WHERE store_id = $1')) {
-        return { rows: [{ '?column?': 1 }] };
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [
+            { key: 'active_store_id', value: JSON.stringify('store_hub_north') },
+            { key: 'authorized_stores', value: ['store_hub_north', 'store_hub_south'] },
+          ],
+        };
       }
       if (sql.includes('FROM fish')) {
         return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
@@ -503,18 +641,16 @@ test('Phase 4 Blocker 1 & 2 Security Remediation Suite', async (t) => {
 
   await t.test('2.3 Invalid or fabricated client storeId is rejected with 400 INVALID_STORE_ID', async () => {
     await withMockPgClient(async (sql, params) => {
-      if (sql.includes('SELECT value FROM settings WHERE key = $1') && params?.[0] === 'store_info') {
+      if (sql.includes('FROM settings')) {
         return {
           rows: [{
+            key: 'store_info',
             value: { storeId: 'store_authority_main' },
           }],
         };
       }
       if (sql.includes('FROM fish')) {
         return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
-      }
-      if (sql.includes('SELECT 1 FROM workers WHERE store_id = $1') || sql.includes('SELECT 1 FROM bills WHERE store_id = $1')) {
-        return { rows: [] }; // No worker or bill matches requested store
       }
       return { rows: [] };
     }, async () => {
@@ -719,6 +855,57 @@ test('Phase 4 Blocker 1 & 2 Security Remediation Suite', async (t) => {
           return true;
         }
       );
+    });
+  });
+
+  await t.test('2.8 Client cannot choose an unauthorized store merely because it appears in workers or historical bills', async () => {
+    let queriedWorkers = false;
+    let queriedBills = false;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [{
+            key: 'active_store_id',
+            value: 'authorized_active_store',
+          }],
+        };
+      }
+      if (sql.includes('FROM workers')) {
+        queriedWorkers = true;
+        return { rows: [{ id: 'worker-rogue', store_id: 'rogue_store' }] };
+      }
+      if (sql.includes('FROM bills')) {
+        queriedBills = true;
+        return { rows: [{ id: 'bill-rogue', store_id: 'rogue_store' }] };
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000004',
+            pickupDate: '2026-10-26',
+            storeId: 'rogue_store',
+            checkoutSnapshot: {
+              items: [{ fishId: 'f0000000-0000-4000-8000-000000000001', name: 'Catla', quantityKg: 1.0, pricePerKg: 300, subtotal: 300 }],
+              summary: { totalAmount: 300, totalQuantity: 1 },
+              subscriptionCoverage: { subCreditUsed: 300, extraPayableAmount: 0 },
+              feeCalc: { paymentFees: 0, platformFee: 0, gstOnFees: 0, finalPayable: 0 },
+            },
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+      assert.strictEqual(queriedWorkers, false, 'Must not query workers table to validate store');
+      assert.strictEqual(queriedBills, false, 'Must not query bills table to validate store');
     });
   });
 });

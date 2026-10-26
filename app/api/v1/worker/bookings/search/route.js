@@ -13,7 +13,20 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
   try {
     const session = await authenticateWorkerAsync(request);
-    const storeId = session?.worker?.store_id || session?.worker?.storeId || session?.storeId || null;
+    const rawStore = session?.worker?.store_id || session?.worker?.storeId || session?.storeId || null;
+    const storeId = typeof rawStore === 'string' && rawStore.trim() ? rawStore.trim() : null;
+    if (!storeId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Forbidden: Authenticated worker lacks a valid authoritative store assignment.',
+          },
+        },
+        { status: 403 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || '';
@@ -34,9 +47,10 @@ export async function GET(request) {
       error.code === 'SESSION_EXPIRED' ||
       error.code === 'SESSION_REVOKED' ||
       error.code === 'WORKER_NOT_FOUND' ||
-      error.code === 'WORKER_ACCOUNT_DISABLED'
+      error.code === 'WORKER_ACCOUNT_DISABLED' ||
+      error.code === 'STORE_MISMATCH'
     ) {
-      const status = error.status || (error.code === 'FORBIDDEN' || error.code === 'WORKER_ACCOUNT_DISABLED' ? 403 : 401);
+      const status = error.status || (error.code === 'FORBIDDEN' || error.code === 'WORKER_ACCOUNT_DISABLED' || error.code === 'STORE_MISMATCH' ? 403 : 401);
       return NextResponse.json(
         {
           success: false,

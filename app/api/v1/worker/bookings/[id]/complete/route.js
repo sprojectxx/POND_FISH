@@ -17,6 +17,19 @@ export async function POST(request, { params }) {
     const bookingId = params.id;
     const workerStoreId = typeof session.storeId === 'string' ? session.storeId.trim() : (typeof session.worker?.store_id === 'string' ? session.worker.store_id.trim() : null);
 
+    if (!workerStoreId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: 'Forbidden: Worker lacks a valid authoritative store assignment.',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
     const result = await completeBookingOrder({
       bookingId,
       workerId: session.workerId,
