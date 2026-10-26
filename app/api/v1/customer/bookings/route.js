@@ -258,6 +258,45 @@ export async function POST(request) {
       );
     }
 
+    if (error.code === 'INVALID_STORE_ID') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'INVALID_STORE_ID',
+            message: error.message,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    if (error.code === 'STORE_MISMATCH') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'STORE_MISMATCH',
+            message: error.message,
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    if (['STORE_CONFIG_UNAVAILABLE', 'STORE_CONFIG_INVALID', 'STORE_CONFIG_AMBIGUOUS', 'STORE_NOT_CONFIGURED'].includes(error.code)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: error.code,
+            message: error.message,
+          },
+        },
+        { status: 500 }
+      );
+    }
+
     console.error('[API ERROR] POST /api/v1/customer/bookings:', error.message);
     return NextResponse.json(
       {

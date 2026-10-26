@@ -908,4 +908,650 @@ test('Phase 4 Blocker 1 & 2 Security Remediation Suite', async (t) => {
       assert.strictEqual(queriedBills, false, 'Must not query bills table to validate store');
     });
   });
+
+  // ==========================================================================
+  // BLOCKER 3: Authoritative Store Resolution & Fail-Closed Scoping Suite
+  // ==========================================================================
+
+  const testSnapshot = {
+    items: [{ fishId: 'f0000000-0000-4000-8000-000000000001', name: 'Catla', quantityKg: 1.0, pricePerKg: 300, subtotal: 300 }],
+    summary: { totalAmount: 300, totalQuantity: 1 },
+    subscriptionCoverage: { subCreditUsed: 300, extraPayableAmount: 0 },
+    feeCalc: { paymentFees: 0, platformFee: 0, gstOnFees: 0, finalPayable: 0 },
+  };
+
+  await t.test('3.1 active_store_id = store_A with store_info = store_B rejects request for store_B', async () => {
+    let mutationAttempted = false;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [
+            { key: 'active_store_id', value: 'store_A' },
+            { key: 'store_info', value: JSON.stringify({ storeId: 'store_B', name: 'Conflicting Store B' }) },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      // 1. Direct resolver test: must reject store_B
+      await assert.rejects(
+        async () => {
+          await bookingEngine.resolveAuthoritativeBookingStore(null, 'store_B');
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+
+      // 2. Direct resolver test: store_A is authoritative
+      const resolved = await bookingEngine.resolveAuthoritativeBookingStore(null, 'store_A');
+      assert.strictEqual(resolved, 'store_A');
+
+      // 3. End-to-end createBooking: requesting store_B must be rejected and prevent mutations
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 'store_B',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false, 'No downstream mutations when requesting conflicting store_B');
+    });
+  });
+
+  await t.test('3.2 active_store_id = store_A with store_destination = store_B rejects request for store_B', async () => {
+    let mutationAttempted = false;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [
+            { key: 'active_store_id', value: 'store_A' },
+            { key: 'store_destination', value: JSON.stringify({ storeId: 'store_B', name: 'Destination B' }) },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 'store_B',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false, 'No downstream mutations when store_destination specifies conflicting store_B');
+    });
+  });
+
+  await t.test('3.3 A registry entry explicitly marked inactive cannot authorize a store', async () => {
+    let mutationAttempted = false;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [
+            { key: 'active_store_id', value: 'store_A' },
+            {
+              key: 'authorized_stores',
+              value: JSON.stringify([
+                { storeId: 'store_inactive_1', is_active: false, status: 'INACTIVE' },
+                { storeId: 'store_inactive_2', active: false },
+              ]),
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 'store_inactive_1',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false, 'Inactive registry store must not trigger mutations');
+    });
+  });
+
+  await t.test('3.4 Plain string registry entry cannot enable multi-store access unless verified project policy permits it', async () => {
+    let mutationAttempted = false;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [
+            { key: 'active_store_id', value: 'store_A' },
+            { key: 'authorized_stores', value: JSON.stringify(['store_A', 'store_plain_secondary']) },
+            { key: 'store_registry', value: JSON.stringify(['store_plain_tertiary']) },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      // 1. store_plain_secondary is rejected
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 'store_plain_secondary',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false);
+
+      // 2. store_plain_tertiary is rejected
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 'store_plain_tertiary',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false);
+    });
+  });
+
+  await t.test('3.5 Database error while reading settings causes fail-closed server error (500)', async () => {
+    let mutationAttempted = false;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('blocked_customer_ids')) {
+        return { rows: [] };
+      }
+      if (sql.includes('FROM settings')) {
+        throw new Error('Connection lost: could not connect to PostgreSQL server');
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 'store_A',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'STORE_CONFIG_UNAVAILABLE');
+          assert.strictEqual(err.status, 500);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false, 'No mutations when database query fails');
+    });
+  });
+
+  await t.test('3.6 Malformed JSON or contradictory authoritative settings cannot trigger fallback authorization', async () => {
+    let mutationAttempted = false;
+
+    // Sub-case A: Malformed JSON in active_store_id
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [{ key: 'active_store_id', value: '{"storeId": broken json' }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'STORE_CONFIG_INVALID');
+          assert.strictEqual(err.status, 500);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false);
+    });
+
+    // Sub-case B: Contradictory settings without primary active_store_id
+    mutationAttempted = false;
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [
+            { key: 'store_info', value: JSON.stringify({ storeId: 'store_alpha' }) },
+            { key: 'store_destination', value: JSON.stringify({ storeId: 'store_beta' }) },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'STORE_CONFIG_AMBIGUOUS');
+          assert.strictEqual(err.status, 500);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false, 'Contradictory settings must not allow booking mutations');
+    });
+
+    // Sub-case C: Blank active_store_id setting fails closed
+    mutationAttempted = false;
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [{ key: 'active_store_id', value: '    ' }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'STORE_CONFIG_INVALID');
+          assert.strictEqual(err.status, 500);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false);
+    });
+  });
+
+  await t.test('3.7 Valid configured Single-Store request continues to work', async () => {
+    let persistedStoreId = null;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [{ key: 'active_store_id', value: JSON.stringify('store_single_mvp') }],
+        };
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM inventory')) {
+        return { rows: [{ id: 'inv-1', fish_id: params[0], available_quantity: 100, reserved_quantity: 0, physical_quantity: 100 }] };
+      }
+      if (sql.includes('UPDATE inventory')) {
+        return { rows: [{ id: 'inv-1', fish_id: params[1], available_quantity: 99, reserved_quantity: 1 }] };
+      }
+      if (sql.includes('INSERT INTO inventory_ledger')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO bookings')) {
+        persistedStoreId = params[9];
+        return {
+          rows: [{
+            id: 'b-single-store-valid',
+            customer_id: params[0],
+            booking_code: params[1],
+            store_id: persistedStoreId,
+            status: 'CONFIRMED',
+            total_amount: 300,
+            sub_credit_used: 300,
+            pickup_date: '2026-10-26',
+            created_at: new Date().toISOString(),
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO booking_items')) {
+        return { rows: [] };
+      }
+      if (sql.includes('FROM bookings') || (sql.includes('SELECT') && sql.includes('bookings'))) {
+        return {
+          rows: [{
+            id: 'b-single-store-valid',
+            customer_id: 'c0000000-0000-4000-8000-000000000001',
+            booking_code: 'BK-VALID-1',
+            store_id: persistedStoreId || 'store_single_mvp',
+            status: 'CONFIRMED',
+            total_amount: 300,
+            sub_credit_used: 300,
+            pickup_date: '2026-10-26',
+            created_at: new Date().toISOString(),
+          }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      const booking = await bookingEngine.createBooking({
+        customerId: 'c0000000-0000-4000-8000-000000000001',
+        pickupDate: '2026-10-26',
+        storeId: 'store_single_mvp',
+        checkoutSnapshot: testSnapshot,
+      });
+
+      assert.ok(booking);
+      assert.strictEqual(persistedStoreId, 'store_single_mvp');
+      assert.strictEqual(booking.store_id, 'store_single_mvp');
+    });
+  });
+
+  await t.test('3.8 Omitted optional store ID resolves to configured store only when authoritative configuration is valid', async () => {
+    // Sub-case A: Valid configuration with omitted storeId resolves to configured store
+    let persistedStoreId = null;
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [{ key: 'active_store_id', value: JSON.stringify('store_configured_default') }],
+        };
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM inventory')) {
+        return { rows: [{ id: 'inv-1', fish_id: params[0], available_quantity: 100, reserved_quantity: 0, physical_quantity: 100 }] };
+      }
+      if (sql.includes('UPDATE inventory')) {
+        return { rows: [{ id: 'inv-1', fish_id: params[1], available_quantity: 99, reserved_quantity: 1 }] };
+      }
+      if (sql.includes('INSERT INTO inventory_ledger')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO bookings')) {
+        persistedStoreId = params[9];
+        return {
+          rows: [{
+            id: 'b-omitted-valid',
+            customer_id: params[0],
+            booking_code: params[1],
+            store_id: persistedStoreId,
+            status: 'CONFIRMED',
+            total_amount: 300,
+            sub_credit_used: 300,
+            pickup_date: '2026-10-26',
+            created_at: new Date().toISOString(),
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO booking_items')) {
+        return { rows: [] };
+      }
+      if (sql.includes('FROM bookings') || (sql.includes('SELECT') && sql.includes('bookings'))) {
+        return {
+          rows: [{
+            id: 'b-omitted-valid',
+            customer_id: 'c0000000-0000-4000-8000-000000000001',
+            booking_code: 'BK-OMITTED-1',
+            store_id: persistedStoreId || 'store_configured_default',
+            status: 'CONFIRMED',
+            total_amount: 300,
+            sub_credit_used: 300,
+            pickup_date: '2026-10-26',
+            created_at: new Date().toISOString(),
+          }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      const booking = await bookingEngine.createBooking({
+        customerId: 'c0000000-0000-4000-8000-000000000001',
+        pickupDate: '2026-10-26',
+        // storeId omitted
+        checkoutSnapshot: testSnapshot,
+      });
+
+      assert.ok(booking);
+      assert.strictEqual(persistedStoreId, 'store_configured_default');
+      assert.strictEqual(booking.store_id, 'store_configured_default');
+    });
+
+    // Sub-case B: Omitted storeId when settings has NO store configured fails closed with STORE_NOT_CONFIGURED (500)
+    let mutationAttempted = false;
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return { rows: [] }; // No store configured
+      }
+      return { rows: [] };
+    }, async () => {
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            // storeId omitted
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'STORE_NOT_CONFIGURED');
+          assert.strictEqual(err.status, 500);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false, 'No mutations when store is not configured in settings');
+    });
+  });
+
+  await t.test('3.9 Explicitly unauthorized or blank store ID is rejected', async () => {
+    let mutationAttempted = false;
+
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [{ key: 'active_store_id', value: 'store_authority_main' }],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      // 1. Blank string rejected
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: '   ',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          assert.ok(err.message.includes('blank'));
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false);
+
+      // 2. Non-string type rejected
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 12345,
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          assert.ok(err.message.includes('non-empty string'));
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false);
+
+      // 3. Unauthorized store ID rejected
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 'unauthorized_hacker_store',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false);
+    });
+  });
+
+  await t.test('3.10 Multi-store limitation policy: Non-configured multi-store requests fail closed while active store succeeds', async () => {
+    let mutationAttempted = false;
+
+    // Project documentation (PRD v2 and Admin UI spec) establishes Single-Store MVP.
+    // Multi-store is out of scope / future scope, and no multi-store enablement policy exists.
+    await withMockPgClient(async (sql, params) => {
+      if (sql.includes('INSERT INTO') || sql.includes('UPDATE') || sql.includes('DELETE')) {
+        mutationAttempted = true;
+      }
+      if (sql.includes('FROM fish')) {
+        return { rows: [{ id: params[0], name: 'Catla', physical_available: true, online_bookable: true, price_per_kg: 300 }] };
+      }
+      if (sql.includes('FROM settings')) {
+        return {
+          rows: [
+            { key: 'active_store_id', value: 'store_primary' },
+            // Setting contains speculative multi-store registry
+            { key: 'stores', value: JSON.stringify([{ id: 'store_branch_2', status: 'ACTIVE' }]) },
+          ],
+        };
+      }
+      return { rows: [] };
+    }, async () => {
+      // Attempting to route to speculative branch store fails closed under Single-Store policy
+      await assert.rejects(
+        async () => {
+          await bookingEngine.createBooking({
+            customerId: 'c0000000-0000-4000-8000-000000000001',
+            pickupDate: '2026-10-26',
+            storeId: 'store_branch_2',
+            checkoutSnapshot: testSnapshot,
+          });
+        },
+        (err) => {
+          assert.strictEqual(err.code, 'INVALID_STORE_ID');
+          assert.strictEqual(err.status, 400);
+          return true;
+        }
+      );
+      assert.strictEqual(mutationAttempted, false, 'Branch store request must not mutate state under single-store MVP');
+
+      // Primary store succeeds
+      const resolvedPrimary = await bookingEngine.resolveAuthoritativeBookingStore(null, 'store_primary');
+      assert.strictEqual(resolvedPrimary, 'store_primary');
+    });
+  });
 });
