@@ -75,16 +75,96 @@ export async function GET(request) {
   }
 }
 
+/**
+ * Deterministically extracts and validates client-supplied store identifier from request body.
+ * Distinguishes between omitted store ID (Single-Store fallback allowed) and explicitly
+ * supplied invalid/blank/conflicting store IDs (fail closed with 400 INVALID_STORE_ID).
+ *
+ * @param {object} body
+ * @returns {{ omitted: boolean, storeId?: string }}
+ */
+function extractAndValidateStoreId(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { omitted: true };
+  }
+
+  const hasStoreId = Object.prototype.hasOwnProperty.call(body, 'storeId');
+  const hasStore_id = Object.prototype.hasOwnProperty.call(body, 'store_id');
+
+  if (!hasStoreId && !hasStore_id) {
+    return { omitted: true };
+  }
+
+  // If both storeId and store_id are supplied, reject conflicting or invalid values
+  if (hasStoreId && hasStore_id) {
+    const valCamel = body.storeId;
+    const valSnake = body.store_id;
+
+    if (typeof valCamel !== 'string' || typeof valSnake !== 'string') {
+      const err = new Error('Requested store ID must be a non-empty string.');
+      err.code = 'INVALID_STORE_ID';
+      err.status = 400;
+      throw err;
+    }
+
+    const cleanCamel = valCamel.trim();
+    const cleanSnake = valSnake.trim();
+
+    if (!cleanCamel || !cleanSnake) {
+      const err = new Error('Requested store ID cannot be blank.');
+      err.code = 'INVALID_STORE_ID';
+      err.status = 400;
+      throw err;
+    }
+
+    if (cleanCamel !== cleanSnake) {
+      const err = new Error('Conflicting storeId and store_id provided in request body.');
+      err.code = 'INVALID_STORE_ID';
+      err.status = 400;
+      throw err;
+    }
+
+    return { omitted: false, storeId: cleanCamel };
+  }
+
+  const rawVal = hasStoreId ? body.storeId : body.store_id;
+
+  if (rawVal === null || typeof rawVal !== 'string') {
+    const err = new Error('Requested store ID must be a non-empty string.');
+    err.code = 'INVALID_STORE_ID';
+    err.status = 400;
+    throw err;
+  }
+
+  const cleanVal = rawVal.trim();
+  if (!cleanVal) {
+    const err = new Error('Requested store ID cannot be blank.');
+    err.code = 'INVALID_STORE_ID';
+    err.status = 400;
+    throw err;
+  }
+
+  return { omitted: false, storeId: cleanVal };
+}
+
 export async function POST(request) {
   try {
     const session = authenticateRequest(request);
-    const body = await request.json().catch(() => ({}));
+    const rawBody = await request.json().catch(() => ({}));
+    const body = (rawBody && typeof rawBody === 'object' && !Array.isArray(rawBody)) ? rawBody : {};
 
-    const booking = await createBooking({
+    const storeValidation = extractAndValidateStoreId(body);
+
+    const bookingPayload = {
       customerId: session.customerId,
       paymentVerification: body.paymentVerification || null,
-      storeId: body.storeId || body.store_id || null,
-    });
+    };
+
+    if (!storeValidation.omitted) {
+      bookingPayload.storeId = storeValidation.storeId;
+    }
+
+    const booking = await createBooking(bookingPayload);
 
     return NextResponse.json(
       {
