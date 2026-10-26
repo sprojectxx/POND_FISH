@@ -66,6 +66,9 @@ async function withMockPgClient(queryHandler, callback) {
 
   process.env.DATABASE_URL = 'postgres://mock:mock@localhost:5432/mock_db';
 
+  let clientReleaseCount = 0;
+  let poolConnectCount = 0;
+
   const mockQuery = async (sql, params) => {
     const sqlStr = typeof sql === 'string' ? sql : sql?.text || '';
     return queryHandler(sqlStr, params);
@@ -73,17 +76,23 @@ async function withMockPgClient(queryHandler, callback) {
 
   const mockClient = {
     query: mockQuery,
-    release: () => {},
+    release: () => {
+      clientReleaseCount++;
+    },
   };
 
   pg.Pool.prototype.query = mockQuery;
   pg.Client.prototype.query = mockQuery;
   pg.Pool.prototype.connect = async function () {
+    poolConnectCount++;
     return mockClient;
   };
 
   try {
-    return await callback();
+    return await callback({
+      getClientReleaseCount: () => clientReleaseCount,
+      getPoolConnectCount: () => poolConnectCount,
+    });
   } finally {
     pg.Pool.prototype.query = origQuery;
     pg.Client.prototype.query = origClientQuery;
@@ -153,8 +162,8 @@ test('Customer Booking API: Store ID Validation and Fail-Closed Security', async
     } = options;
 
     return async (sql, params) => {
-      const trimmed = sql.trim().toUpperCase();
-      const isMutation = trimmed.startsWith('INSERT INTO') || trimmed.startsWith('UPDATE ') || trimmed.startsWith('DELETE FROM');
+      const cleaned = sql.replace(/\/\*[\s\S]*?\*\/|--[^\n]*/g, '').trim();
+      const isMutation = /^\s*(INSERT\s+INTO|UPDATE\s+|DELETE\s+FROM)/i.test(cleaned);
       if (isMutation) {
         onMutation(sql, params);
       }

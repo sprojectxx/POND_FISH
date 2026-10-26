@@ -325,6 +325,45 @@ export async function POST(request) {
       );
     }
 
+    if (error.code === 'CUSTOMER_BLOCKED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'CUSTOMER_BLOCKED',
+            message: error.message,
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    if (error.code === 'PAYMENT_ALREADY_USED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'PAYMENT_ALREADY_USED',
+            message: error.message,
+          },
+        },
+        { status: 409 }
+      );
+    }
+
+    if (['MISSING_PAYMENT_ORDER_ID', 'PAYMENT_ORDER_NOT_FOUND', 'PAYMENT_ORDER_ID_MISMATCH', 'PAYMENT_CURRENCY_MISMATCH'].includes(error.code)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: error.code,
+            message: error.message,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
     if (error.code === 'PAYMENT_AMOUNT_MISMATCH') {
       return NextResponse.json(
         {
