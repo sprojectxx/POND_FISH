@@ -1,12 +1,12 @@
 /**
- * Transaction Boundary & Failure-Injection Test Suite
+ * Transaction Boundary, Failure-Injection, and Ownership Audit Suite
  * Component: lib/engines/booking.js (createBooking) & POST /api/v1/customer/bookings
  * 
  * Verifies transaction atomicity, rollback consistency, client cleanup, and payment safety
- * across all 10 critical failure and idempotency boundaries:
+ * across all critical failure, ownership, and idempotency boundaries:
  * 1. Invalid or unauthorized store ID.
  * 2. Store configuration query failure or malformed configuration.
- * 3. Inventory reservation failure (e.g., insufficient stock).
+ * 3. Inventory reservation failure (insufficient available stock).
  * 4. Booking insertion failure after inventory has already been reserved.
  * 5. Booking line-item insertion failure after booking header created.
  * 6. Subscription-credit deduction failure after booking created.
@@ -17,6 +17,17 @@
  *     10a. Same-customer payment retry returns existing booking without duplicating inventory/records.
  *     10b. Cross-customer payment replay rejected with PAYMENT_ALREADY_USED (409/403).
  *     10c. Concurrent non-snapshot cart checkout serialized with CART_ALREADY_PROCESSED (409).
+ *     10d. Cross-customer checkout intent replay rejected when booking_id is in checkout_intents (not swallowed).
+ *     10e. Cross-customer checkout intent replay rejected BEFORE booking creation (when booking_id is null).
+ *     10f. Checkout-intent DB query error is NOT silently swallowed as a missing table.
+ *     10g. Missing checkout_intents table (42P01 error) uses SAVEPOINT and rolls back savepoint safely.
+ * 11. External transaction client ownership:
+ *     11a. External client success: engine does NOT call BEGIN, COMMIT, or release().
+ *     11b. External client early return (idempotent replay): engine does NOT call COMMIT.
+ *     11c. External client error: engine does NOT call ROLLBACK or release().
+ * 12. Uncertain commit outcomes:
+ *     12a. Database actually committed before network drop: retry discovers existing booking idempotently.
+ *     12b. Database rolled back on commit failure: clean retry creates booking without duplicate artifacts.
  */
 
 const test = require('node:test');
@@ -111,6 +122,7 @@ function createAcidTransactionHarness(customConfig = {}) {
     subscriptionDeductions: [],
     payments: [],
     cartItems: [{ fishId: initialFishId, customerId: 'c0000000-0000-4000-8000-000000000001', quantityKg: 2.0 }],
+    intentBookingId: null,
   };
 
   let uncommittedState = null;
@@ -119,6 +131,9 @@ function createAcidTransactionHarness(customConfig = {}) {
   let poolConnectCount = 0;
   let rollbackCount = 0;
   let commitCount = 0;
+  let savepointCount = 0;
+  let releaseSavepointCount = 0;
+  let rollbackSavepointCount = 0;
 
   function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
@@ -134,9 +149,43 @@ function createAcidTransactionHarness(customConfig = {}) {
       return { rows: [], rowCount: 0 };
     }
 
+    if (/^SAVEPOINT\b/i.test(cleaned)) {
+      savepointCount++;
+      return { rows: [], rowCount: 0 };
+    }
+
+    if (/^RELEASE\s+SAVEPOINT\b/i.test(cleaned)) {
+      releaseSavepointCount++;
+      return { rows: [], rowCount: 0 };
+    }
+
+    if (/^ROLLBACK\s+TO\s+SAVEPOINT\b/i.test(cleaned)) {
+      rollbackSavepointCount++;
+      return { rows: [], rowCount: 0 };
+    }
+
     if (/^COMMIT\b/i.test(cleaned)) {
       if (customConfig.failOnCommit) {
         throw new Error('SIMULATED_COMMIT_FAILURE: Database connection terminated during COMMIT');
+      }
+      if (customConfig.uncertainCommitActuallyCommitted) {
+        // Server wrote to WAL and committed before dropping connection
+        committedState.inventory = clone(uncommittedState.inventory);
+        committedState.bookings = clone(uncommittedState.bookings);
+        committedState.bookingItems = clone(uncommittedState.bookingItems);
+        committedState.ledger = clone(uncommittedState.ledger);
+        committedState.subscriptionDeductions = clone(uncommittedState.subscriptionDeductions);
+        committedState.payments = clone(uncommittedState.payments);
+        committedState.cartItems = clone(uncommittedState.cartItems);
+        committedState.intentBookingId = uncommittedState.intentBookingId;
+        inTransaction = false;
+        throw new Error('SIMULATED_CONNECTION_DROP_DURING_COMMIT: Socket hung up after server commit');
+      }
+      if (customConfig.uncertainCommitActuallyRolledBack) {
+        // Server aborted on commit
+        uncommittedState = null;
+        inTransaction = false;
+        throw new Error('SIMULATED_COMMIT_ROLLBACK: Transaction aborted during commit');
       }
       if (inTransaction && uncommittedState) {
         // Promote uncommitted state to committed
@@ -147,6 +196,7 @@ function createAcidTransactionHarness(customConfig = {}) {
         committedState.subscriptionDeductions = clone(uncommittedState.subscriptionDeductions);
         committedState.payments = clone(uncommittedState.payments);
         committedState.cartItems = clone(uncommittedState.cartItems);
+        committedState.intentBookingId = uncommittedState.intentBookingId;
       }
       inTransaction = false;
       commitCount++;
@@ -185,14 +235,15 @@ function createAcidTransactionHarness(customConfig = {}) {
 
     // 2. Checkout intents queries
     if (sql.includes('FROM checkout_intents')) {
-      if (customConfig.intentWithBookingId) {
-        return {
-          rows: [{
-            booking_id: customConfig.intentWithBookingId,
-            status: 'COMPLETED',
-            customer_id: customConfig.intentCustomerId || 'c0000000-0000-4000-8000-000000000001',
-          }],
-        };
+      if (customConfig.intentTableMissing) {
+        const err = new Error('relation "checkout_intents" does not exist');
+        err.code = '42P01';
+        throw err;
+      }
+      if (customConfig.failOnIntentQuery) {
+        const err = new Error('SIMULATED_INTENT_QUERY_FAILURE: Database connection lost');
+        err.code = '08006';
+        throw err;
       }
       const snapshotSubCoverage = customConfig.paidOrder
         ? {
@@ -210,9 +261,35 @@ function createAcidTransactionHarness(customConfig = {}) {
             itemBreakdown: [{ fishId: initialFishId, coveredQty: 2.0 }],
           };
 
+      if (customConfig.intentBelongsToVictim) {
+        return {
+          rows: [{
+            booking_id: customConfig.intentWithBookingId || null,
+            status: customConfig.intentWithBookingId ? 'COMPLETED' : 'CREATED',
+            customer_id: 'c9999999-9999-4000-8000-999999999999', // victim!
+            cart_snapshot: JSON.stringify([{ fishId: initialFishId, name: 'Catla', quantityKg: 2.0, pricePerKg: 250, subtotal: 500 }]),
+            fee_breakdown: JSON.stringify({ totalAmount: 500, totalQuantity: 2, finalPayable: customConfig.paidOrder ? 500 : 0 }),
+            subscription_snapshot: JSON.stringify(snapshotSubCoverage),
+          }],
+        };
+      }
+      const effectiveIntentBookingId = state?.intentBookingId || customConfig.intentWithBookingId || null;
+      if (effectiveIntentBookingId) {
+        return {
+          rows: [{
+            booking_id: effectiveIntentBookingId,
+            status: 'COMPLETED',
+            customer_id: customConfig.intentCustomerId || 'c0000000-0000-4000-8000-000000000001',
+            cart_snapshot: JSON.stringify([{ fishId: initialFishId, name: 'Catla', quantityKg: 2.0, pricePerKg: 250, subtotal: 500 }]),
+            fee_breakdown: JSON.stringify({ totalAmount: 500, totalQuantity: 2, finalPayable: customConfig.paidOrder ? 500 : 0 }),
+            subscription_snapshot: JSON.stringify(snapshotSubCoverage),
+          }],
+        };
+      }
+
       return {
         rows: [{
-          customer_id: params?.[0] || 'c0000000-0000-4000-8000-000000000001',
+          customer_id: customConfig.intentCustomerId || 'c0000000-0000-4000-8000-000000000001',
           cart_snapshot: JSON.stringify([{ fishId: initialFishId, name: 'Catla', quantityKg: 2.0, pricePerKg: 250, subtotal: 500 }]),
           fee_breakdown: JSON.stringify({ totalAmount: 500, totalQuantity: 2, finalPayable: customConfig.paidOrder ? 500 : 0 }),
           subscription_snapshot: JSON.stringify(snapshotSubCoverage),
@@ -220,19 +297,42 @@ function createAcidTransactionHarness(customConfig = {}) {
       };
     }
 
+    if (sql.includes('UPDATE checkout_intents')) {
+      if (customConfig.intentTableMissing) {
+        const err = new Error('relation "checkout_intents" does not exist');
+        err.code = '42P01';
+        throw err;
+      }
+      if (params?.[1]) {
+        state.intentBookingId = params[1];
+      }
+      return { rows: [{ razorpay_order_id: params?.[0], booking_id: params?.[1], status: 'COMPLETED' }], rowCount: 1 };
+    }
+
     // 3. Existing payment checks (Idempotency Step 0)
     if (sql.includes('FROM payments')) {
       if (customConfig.existingPayment) {
         return { rows: [{ booking_id: customConfig.existingPayment.bookingId }] };
       }
+      if (committedState.payments.length > 0) {
+        const matching = committedState.payments.find(p => p.razorpayOrderId === params?.[1] || p.razorpayPaymentId === params?.[0]);
+        if (matching) {
+          return { rows: [{ booking_id: matching.bookingId }] };
+        }
+      }
       return { rows: [] };
     }
 
-    // 4. Cart rows FOR UPDATE (Step 0b concurrency safeguard)
-    if (sql.includes('FROM customer_cart_items') && sql.includes('FOR UPDATE')) {
+    // 4. Cart rows (Persistent cart retrieval and Step 0b concurrency safeguard)
+    if (sql.includes('FROM customer_cart_items')) {
       const remainingItems = state.cartItems.filter(item => item.customerId === params[0]);
       return {
-        rows: remainingItems.map(item => ({ id: 'cart-1', fish_id: item.fishId })),
+        rows: remainingItems.map(item => ({
+          id: 'cart-1',
+          customer_id: item.customerId,
+          fish_id: item.fishId,
+          quantity_kg: item.quantityKg,
+        })),
         rowCount: remainingItems.length,
       };
     }
@@ -367,8 +467,14 @@ function createAcidTransactionHarness(customConfig = {}) {
 
     // 13. Payments insert
     if (sql.includes('INSERT INTO payments')) {
-      state.payments.push({ params });
-      return { rows: [], rowCount: 1 };
+      const pRecord = {
+        bookingId: params[1],
+        razorpayOrderId: params[2],
+        razorpayPaymentId: params[3],
+        amount: params[5],
+      };
+      state.payments.push(pRecord);
+      return { rows: [pRecord], rowCount: 1 };
     }
 
     // 14. Booking retrieval by ID
@@ -418,7 +524,29 @@ function createAcidTransactionHarness(customConfig = {}) {
         getPoolConnectCount: () => poolConnectCount,
         getRollbackCount: () => rollbackCount,
         getCommitCount: () => commitCount,
+        getSavepointCount: () => savepointCount,
+        getRollbackSavepointCount: () => rollbackSavepointCount,
         setConfig: (newConf) => { Object.assign(customConfig, newConf); },
+        createExternalClient: () => {
+          let extBegins = 0;
+          let extCommits = 0;
+          let extRollbacks = 0;
+          let extReleases = 0;
+          return {
+            query: async (sql, params) => {
+              const cleaned = sql.replace(/\/\*[\s\S]*?\*\/|--[^\n]*/g, '').trim();
+              if (/^BEGIN\b/i.test(cleaned)) extBegins++;
+              if (/^COMMIT\b/i.test(cleaned)) extCommits++;
+              if (/^ROLLBACK\b/i.test(cleaned)) extRollbacks++;
+              return queryHandler(sql, params);
+            },
+            release: () => { extReleases++; },
+            getExtBegins: () => extBegins,
+            getExtCommits: () => extCommits,
+            getExtRollbacks: () => extRollbacks,
+            getExtReleases: () => extReleases,
+          };
+        },
       });
     } finally {
       pg.Pool.prototype.query = origQuery;
@@ -743,7 +871,6 @@ test('Transaction Integrity and Failure-Injection Audit Suite', async (suite) =>
     harness.committedState.cartItems = [];
 
     await harness.withPg(async (ctx) => {
-      // Direct call to bookingEngine.createBooking without checkoutSnapshot
       let thrownError = null;
       try {
         await bookingEngine.createBooking({
@@ -759,6 +886,246 @@ test('Transaction Integrity and Failure-Injection Audit Suite', async (suite) =>
       assert.ok(thrownError, 'Should throw error when cart is empty');
       assert.strictEqual(thrownError.code, 'EMPTY_CART');
       assert.strictEqual(ctx.getCommittedState().bookings.length, 0);
+    });
+  });
+
+  await suite.test('Point 10d: Cross-customer checkout intent replay rejected even when booking_id is in checkout_intents (not swallowed)', async () => {
+    const victimCustomerId = 'c9999999-9999-4000-8000-999999999999';
+    const victimBookingRecord = {
+      id: 'b0000000-0000-4000-8000-000000000077',
+      booking_code: 'BK-VICTIM-077',
+      customer_id: victimCustomerId, // belongs to victim!
+      store_id: 'store_main',
+      status: 'CONFIRMED',
+      total_amount: 500,
+    };
+
+    const harness = createAcidTransactionHarness({
+      paidOrder: true,
+      intentWithBookingId: victimBookingRecord.id,
+      intentCustomerId: victimCustomerId,
+      existingBookingRecord: victimBookingRecord,
+    });
+
+    await harness.withPg(async (ctx) => {
+      // Attacker customer sends request with orderId linked to victim's completed checkout intent
+      const req = createCustomerPostRequest(token, { paymentVerification });
+      const res = await customerBookingsRoute.POST(req);
+      assert.strictEqual(res.status, 409, 'Expected 409 Conflict');
+      const body = await res.json();
+      assert.strictEqual(body.error.code, 'PAYMENT_ALREADY_USED');
+
+      const state = ctx.getCommittedState();
+      assert.strictEqual(state.bookings.length, 0, 'Zero bookings created for attacker');
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].reserved, 0, 'No stock reserved for attacker');
+      assert.strictEqual(ctx.getClientReleaseCount(), ctx.getPoolConnectCount(), 'No client connection leaked');
+    });
+  });
+
+  await suite.test('Point 10e: Cross-customer checkout intent replay rejected BEFORE booking creation (when booking_id is null)', async () => {
+    const harness = createAcidTransactionHarness({
+      paidOrder: true,
+      intentBelongsToVictim: true, // intent created for victim, booking_id still null
+    });
+
+    await harness.withPg(async (ctx) => {
+      // Attacker customer tries to claim victim's open checkout intent
+      const req = createCustomerPostRequest(token, { paymentVerification });
+      const res = await customerBookingsRoute.POST(req);
+      assert.strictEqual(res.status, 409, 'Expected 409 Conflict on victim checkout intent claim');
+      const body = await res.json();
+      assert.strictEqual(body.error.code, 'PAYMENT_ALREADY_USED');
+
+      const state = ctx.getCommittedState();
+      assert.strictEqual(state.bookings.length, 0, 'Zero bookings created');
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].reserved, 0);
+      assert.strictEqual(ctx.getClientReleaseCount(), ctx.getPoolConnectCount(), 'No client connection leaked');
+    });
+  });
+
+  await suite.test('Point 10f: Checkout intent query DB failure is NOT swallowed as a missing table', async () => {
+    const harness = createAcidTransactionHarness({
+      paidOrder: true,
+      failOnIntentQuery: true, // simulated DB network/query error (not 42P01)
+    });
+
+    await harness.withPg(async (ctx) => {
+      const req = createCustomerPostRequest(token, { paymentVerification });
+      const res = await customerBookingsRoute.POST(req);
+      assert.strictEqual(res.status, 500, 'Real database error must bubble as 500, not proceed');
+
+      const state = ctx.getCommittedState();
+      assert.strictEqual(state.bookings.length, 0, 'Zero bookings created on intent query error');
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].reserved, 0);
+      assert.strictEqual(ctx.getClientReleaseCount(), ctx.getPoolConnectCount(), 'No client connection leaked');
+    });
+  });
+
+  await suite.test('Point 10g: Missing checkout_intents table (42P01) uses SAVEPOINT and rolls back savepoint safely', async () => {
+    const harness = createAcidTransactionHarness({
+      intentTableMissing: true, // simulates Migration 0018 unapplied (error 42P01)
+    });
+
+    await harness.withPg(async (ctx) => {
+      const req = createCustomerPostRequest(token, { paymentVerification });
+      const res = await customerBookingsRoute.POST(req);
+      // Because savepoint caught 42P01 and rolled back to savepoint, the main transaction survived and succeeded!
+      assert.strictEqual(res.status, 201, 'Booking succeeds using savepoint rollback on unapplied migration');
+      const body = await res.json();
+      assert.strictEqual(body.success, true);
+
+      assert.ok(ctx.getSavepointCount() >= 1, 'SAVEPOINT was created');
+      assert.ok(ctx.getRollbackSavepointCount() >= 1, 'ROLLBACK TO SAVEPOINT was called for missing table');
+      assert.strictEqual(ctx.getRollbackCount(), 0, 'Main transaction was NOT rolled back');
+      assert.strictEqual(ctx.getCommitCount(), 1, 'Main transaction committed successfully');
+      assert.strictEqual(ctx.getClientReleaseCount(), 1, 'Client released');
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // POINT 11: External Transaction Client Ownership
+  // --------------------------------------------------------------------------
+  await suite.test('Point 11a: External client success — createBooking does NOT call BEGIN, COMMIT, or release()', async () => {
+    const harness = createAcidTransactionHarness();
+
+    await harness.withPg(async (ctx) => {
+      const externalClient = ctx.createExternalClient();
+
+      const booking = await bookingEngine.createBooking({
+        customerId,
+        paymentVerification,
+        storeId: 'store_main',
+        client: externalClient,
+      });
+
+      assert.ok(booking, 'Booking created successfully');
+      assert.strictEqual(externalClient.getExtBegins(), 0, 'createBooking must NOT call BEGIN on external client');
+      assert.strictEqual(externalClient.getExtCommits(), 0, 'createBooking must NOT call COMMIT on external client');
+      assert.strictEqual(externalClient.getExtRollbacks(), 0, 'createBooking must NOT call ROLLBACK on external client');
+      assert.strictEqual(externalClient.getExtReleases(), 0, 'createBooking must NOT release external client');
+    });
+  });
+
+  await suite.test('Point 11b: External client idempotent replay — createBooking does NOT call COMMIT', async () => {
+    const existingBookingRecord = {
+      id: 'b0000000-0000-4000-8000-000000000055',
+      booking_code: 'BK-EXISTING-055',
+      customer_id: customerId,
+      store_id: 'store_main',
+      status: 'CONFIRMED',
+      total_amount: 500,
+    };
+
+    const harness = createAcidTransactionHarness({
+      existingPayment: { bookingId: existingBookingRecord.id },
+      existingBookingRecord,
+    });
+
+    await harness.withPg(async (ctx) => {
+      const externalClient = ctx.createExternalClient();
+
+      const booking = await bookingEngine.createBooking({
+        customerId,
+        paymentVerification,
+        storeId: 'store_main',
+        client: externalClient,
+      });
+
+      assert.strictEqual(booking.id, existingBookingRecord.id, 'Returned existing booking');
+      assert.strictEqual(externalClient.getExtCommits(), 0, 'createBooking must NOT call COMMIT on early idempotent return');
+      assert.strictEqual(externalClient.getExtReleases(), 0, 'createBooking must NOT release external client');
+    });
+  });
+
+  await suite.test('Point 11c: External client failure — createBooking does NOT call ROLLBACK or release()', async () => {
+    const harness = createAcidTransactionHarness({
+      failOnBookingInsert: true,
+    });
+
+    await harness.withPg(async (ctx) => {
+      const externalClient = ctx.createExternalClient();
+
+      let thrown = null;
+      try {
+        await bookingEngine.createBooking({
+          customerId,
+          paymentVerification,
+          storeId: 'store_main',
+          client: externalClient,
+        });
+      } catch (err) {
+        thrown = err;
+      }
+
+      assert.ok(thrown, 'Error was thrown to caller');
+      assert.strictEqual(externalClient.getExtRollbacks(), 0, 'createBooking must NOT call ROLLBACK on external client');
+      assert.strictEqual(externalClient.getExtReleases(), 0, 'createBooking must NOT release external client');
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // POINT 12: Uncertain Commit Outcomes & Durable Retries
+  // --------------------------------------------------------------------------
+  await suite.test('Point 12a: Uncertain commit where DB committed before connection drop — retry discovers existing booking idempotently', async () => {
+    const harness = createAcidTransactionHarness({
+      paidOrder: true,
+      uncertainCommitActuallyCommitted: true, // First call: server committed to WAL, but socket dropped
+    });
+
+    await harness.withPg(async (ctx) => {
+      // First attempt: commit throws connection error, but data was committed on server
+      const firstReq = createCustomerPostRequest(token, { paymentVerification });
+      const res1 = await customerBookingsRoute.POST(firstReq);
+      assert.strictEqual(res1.status, 500, 'Initial call reports 500 due to network socket drop during commit confirmation');
+
+      // Verify server database state: booking and payment actually exist
+      const state = ctx.getCommittedState();
+      assert.strictEqual(state.bookings.length, 1, 'Booking was persisted in database before network disconnect');
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].available, 98, 'Inventory decremented to 98');
+
+      // Second attempt: Customer / Webhook retries with same durable paymentVerification
+      ctx.setConfig({ uncertainCommitActuallyCommitted: false });
+      const secondReq = createCustomerPostRequest(token, { paymentVerification });
+      const res2 = await customerBookingsRoute.POST(secondReq);
+      assert.strictEqual(res2.status, 201);
+      const resBody2 = await res2.json();
+      assert.strictEqual(resBody2.success, true);
+      assert.strictEqual(resBody2.data.id, state.bookings[0].id, 'Retry returned the already-committed booking');
+
+      // Verify no duplicate artifacts were created
+      assert.strictEqual(state.bookings.length, 1, 'No second booking was created');
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].available, 98, 'Inventory was NOT decremented twice');
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].reserved, 2, 'Reserved quantity remains 2');
+    });
+  });
+
+  await suite.test('Point 12b: Uncertain commit where DB aborted — clean retry creates booking without conflicting state', async () => {
+    const harness = createAcidTransactionHarness({
+      uncertainCommitActuallyRolledBack: true, // First call: commit aborted on server
+    });
+
+    await harness.withPg(async (ctx) => {
+      // First attempt: commit aborted
+      const firstReq = createCustomerPostRequest(token, { paymentVerification });
+      const res1 = await customerBookingsRoute.POST(firstReq);
+      assert.strictEqual(res1.status, 500);
+
+      // Verify server database state: nothing was committed
+      const state = ctx.getCommittedState();
+      assert.strictEqual(state.bookings.length, 0, 'Zero bookings committed on abort');
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].available, 100);
+
+      // Second attempt: clean retry completes booking
+      ctx.setConfig({ uncertainCommitActuallyRolledBack: false });
+      const secondReq = createCustomerPostRequest(token, { paymentVerification });
+      const res2 = await customerBookingsRoute.POST(secondReq);
+      assert.strictEqual(res2.status, 201);
+      const resBody2 = await res2.json();
+      assert.strictEqual(resBody2.success, true);
+
+      assert.strictEqual(state.bookings.length, 1, 'Exactly 1 booking created on successful retry');
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].available, 98);
+      assert.strictEqual(state.inventory['f0000000-0000-4000-8000-000000000001'].reserved, 2);
     });
   });
 });
