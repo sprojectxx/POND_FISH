@@ -80,5 +80,37 @@ test('Subdomain Routing Unit Tests', async (t) => {
     assert.ok(res, 'Middleware must return a response');
     assert.strictEqual(res.status, 200, 'Public login API must return 200 pass-through');
   });
+
+  await t.test('7. Vercel-generated URL pond-fish-admin.vercel.app/ redirects unauthenticated admin to /login', async () => {
+    const req = new Request('https://pond-fish-admin.vercel.app/', {
+      headers: { host: 'pond-fish-admin.vercel.app' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    assert.strictEqual(res.status, 307);
+    const location = res.headers.get('location');
+    assert.ok(location.includes('/login'), `Expected redirect to /login, got: ${location}`);
+  });
+
+  await t.test('8. Vercel-generated URL pond-fish-tv.vercel.app/ rewrites internally to /tv', async () => {
+    const req = new Request('https://pond-fish-tv.vercel.app/', {
+      headers: { host: 'pond-fish-tv.vercel.app' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    const rewriteHeader = res.headers.get('x-middleware-rewrite');
+    assert.ok(rewriteHeader && rewriteHeader.includes('/tv'), `Expected rewrite to /tv, got: ${rewriteHeader}`);
+  });
+
+  await t.test('9. Vercel-generated URL pond-fish-worker.vercel.app/ redirects unauthenticated worker to /login', async () => {
+    const req = new Request('https://pond-fish-worker.vercel.app/', {
+      headers: { host: 'pond-fish-worker.vercel.app' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    assert.strictEqual(res.status, 307);
+    const location = res.headers.get('location');
+    assert.ok(location.includes('/login'), `Expected redirect to /login, got: ${location}`);
+  });
 });
 

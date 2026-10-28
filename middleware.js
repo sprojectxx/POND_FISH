@@ -162,15 +162,17 @@ export async function middleware(request) {
   }
 
   // Host & Subdomain Detection
-  const host = request.headers.get('host') || '';
-  const hostname = host.split(':')[0].toLowerCase();
+  const host = request.headers?.get ? request.headers.get('host') : '';
+  const hostname = (host || '').split(':')[0].toLowerCase();
+
+  const portalEnv = (process.env.PORTAL_OVERRIDE || process.env.NEXT_PUBLIC_PORTAL || '').toLowerCase();
 
   let portalPrefix = null;
-  if (hostname.startsWith('admin.')) {
+  if (portalEnv === 'admin' || hostname.startsWith('admin.') || hostname.startsWith('pond-fish-admin') || hostname.includes('-admin-') || hostname.includes('-admin.')) {
     portalPrefix = '/admin';
-  } else if (hostname.startsWith('worker.')) {
+  } else if (portalEnv === 'worker' || hostname.startsWith('worker.') || hostname.startsWith('pond-fish-worker') || hostname.includes('-worker-') || hostname.includes('-worker.')) {
     portalPrefix = '/worker';
-  } else if (hostname.startsWith('tv.')) {
+  } else if (portalEnv === 'tv' || hostname.startsWith('tv.') || hostname.startsWith('pond-fish-tv') || hostname.includes('-tv-') || hostname.includes('-tv.')) {
     portalPrefix = '/tv';
   }
 
