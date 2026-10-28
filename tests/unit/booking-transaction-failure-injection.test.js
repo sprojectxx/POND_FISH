@@ -325,6 +325,9 @@ function createAcidTransactionHarness(customConfig = {}) {
 
     // 4. Cart rows (Persistent cart retrieval and Step 0b concurrency safeguard)
     if (sql.includes('FROM customer_cart_items')) {
+      if (customConfig.cartEmptiedDuringRace && sql.includes('FOR UPDATE')) {
+        return { rows: [], rowCount: 0 };
+      }
       const remainingItems = state.cartItems.filter(item => item.customerId === params[0]);
       return {
         rows: remainingItems.map(item => ({
@@ -403,15 +406,26 @@ function createAcidTransactionHarness(customConfig = {}) {
       return { rows: [{ is_active: true }] };
     }
 
-    if (sql.includes('customer_subscriptions') && sql.includes('FOR UPDATE')) {
-      if (customConfig.failOnSubscriptionDeduction) {
+    if (sql.includes('subscription_plan_fish')) {
+      return { rows: [{ enabled: true }] };
+    }
+
+    if (sql.includes('customer_subscriptions')) {
+      if (sql.includes('FOR UPDATE') && customConfig.failOnSubscriptionDeduction) {
         throw new Error('SIMULATED_SUBSCRIPTION_FAILURE: Customer subscription balance depleted or locked');
       }
       return {
         rows: [{
           id: 'sub-001',
+          subscription_id: 'sub-001',
+          customer_id: 'c0000000-0000-4000-8000-000000000001',
+          plan_id: 'plan-001',
           status: 'ACTIVE',
-          credit_balance: 500,
+          credit_balance: 5000,
+          weekly_qty_used: 0,
+          plan_title: 'Family Fresh Pass',
+          weekly_qty_limit_kg: 10,
+          plan_active: true,
           expires_at: new Date(Date.now() + 86400000).toISOString(),
         }],
       };
@@ -526,6 +540,7 @@ function createAcidTransactionHarness(customConfig = {}) {
         getCommitCount: () => commitCount,
         getSavepointCount: () => savepointCount,
         getRollbackSavepointCount: () => rollbackSavepointCount,
+        getReleaseSavepointCount: () => releaseSavepointCount,
         setConfig: (newConf) => { Object.assign(customConfig, newConf); },
         createExternalClient: () => {
           let extBegins = 0;
@@ -866,26 +881,32 @@ test('Transaction Integrity and Failure-Injection Audit Suite', async (suite) =>
   });
 
   await suite.test('Point 10c: Concurrent non-snapshot checkout race fails closed with CART_ALREADY_PROCESSED (409)', async () => {
-    const harness = createAcidTransactionHarness();
-    // Simulate cart emptied by a concurrent request that committed first
-    harness.committedState.cartItems = [];
+    // 10c-1: Submitting with an initially empty cart rejects with HTTP 400 EMPTY_CART
+    const emptyCartHarness = createAcidTransactionHarness();
+    emptyCartHarness.committedState.cartItems = [];
 
-    await harness.withPg(async (ctx) => {
-      let thrownError = null;
-      try {
-        await bookingEngine.createBooking({
-          customerId,
-          paymentVerification: null,
-          checkoutSnapshot: null,
-          storeId: 'store_main',
-        });
-      } catch (err) {
-        thrownError = err;
-      }
-
-      assert.ok(thrownError, 'Should throw error when cart is empty');
-      assert.strictEqual(thrownError.code, 'EMPTY_CART');
+    await emptyCartHarness.withPg(async (ctx) => {
+      const req = createCustomerPostRequest(token, {});
+      const res = await customerBookingsRoute.POST(req);
+      assert.strictEqual(res.status, 400, 'Expected 400 Bad Request for empty cart');
+      const body = await res.json();
+      assert.strictEqual(body.error.code, 'EMPTY_CART');
       assert.strictEqual(ctx.getCommittedState().bookings.length, 0);
+    });
+
+    // 10c-2: Concurrent race where cart was populated at pre-fetch but emptied during row lock fails with CART_ALREADY_PROCESSED (409)
+    const raceHarness = createAcidTransactionHarness({
+      cartEmptiedDuringRace: true,
+    });
+
+    await raceHarness.withPg(async (ctx) => {
+      const req = createCustomerPostRequest(token, {});
+      const res = await customerBookingsRoute.POST(req);
+      assert.strictEqual(res.status, 409, 'Expected 409 Conflict for cart already processed');
+      const body = await res.json();
+      assert.strictEqual(body.error.code, 'CART_ALREADY_PROCESSED');
+      assert.strictEqual(ctx.getCommittedState().bookings.length, 0);
+      assert.strictEqual(ctx.getRollbackCount(), 1, 'Transaction rolled back on race detection');
     });
   });
 
@@ -976,6 +997,7 @@ test('Transaction Integrity and Failure-Injection Audit Suite', async (suite) =>
 
       assert.ok(ctx.getSavepointCount() >= 1, 'SAVEPOINT was created');
       assert.ok(ctx.getRollbackSavepointCount() >= 1, 'ROLLBACK TO SAVEPOINT was called for missing table');
+      assert.ok(ctx.getReleaseSavepointCount() >= 1, 'RELEASE SAVEPOINT was called to clean up savepoint');
       assert.strictEqual(ctx.getRollbackCount(), 0, 'Main transaction was NOT rolled back');
       assert.strictEqual(ctx.getCommitCount(), 1, 'Main transaction committed successfully');
       assert.strictEqual(ctx.getClientReleaseCount(), 1, 'Client released');
