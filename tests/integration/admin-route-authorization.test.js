@@ -240,7 +240,7 @@ async function runTests() {
       const req = createMockRequest({ pathname: ep.path, method: ep.method });
       
       // Check middleware response
-      const midRes = middleware(req);
+      const midRes = await middleware(req);
       assert.strictEqual(midRes.status, 401, `Middleware must return 401 for unauthenticated ${ep.path}`);
       const midData = await midRes.json();
       assert.strictEqual(midData.success, false);
@@ -436,7 +436,7 @@ async function runTests() {
     });
 
     // 1. Middleware early guard must reject (not a telemetry/scheduler endpoint, no adminToken)
-    const midRes = middleware(arbReq);
+    const midRes = await middleware(arbReq);
     assert.strictEqual(midRes.status, 401, 'Middleware must reject arbitrary x-admin-key on general admin route');
     const midData = await midRes.json();
     assert.strictEqual(midData.error.code, 'UNAUTHORIZED');
@@ -453,7 +453,7 @@ async function runTests() {
       method: 'DELETE',
       headers: { 'x-internal-secret': 'arbitrary-cron-key' },
     });
-    const midRes2 = middleware(arbInternalReq);
+    const midRes2 = await middleware(arbInternalReq);
     assert.strictEqual(midRes2.status, 401);
     const res2 = await sessionsDelete(arbInternalReq);
     assert.strictEqual(res2.status, 401);
@@ -476,7 +476,7 @@ async function runTests() {
       body: { latitude: 12.9716, longitude: 77.5946, speed: 45 },
     });
 
-    const midTelemetry = middleware(validTelemetryReq);
+    const midTelemetry = await middleware(validTelemetryReq);
     assert.strictEqual(midTelemetry.status, 200, 'Middleware permits valid telemetry key pass-through');
     const posRes = await positionsPost(validTelemetryReq, { params: { id: 'journey-101' } });
     assert.strictEqual(posRes.status, 201, 'Telemetry endpoint accepts configured x-admin-key');
@@ -490,7 +490,7 @@ async function runTests() {
       headers: { 'x-internal-secret': TEST_CRON_SECRET },
     });
 
-    const midSched = middleware(validSchedulerReq);
+    const midSched = await middleware(validSchedulerReq);
     assert.strictEqual(midSched.status, 200, 'Middleware permits valid scheduler secret pass-through');
     const schedRes = await processScheduledPost(validSchedulerReq);
     assert.strictEqual(schedRes.status, 200, 'Scheduler endpoint accepts configured x-internal-secret');
@@ -503,7 +503,7 @@ async function runTests() {
       pathname: '/api/v1/admin/settings',
       headers: { 'x-admin-key': TEST_ADMIN_SECRET },
     });
-    const crossMid = middleware(crossAccessReq);
+    const crossMid = await middleware(crossAccessReq);
     assert.strictEqual(crossMid.status, 401, 'Middleware blocks telemetry key on human admin routes');
     const crossRes = await settingsGet(crossAccessReq);
     assert.strictEqual(crossRes.status, 401, 'Human admin handler rejects telemetry key');

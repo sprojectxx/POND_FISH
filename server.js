@@ -21,6 +21,19 @@ app.prepare().then(() => {
   // Attach WebSocket server
   initWebSocketServer(server);
 
+  // In development, Next.js HMR uses WebSockets on /_next/webpack-hmr
+  const upgradeHandler = app.getUpgradeHandler();
+  server.on('upgrade', (req, socket, head) => {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      if (url.pathname !== '/api/v1/realtime' && upgradeHandler) {
+        upgradeHandler(req, socket, head);
+      }
+    } catch {
+      // Ignored
+    }
+  });
+
   server.listen(port, (err) => {
     if (err) throw err;
     console.log(`> PondFish Unified Server ready on http://localhost:${port}`);

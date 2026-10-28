@@ -99,13 +99,13 @@ async function runAuditTests() {
   console.log('  ✓ 1.2 extractWorkerToken extracts credentials from worker_session cookie and Bearer header');
 
   // Test 1.3: Middleware permits navigation with worker_session cookie
-  const midRes = middleware(reqWithCookie);
+  const midRes = await middleware(reqWithCookie);
   assert.strictEqual(midRes.headers.get('location'), null, 'Authenticated worker should access /worker without redirect');
   passed++;
   console.log('  ✓ 1.3 Next.js middleware smoothly approves /worker access with valid worker_session cookie');
 
   // Test 1.4: Middleware redirects unauthenticated user from /worker to /worker/login
-  const unauthMidRes = middleware(reqEmpty);
+  const unauthMidRes = await middleware(reqEmpty);
   assert.ok(unauthMidRes.headers.get('location')?.includes('/worker/login'), 'Unauthenticated user must be redirected');
   passed++;
   console.log('  ✓ 1.4 Middleware strictly redirects unauthenticated visits away from /worker');
@@ -176,12 +176,12 @@ console.log('\n[Test Group 3] Cross-Portal Role Boundary Isolation');
 
   // Worker trying to access /admin
   const workerAtAdminReq = createMockRequest({ pathname: '/admin', cookies: { worker_session: workerToken } });
-  const workerAtAdminRes = middleware(workerAtAdminReq);
+  const workerAtAdminRes = await middleware(workerAtAdminReq);
   assert.ok(workerAtAdminRes.headers.get('location')?.includes('/admin/login'), 'Worker token must not access /admin');
 
   // Admin token cannot be used to bypass worker login via worker_session
   const fakeWorkerReq = createMockRequest({ pathname: '/worker', cookies: { worker_session: adminToken } });
-  const fakeWorkerRes = middleware(fakeWorkerReq);
+  const fakeWorkerRes = await middleware(fakeWorkerReq);
   assert.ok(fakeWorkerRes.headers.get('location')?.includes('/worker/login'), 'Admin token cannot masquerade as worker');
 
   passed++;
@@ -454,14 +454,14 @@ console.log('\n[Test Group 9] Middleware Malformed Percent-Encoding & Path Edge 
 {
   // 9.1 Malformed percent-encoding must fail closed with 400 Bad Request
   const malformedReq = createMockRequest({ pathname: '/api/v1/%E0%A4%A/worker/bookings' });
-  const malformedRes = middleware(malformedReq);
+  const malformedRes = await middleware(malformedReq);
   assert.strictEqual(malformedRes.status, 400, 'Malformed percent-encoding must return 400');
   const malformedBody = await malformedRes.json();
   assert.strictEqual(malformedBody.error.code, 'MALFORMED_URI_ENCODING');
 
   // 9.2 Consecutive slashes normalized without bypassing route guards
   const consecutiveSlashReq = createMockRequest({ pathname: '/api/v1//worker///bookings/today//' });
-  const consecutiveRes = middleware(consecutiveSlashReq);
+  const consecutiveRes = await middleware(consecutiveSlashReq);
   assert.strictEqual(consecutiveRes.status, 401, 'Consecutive slashes must be normalized and blocked if unauthenticated');
 
   passed++;

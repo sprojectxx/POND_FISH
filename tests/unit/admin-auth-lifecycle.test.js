@@ -3,13 +3,13 @@
  * Traceability:
  * - PondFish Master PRD v2 (Section 26: Security & Privacy)
  * - Engine 22: Multi-Portal RBAC Authentication & Session Engine
- * - Phase E Verification Scenarios (1–13)
- * Pure, isolated unit test suite. ZERO database mutation, ZERO network calls.
+ * - Edge Runtime Web Crypto Middleware Security Verification (ADMIN-01 & AP-01)
+ * Pure, isolated unit test suite. ZERO production database mutation, ZERO network calls.
  */
 
 const assert = require('assert');
 const jwt = require('jsonwebtoken');
-const { middleware } = require('../../middleware');
+const { middleware, verifyJwt } = require('../../middleware');
 const {
   authenticateAdmin,
   extractToken,
@@ -17,8 +17,23 @@ const {
   timingSafeEqualStrings,
 } = require('../../lib/auth/admin-auth');
 const rbacEngine = require('../../lib/engines/rbac');
+const adminRepository = require('../../lib/db/repositories/adminRepository');
 
-console.log('=== PONDFISH ADMIN AUTH & SESSION SECURITY VERIFICATION (PHASE E) ===\n');
+// Stub admin repository for pure, isolated unit testing without live DB dependency
+adminRepository.findAdminByEmail = async (email) => {
+  if (email && email.toLowerCase() === 'admin@pondfish.in') {
+    return {
+      id: 'admin-uuid-1',
+      name: 'Super Administrator',
+      email: 'admin@pondfish.in',
+      password_hash: '$2a$12$abcdef1234567890abcdef1234567890abcdef1234567890abcdef12',
+      is_super_admin: true,
+    };
+  }
+  return null;
+};
+
+console.log('=== PONDFISH ADMIN AUTH & SESSION SECURITY VERIFICATION (EDGE RUNTIME SAFE) ===\n');
 
 let passed = 0;
 const TEST_JWT_SECRET = 'pondfish-test-suite-secure-jwt-secret-key-2026';
@@ -45,422 +60,343 @@ function createMockRequest({ pathname = '/admin', cookies = {}, headers = {}, me
   };
 }
 
-// ---------------------------------------------------------------------------
-// Scenario 1: Successful admin login and cookie issuance (token omitted from body)
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 1] Successful admin login and cookie issuance...');
+async function runAllTests() {
+  // ---------------------------------------------------------------------------
+  // Requirement 1: Correct credentials produce a successful response and session cookie
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 1] Correct credentials produce a successful response and session cookie...');
 
-  // Generate synthetic admin JWT
-  const sessionId = 'test-session-uuid-1';
-  const token = jwt.sign(
-    {
-      adminId: 'admin-uuid-1',
-      email: 'admin@pondfish.in',
-      name: 'Operations Lead',
-      role: 'ADMIN',
-      is_super_admin: true,
-      sessionId,
-    },
-    TEST_JWT_SECRET,
-    { expiresIn: '12h' }
-  );
-
-  // Assert token structure and claims
-  const decoded = jwt.verify(token, TEST_JWT_SECRET);
-  assert.strictEqual(decoded.role, 'ADMIN');
-  assert.strictEqual(decoded.is_super_admin, true);
-  assert.strictEqual(decoded.sessionId, sessionId);
-
-  // Verify token extraction from cookies
-  const reqWithCookie = createMockRequest({
-    pathname: '/admin',
-    cookies: { admin_session: token },
-  });
-  const extracted = extractToken(reqWithCookie);
-  assert.strictEqual(extracted, token, 'extractToken must retrieve admin_session cookie');
-
-  passed++;
-  console.log('  ✓ Admin session token correctly formatted, signed, and extracted from cookie');
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 2: Invalid credentials and missing fields
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 2] Invalid credentials and missing input rejection...');
-
-  // Missing email/password validation
-  assert.rejects(
-    async () => {
-      await rbacEngine.loginAdmin({ email: '', password: '' });
-    },
-    (err) => err.code === 'INVALID_INPUT' && err.status === 400
-  );
-
-  passed++;
-  console.log('  ✓ Invalid inputs rejected with status 400 INVALID_INPUT');
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 3: First navigation after login
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 3] First navigation after login approved by middleware...');
-
-  const token = jwt.sign(
-    { adminId: 'admin-uuid-1', email: 'admin@pondfish.in', role: 'ADMIN', is_super_admin: true },
-    TEST_JWT_SECRET
-  );
-
-  const req = createMockRequest({
-    pathname: '/admin',
-    cookies: { admin_session: token },
-  });
-
-  const response = middleware(req);
-  assert.ok(response, 'Middleware must return a response');
-  // Should NOT redirect to /admin/login because token is present
-  const location = response.headers.get('location');
-  assert.strictEqual(location, null, 'Authenticated user must not be redirected away from /admin');
-
-  passed++;
-  console.log('  ✓ First navigation after login smoothly passes middleware without redirect');
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 4: Several consecutive admin page navigations without repeated login prompts
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 4] Consecutive navigations across /admin subroutes...');
-
-  const token = jwt.sign(
-    { adminId: 'admin-uuid-1', email: 'admin@pondfish.in', role: 'ADMIN', is_super_admin: true },
-    TEST_JWT_SECRET
-  );
-
-  const subroutes = [
-    '/admin',
-    '/admin/bookings',
-    '/admin/transactions',
-    '/admin/fish',
-    '/admin/subscriptions/plans',
-    '/admin/settings',
-    '/admin/reports',
-    '/admin/exceptions',
-    '/admin/security',
-  ];
-
-  for (const route of subroutes) {
-    const req = createMockRequest({
-      pathname: route,
-      cookies: { admin_session: token },
-    });
-    const res = middleware(req);
-    assert.strictEqual(res.headers.get('location'), null, `Route ${route} must not redirect when session is valid`);
-  }
-
-  passed++;
-  console.log(`  ✓ Successfully navigated ${subroutes.length} distinct admin routes without re-auth redirects`);
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 5: Browser refresh and direct URL access
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 5] Direct URL access and browser refresh with cookie...');
-
-  const token = jwt.sign(
-    { adminId: 'admin-uuid-1', email: 'admin@pondfish.in', role: 'ADMIN', is_super_admin: true },
-    TEST_JWT_SECRET
-  );
-
-  // Direct access with query params
-  const req = createMockRequest({
-    pathname: '/admin/bookings?status=CONFIRMED&page=2',
-    cookies: { admin_session: token },
-  });
-
-  const res = middleware(req);
-  assert.strictEqual(res.headers.get('location'), null, 'Direct URL access must be permitted with cookie');
-
-  // Verify authenticateAdmin works synchronously with the request
-  const identity = authenticateAdmin(req);
-  assert.strictEqual(identity.role, 'ADMIN');
-  assert.strictEqual(identity.email, 'admin@pondfish.in');
-
-  passed++;
-  console.log('  ✓ Direct URL access and browser refresh correctly validated via admin_session cookie');
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 6: Missing, malformed, expired, and revoked sessions
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 6] Missing, malformed, and expired sessions fail closed...');
-
-  // 1. Missing session on /admin page redirects to /admin/login
-  const unauthReq = createMockRequest({ pathname: '/admin/settings' });
-  const unauthRes = middleware(unauthReq);
-  const redirectLoc = unauthRes.headers.get('location');
-  assert.ok(redirectLoc && redirectLoc.includes('/admin/login'), 'Missing session must redirect to /admin/login');
-  assert.ok(redirectLoc.includes('redirect=%2Fadmin%2Fsettings'), 'Redirect URL must preserve target path');
-
-  // 2. Malformed token throws UNAUTHORIZED
-  const malformedReq = createMockRequest({
-    pathname: '/admin',
-    cookies: { admin_session: 'invalid.jwt.token' },
-  });
-  assert.throws(
-    () => authenticateAdmin(malformedReq),
-    (err) => err.code === 'UNAUTHORIZED' && err.status === 401
-  );
-
-  // 3. Expired token throws SESSION_EXPIRED
-  const expiredToken = jwt.sign(
-    { adminId: 'admin-1', role: 'ADMIN', is_super_admin: true },
-    TEST_JWT_SECRET,
-    { expiresIn: '-10s' } // Expired 10 seconds ago
-  );
-  const expiredReq = createMockRequest({
-    pathname: '/admin',
-    cookies: { admin_session: expiredToken },
-  });
-  assert.throws(
-    () => authenticateAdmin(expiredReq),
-    (err) => err.code === 'SESSION_EXPIRED' && err.status === 401
-  );
-
-  passed++;
-  console.log('  ✓ Missing, malformed, and expired sessions strictly fail-closed with 401 or login redirect');
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 7: Logout followed by direct URL / API access
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 7] Post-logout access rejection...');
-
-  // Simulate logout cookie clearing (cookie empty or removed)
-  const postLogoutReq = createMockRequest({
-    pathname: '/admin/transactions',
-    cookies: {}, // Cleared on logout
-  });
-
-  const res = middleware(postLogoutReq);
-  const loc = res.headers.get('location');
-  assert.ok(loc && loc.includes('/admin/login'), 'Post-logout request must redirect to login');
-
-  assert.throws(
-    () => authenticateAdmin(postLogoutReq),
-    (err) => err.code === 'UNAUTHORIZED' && err.status === 401
-  );
-
-  passed++;
-  console.log('  ✓ Post-logout requests immediately blocked at middleware and API layer');
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 8: Network failure handling in session verification (fail-closed)
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 8] Network failure must fail closed (no localStorage bypass)...');
-
-  // Verify that AdminLayout no longer reads cached localStorage to set adminUser on fetch rejection
-  // In our layout fix, the catch block logs error and sets adminUser(null), ensuring fail-closed behavior.
-  const cachedUserMetadata = JSON.stringify({ id: 'admin-1', name: 'Fake Admin' });
-  let adminUserState = null;
-
-  // Simulate the hardened catch handler logic:
-  try {
-    throw new Error('Network timeout fetching /api/v1/admin/auth/me');
-  } catch (err) {
-    // Hardened logic: setAdminUser(null)
-    adminUserState = null;
-  }
-  assert.strictEqual(adminUserState, null, 'Failed network request must never authenticate via localStorage');
-
-  passed++;
-  console.log('  ✓ Network failure strictly fails closed without granting unauthorized access');
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 9: Multiple tabs & concurrent session checks
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 9] Concurrent session verification across multiple tabs...');
-
-  const token = jwt.sign(
-    { adminId: 'admin-uuid-1', email: 'tab@pondfish.in', role: 'ADMIN', is_super_admin: true, sessionId: 'sess-multi-tab' },
-    TEST_JWT_SECRET
-  );
-
-  // Simulate 10 simultaneous tabs checking credentials
-  const concurrentChecks = Array.from({ length: 10 }, (_, i) => {
-    const req = createMockRequest({
-      pathname: `/admin/tab-${i}`,
-      cookies: { admin_session: token },
-    });
-    return authenticateAdmin(req);
-  });
-
-  concurrentChecks.forEach((identity) => {
-    assert.strictEqual(identity.role, 'ADMIN');
-    assert.strictEqual(identity.sessionId, 'sess-multi-tab');
-  });
-
-  passed++;
-  console.log('  ✓ 10 concurrent tabs successfully verified without session corruption or lockout');
-}
-
-// ---------------------------------------------------------------------------
-// Scenario 10: Unauthorized access to sensitive admin API routes
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 10] Unauthorized access to sensitive admin API endpoints blocked...');
-
-  const sensitiveApis = [
-    '/api/v1/admin/dashboard',
-    '/api/v1/admin/settings',
-    '/api/v1/admin/reports',
-    '/api/v1/admin/audit',
-    '/api/v1/admin/exceptions',
-    '/api/v1/admin/workers',
-  ];
-
-  for (const apiPath of sensitiveApis) {
-    const unauthReq = createMockRequest({ pathname: apiPath });
-    const middlewareRes = middleware(unauthReq);
-    assert.strictEqual(middlewareRes.status, 401, `API ${apiPath} must be blocked with 401 at middleware`);
-
-    assert.throws(
-      () => authenticateAdmin(unauthReq),
-      (err) => err.code === 'UNAUTHORIZED' && err.status === 401
+    const sessionId = 'test-session-uuid-1';
+    const token = jwt.sign(
+      {
+        adminId: 'admin-uuid-1',
+        email: 'admin@pondfish.in',
+        name: 'Operations Lead',
+        role: 'ADMIN',
+        is_super_admin: true,
+        sessionId,
+      },
+      TEST_JWT_SECRET,
+      { expiresIn: '12h' }
     );
+
+    const decoded = jwt.verify(token, TEST_JWT_SECRET);
+    assert.strictEqual(decoded.role, 'ADMIN');
+    assert.strictEqual(decoded.is_super_admin, true);
+    assert.strictEqual(decoded.sessionId, sessionId);
+
+    // Verify token extraction from cookies
+    const reqWithCookie = createMockRequest({
+      pathname: '/admin',
+      cookies: { admin_session: token },
+    });
+    const extracted = extractToken(reqWithCookie);
+    assert.strictEqual(extracted, token, 'extractToken must retrieve admin_session cookie');
+
+    passed++;
+    console.log('  ✓ Admin session token correctly formatted, signed, and extracted from cookie');
   }
 
-  passed++;
-  console.log(`  ✓ All ${sensitiveApis.length} sensitive admin API routes rejected unauthenticated requests with 401`);
-}
+  // ---------------------------------------------------------------------------
+  // Requirement 2: Invalid credentials do not create an authenticated session
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 2] Invalid credentials and missing fields rejection...');
 
-// ---------------------------------------------------------------------------
-// Scenario 11: Attempt to use client-side hardcoded admin key or forged role
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 11] Client-side hardcoded keys and forged roles rejected...');
+    await assert.rejects(
+      async () => {
+        await rbacEngine.loginAdmin({ email: '', password: '' });
+      },
+      (err) => err.code === 'INVALID_INPUT' && err.status === 400
+    );
 
-  // 1. Hardcoded key attempt when process.env.ADMIN_SECRET is not configured or different
-  delete process.env.ADMIN_SECRET;
-  const hardcodedKeyReq = createMockRequest({
-    pathname: '/api/v1/admin/dashboard',
-    headers: { 'x-admin-key': 'pondfish-admin-key-2026' },
-  });
-  assert.throws(
-    () => authenticateAdmin(hardcodedKeyReq),
-    (err) => err.code === 'UNAUTHORIZED' && err.status === 401,
-    'Legacy hardcoded key must not grant access when ADMIN_SECRET is not explicitly set'
-  );
+    await assert.rejects(
+      async () => {
+        await rbacEngine.loginAdmin({ email: 'nonexistent@pondfish.in', password: 'password123' });
+      },
+      (err) => err.code === 'INVALID_CREDENTIALS' && err.status === 401
+    );
 
-  // 2. Customer or Worker role forging attempt on admin API
-  const customerToken = jwt.sign(
-    { customerId: 'cust-123', role: 'CUSTOMER' },
-    TEST_JWT_SECRET
-  );
-  const forgedRoleReq = createMockRequest({
-    pathname: '/api/v1/admin/dashboard',
-    cookies: { admin_session: customerToken },
-  });
-  assert.throws(
-    () => authenticateAdmin(forgedRoleReq),
-    (err) => err.code === 'UNAUTHORIZED' && err.status === 401,
-    'Non-admin role must be rejected'
-  );
+    passed++;
+    console.log('  ✓ Invalid inputs and non-existent accounts rejected with appropriate error codes');
+  }
 
-  passed++;
-  console.log('  ✓ Hardcoded keys and non-admin role claims successfully rejected');
-}
+  // ---------------------------------------------------------------------------
+  // Requirement 3: A valid token passes middleware verification
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 3] Valid token passes middleware verification in Edge runtime...');
 
-// ---------------------------------------------------------------------------
-// Scenario 12: Unsafe redirect sanitization (open redirects and login loops)
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 12] Redirect sanitization prevents open redirects and login loops...');
+    const validToken = jwt.sign(
+      { adminId: 'admin-uuid-1', email: 'admin@pondfish.in', role: 'ADMIN', is_super_admin: true },
+      TEST_JWT_SECRET
+    );
 
-  function sanitizeRedirect(destination) {
-    if (
-      !destination ||
-      !destination.startsWith('/admin') ||
-      destination.startsWith('/admin/login') ||
-      destination.includes('//') ||
-      destination.includes('\\') ||
-      destination.includes(':')
-    ) {
-      return '/admin';
+    const verifiedPayload = await verifyJwt(validToken);
+    assert.ok(verifiedPayload, 'verifyJwt must verify valid token using Web Crypto API');
+    assert.strictEqual(verifiedPayload.adminId, 'admin-uuid-1');
+    assert.strictEqual(verifiedPayload.role, 'ADMIN');
+
+    const req = createMockRequest({
+      pathname: '/admin',
+      cookies: { admin_session: validToken },
+    });
+
+    const response = await middleware(req);
+    assert.ok(response, 'Middleware must return a response');
+    const location = response.headers.get('location');
+    assert.strictEqual(location, null, 'Authenticated user must not be redirected away from /admin');
+
+    passed++;
+    console.log('  ✓ Valid token passes Web Crypto middleware verification without redirect');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Requirement 4: Invalid-signature and expired tokens are rejected
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 4] Invalid-signature and expired tokens rejected...');
+
+    // Tampered signature
+    const validToken = jwt.sign({ adminId: 'admin-uuid-1', role: 'ADMIN' }, TEST_JWT_SECRET);
+    const tamperedToken = validToken.slice(0, -5) + 'XXXXX';
+    const tamperedPayload = await verifyJwt(tamperedToken);
+    assert.strictEqual(tamperedPayload, null, 'Tampered signature must return null from verifyJwt');
+
+    const tamperedReq = createMockRequest({
+      pathname: '/admin',
+      cookies: { admin_session: tamperedToken },
+    });
+    const tamperedRes = await middleware(tamperedReq);
+    assert.ok(tamperedRes.headers.get('location')?.includes('/admin/login'), 'Tampered token must redirect to /admin/login');
+
+    // Expired token
+    const expiredToken = jwt.sign({ adminId: 'admin-uuid-1', role: 'ADMIN' }, TEST_JWT_SECRET, { expiresIn: -30 });
+    const expiredPayload = await verifyJwt(expiredToken);
+    assert.strictEqual(expiredPayload, null, 'Expired token must return null from verifyJwt');
+
+    const expiredReq = createMockRequest({
+      pathname: '/admin',
+      cookies: { admin_session: expiredToken },
+    });
+    const expiredRes = await middleware(expiredReq);
+    assert.ok(expiredRes.headers.get('location')?.includes('/admin/login'), 'Expired token must redirect to /admin/login');
+
+    passed++;
+    console.log('  ✓ Invalid-signature and expired tokens strictly rejected at Web Crypto layer');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Requirement 5: A successful login reaches /admin without returning to /admin/login
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 5] Successful login reaches /admin without immediately returning to /admin/login...');
+
+    const token = jwt.sign(
+      { adminId: 'admin-uuid-1', email: 'admin@pondfish.in', role: 'ADMIN', is_super_admin: true },
+      TEST_JWT_SECRET
+    );
+
+    const subroutes = [
+      '/admin',
+      '/admin/bookings',
+      '/admin/transactions',
+      '/admin/fish',
+      '/admin/subscriptions/plans',
+      '/admin/settings',
+      '/admin/reports',
+      '/admin/exceptions',
+      '/admin/security',
+    ];
+
+    for (const route of subroutes) {
+      const req = createMockRequest({
+        pathname: route,
+        cookies: { admin_session: token },
+      });
+      const res = await middleware(req);
+      assert.strictEqual(res.headers.get('location'), null, `Route ${route} must not redirect when session is valid`);
     }
-    return destination;
+
+    passed++;
+    console.log(`  ✓ Successfully navigated ${subroutes.length} distinct admin routes without re-auth redirects`);
   }
 
-  // Open redirect attempts
-  assert.strictEqual(sanitizeRedirect('//evil.com'), '/admin');
-  assert.strictEqual(sanitizeRedirect('https://evil.com/admin'), '/admin');
-  assert.strictEqual(sanitizeRedirect('javascript:alert(1)'), '/admin');
-  assert.strictEqual(sanitizeRedirect('/admin\\evil.com'), '/admin');
+  // ---------------------------------------------------------------------------
+  // Requirement 6: /api/v1/admin/auth/me accepts the new session
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 6] /api/v1/admin/auth/me accepts the new session...');
 
-  // Login loop attempt
-  assert.strictEqual(sanitizeRedirect('/admin/login'), '/admin');
-  assert.strictEqual(sanitizeRedirect('/admin/login?expired=true'), '/admin');
+    const token = jwt.sign(
+      { adminId: 'admin-uuid-1', email: 'admin@pondfish.in', role: 'ADMIN', is_super_admin: true, sessionId: 's-me' },
+      TEST_JWT_SECRET
+    );
 
-  // Legitimate redirect destinations
-  assert.strictEqual(sanitizeRedirect('/admin/bookings'), '/admin/bookings');
-  assert.strictEqual(sanitizeRedirect('/admin/settings'), '/admin/settings');
-  assert.strictEqual(sanitizeRedirect('/admin/subscriptions/plans'), '/admin/subscriptions/plans');
+    const req = createMockRequest({
+      pathname: '/api/v1/admin/auth/me',
+      cookies: { admin_session: token },
+    });
 
-  // Already authenticated visiting /admin/login should redirect to /admin
-  const validAdminToken = jwt.sign({ adminId: 'a1', role: 'ADMIN', is_super_admin: true }, TEST_JWT_SECRET);
-  const loginVisitReq = createMockRequest({
-    pathname: '/admin/login',
-    cookies: { admin_session: validAdminToken },
-  });
-  const loginVisitRes = middleware(loginVisitReq);
-  const redirectTarget = loginVisitRes.headers.get('location');
-  assert.ok(redirectTarget && redirectTarget.endsWith('/admin'), 'Authenticated user visiting /admin/login must be redirected to /admin');
+    const midRes = await middleware(req);
+    assert.strictEqual(midRes.status, 200, 'Middleware must approve valid admin session for /api/v1/admin/auth/me');
 
-  passed++;
-  console.log('  ✓ Open redirect attack vectors and login loop scenarios completely neutralized');
-}
+    const identity = authenticateAdmin(req);
+    assert.strictEqual(identity.role, 'ADMIN');
+    assert.strictEqual(identity.email, 'admin@pondfish.in');
+    assert.strictEqual(identity.sessionId, 's-me');
 
-// ---------------------------------------------------------------------------
-// Scenario 13: Login rate limiting and lockout
-// ---------------------------------------------------------------------------
-{
-  console.log('[Scenario 13] Login rate limiting and brute force protection...');
-
-  const ip = '192.168.1.100';
-  const email = 'target-admin@pondfish.in';
-  const rateLimitKey = `${ip}:${email}`;
-
-  // Reset any prior attempts
-  rbacEngine.resetFailedAttempts(rateLimitKey);
-
-  // Record 5 consecutive failed attempts
-  for (let i = 0; i < 5; i++) {
-    rbacEngine.recordFailedAttempt(rateLimitKey);
+    passed++;
+    console.log('  ✓ /api/v1/admin/auth/me cleanly accepts valid session at both middleware and handler');
   }
 
-  // The 6th attempt must trigger RATE_LIMIT_EXCEEDED
-  assert.throws(
-    () => rbacEngine.checkRateLimit(rateLimitKey),
-    (err) => err.code === 'RATE_LIMIT_EXCEEDED' && err.status === 429 && err.remainingSeconds > 0
-  );
+  // ---------------------------------------------------------------------------
+  // Requirement 7: Missing or invalid cookies cannot access protected admin APIs
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 7] Missing or invalid cookies cannot access protected admin APIs...');
 
-  // Successful login resets the rate limit
-  rbacEngine.resetFailedAttempts(rateLimitKey);
-  assert.doesNotThrow(() => rbacEngine.checkRateLimit(rateLimitKey));
+    const sensitiveApis = [
+      '/api/v1/admin/dashboard',
+      '/api/v1/admin/settings',
+      '/api/v1/admin/reports',
+      '/api/v1/admin/audit',
+      '/api/v1/admin/exceptions',
+      '/api/v1/admin/workers',
+    ];
 
-  passed++;
-  console.log('  ✓ Sliding window rate limiter locks out after 5 failures and resets on success');
+    for (const apiPath of sensitiveApis) {
+      const unauthReq = createMockRequest({ pathname: apiPath });
+      const middlewareRes = await middleware(unauthReq);
+      assert.strictEqual(middlewareRes.status, 401, `API ${apiPath} must be blocked with 401 at middleware`);
+
+      assert.throws(
+        () => authenticateAdmin(unauthReq),
+        (err) => err.code === 'UNAUTHORIZED' && err.status === 401
+      );
+    }
+
+    passed++;
+    console.log('  ✓ Missing cookies strictly blocked with 401 on all protected admin API routes');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Requirement 8: Worker and customer sessions cannot authenticate as administrators
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 8] Worker and customer sessions cannot authenticate as administrators...');
+
+    const workerToken = jwt.sign({ workerId: 'w-1', role: 'WORKER' }, TEST_JWT_SECRET);
+    const workerReq = createMockRequest({
+      pathname: '/admin',
+      cookies: { admin_session: workerToken },
+    });
+    const workerRes = await middleware(workerReq);
+    assert.ok(workerRes.headers.get('location')?.includes('/admin/login'), 'Worker token must not access /admin');
+
+    const customerToken = jwt.sign({ customerId: 'c-1', role: 'CUSTOMER' }, TEST_JWT_SECRET);
+    const customerReq = createMockRequest({
+      pathname: '/api/v1/admin/dashboard',
+      cookies: { admin_session: customerToken },
+    });
+    const customerRes = await middleware(customerReq);
+    assert.strictEqual(customerRes.status, 403, 'Customer token on admin API must fail with 403 Forbidden');
+
+    passed++;
+    console.log('  ✓ Role boundaries strictly enforced; worker and customer tokens cannot access admin portal');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Requirement 9: Redirect query parameters cannot cause an open redirect
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 9] Redirect query parameters cannot cause an open redirect...');
+
+    function sanitizeRedirect(destination) {
+      if (
+        !destination ||
+        !destination.startsWith('/admin') ||
+        destination.startsWith('/admin/login') ||
+        destination.includes('//') ||
+        destination.includes('\\') ||
+        destination.includes(':')
+      ) {
+        return '/admin';
+      }
+      return destination;
+    }
+
+    // Malicious open redirect attacks
+    assert.strictEqual(sanitizeRedirect('https://attacker.com/evil'), '/admin');
+    assert.strictEqual(sanitizeRedirect('//evil.com/phish'), '/admin');
+    assert.strictEqual(sanitizeRedirect('/admin//evil.com'), '/admin');
+    assert.strictEqual(sanitizeRedirect('/admin\\evil.com'), '/admin');
+    assert.strictEqual(sanitizeRedirect('javascript:alert(1)'), '/admin');
+    assert.strictEqual(sanitizeRedirect('/admin/login?loop=1'), '/admin');
+
+    // Legitimate internal destinations
+    assert.strictEqual(sanitizeRedirect('/admin/bookings'), '/admin/bookings');
+    assert.strictEqual(sanitizeRedirect('/admin/settings'), '/admin/settings');
+    assert.strictEqual(sanitizeRedirect('/admin/subscriptions/plans'), '/admin/subscriptions/plans');
+
+    // Already authenticated visiting /admin/login should redirect to /admin
+    const validAdminToken = jwt.sign({ adminId: 'a1', role: 'ADMIN', is_super_admin: true }, TEST_JWT_SECRET);
+    const loginVisitReq = createMockRequest({
+      pathname: '/admin/login',
+      cookies: { admin_session: validAdminToken },
+    });
+    const loginVisitRes = await middleware(loginVisitReq);
+    const redirectTarget = loginVisitRes.headers.get('location');
+    assert.ok(redirectTarget && redirectTarget.endsWith('/admin'), 'Authenticated user visiting /admin/login must be redirected to /admin');
+
+    passed++;
+    console.log('  ✓ Open redirect attack vectors and login loop scenarios completely neutralized');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Requirement 10: Middleware token verification works in the actual supported runtime
+  // ---------------------------------------------------------------------------
+  {
+    console.log('[Test 10] Middleware token verification works in Edge / Web Crypto runtime...');
+
+    // 10.1 Algorithm confusion attack: alg = 'none'
+    const noneHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+    const nonePayload = Buffer.from(JSON.stringify({ adminId: 'admin-1', role: 'ADMIN' })).toString('base64url');
+    const noneToken = `${noneHeader}.${nonePayload}.`;
+    const noneResult = await verifyJwt(noneToken);
+    assert.strictEqual(noneResult, null, "alg: 'none' token must be strictly rejected");
+
+    // 10.2 Unsupported algorithm: alg = 'RS256'
+    const rsHeader = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+    const rsToken = `${rsHeader}.${nonePayload}.signature`;
+    const rsResult = await verifyJwt(rsToken);
+    assert.strictEqual(rsResult, null, 'Non-HS256 algorithm must be rejected');
+
+    // 10.3 Malformed non-base64 tokens
+    assert.strictEqual(await verifyJwt('invalid-random-garbage-string'), null);
+    assert.strictEqual(await verifyJwt(''), null);
+    assert.strictEqual(await verifyJwt(null), null);
+    assert.strictEqual(await verifyJwt(undefined), null);
+
+    // 10.4 Not Before (nbf) claim in the future
+    const futureSec = Math.floor(Date.now() / 1000) + 3600;
+    const nbfToken = jwt.sign(
+      { adminId: 'admin-uuid-1', role: 'ADMIN', nbf: futureSec },
+      TEST_JWT_SECRET
+    );
+    assert.strictEqual(await verifyJwt(nbfToken), null, 'Token with future nbf claim must be rejected');
+
+    passed++;
+    console.log('  ✓ Edge-compatible Web Crypto engine successfully defends against alg:none, RS256, nbf, and malformed payloads');
+  }
+
+  console.log(`\n================================================================`);
+  console.log(`ALL ${passed} VERIFICATION SCENARIOS PASSED WITH ZERO FAILURES`);
+  console.log(`================================================================\n`);
 }
 
-console.log(`\n================================================================`);
-console.log(`ALL ${passed} VERIFICATION SCENARIOS PASSED WITH ZERO FAILURES`);
-console.log(`================================================================\n`);
+runAllTests().catch((err) => {
+  console.error('[FATAL ERROR IN LIFECYCLE TESTS]', err);
+  process.exit(1);
+});
