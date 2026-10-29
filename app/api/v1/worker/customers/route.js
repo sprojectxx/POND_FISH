@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 const { verifyWorkerSessionAsync, extractWorkerToken } = require('../../../../../lib/engines/worker');
 const customerRepository = require('../../../../../lib/db/repositories/customerRepository');
+const { isDatabaseConnectionError } = require('../../../../../lib/db/pool');
 
 export const dynamic = 'force-dynamic';
 
@@ -80,13 +81,24 @@ export async function GET(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    const status = error.status || (error.code === 'FORBIDDEN' || error.code === 'WORKER_ACCOUNT_DISABLED' ? 403 : error.code === 'UNAUTHORIZED' ? 401 : 500);
+    let status = error.status;
+    if (!status) {
+      if (error.code === 'FORBIDDEN' || error.code === 'WORKER_ACCOUNT_DISABLED') {
+        status = 403;
+      } else if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED') {
+        status = 401;
+      } else if (error.code === 'SESSION_REGISTRY_UNAVAILABLE' || isDatabaseConnectionError(error)) {
+        status = 503;
+      } else {
+        status = 500;
+      }
+    }
     return NextResponse.json(
       {
         success: false,
         error: {
           code: error.code || 'CUSTOMER_SEARCH_FAILED',
-          message: error.message || 'Unable to complete customer search. Please try again.',
+          message: status === 500 ? 'Unable to complete customer search. Please try again.' : (error.message || 'Unable to complete customer search. Please try again.'),
         },
       },
       { status }

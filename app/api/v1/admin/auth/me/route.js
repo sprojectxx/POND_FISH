@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 const { authenticateAdminAsync } = require('../../../../../../lib/auth/admin-auth');
 const rbacEngine = require('../../../../../../lib/engines/rbac');
+const { isDatabaseConnectionError } = require('../../../../../../lib/db/pool');
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,24 @@ export async function GET(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    if (
+      error.code === 'SESSION_REGISTRY_UNAVAILABLE' ||
+      error.status === 503 ||
+      error.isConnectionError ||
+      isDatabaseConnectionError(error)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'SESSION_REGISTRY_UNAVAILABLE',
+            message: 'Session verification temporarily unavailable. Please retry.',
+          },
+        },
+        { status: 503 }
+      );
+    }
+
     if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED') {
       return NextResponse.json(
         {
@@ -60,13 +79,13 @@ export async function GET(request) {
       );
     }
 
-    console.error('[API ERROR] GET /api/v1/admin/auth/me:', error);
+    console.error('[API ERROR] GET /api/v1/admin/auth/me:', error.message);
     return NextResponse.json(
       {
         success: false,
         error: {
-          code: 'PROFILE_FETCH_FAILED',
-          message: error.message,
+          code: 'INTERNAL_ERROR',
+          message: 'An unexpected internal error occurred.',
         },
       },
       { status: 500 }

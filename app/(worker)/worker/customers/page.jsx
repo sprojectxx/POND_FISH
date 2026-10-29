@@ -7,7 +7,7 @@
  * view subscription status and credit balance, and initiate physical bill scanning.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -19,40 +19,84 @@ export default function WorkerCustomerSearchPage() {
   const [error, setError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
 
+  const abortControllerRef = useRef(null);
+  const lastSearchSeqRef = useRef(0);
+  const lastExecutedQueryRef = useRef('');
+
   const performSearch = useCallback(async (query) => {
     const trimmed = (query || '').trim();
     if (!trimmed || trimmed.length < 2) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      lastSearchSeqRef.current += 1;
+      lastExecutedQueryRef.current = '';
       setCustomers([]);
       setHasSearched(false);
+      setLoading(false);
+      setError(null);
       return;
     }
 
+    if (trimmed === lastExecutedQueryRef.current) {
+      return;
+    }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const currentSeq = ++lastSearchSeqRef.current;
     setLoading(true);
     setError(null);
 
     try {
       const res = await fetch(`/api/v1/worker/customers?search=${encodeURIComponent(trimmed)}`, {
         credentials: 'include',
+        signal: controller.signal,
       });
 
       const json = await res.json();
+
+      if (currentSeq !== lastSearchSeqRef.current) {
+        // Stale search response arrived out of order; discard silently
+        return;
+      }
+
       if (!res.ok || !json.success) {
-        if (res.status === 401 || res.status === 403) {
+        if (res.status === 401 || (res.status === 403 && json.error?.code === 'WORKER_ACCOUNT_DISABLED')) {
           localStorage.removeItem('pondfish_worker_token');
           localStorage.removeItem('pondfish_worker_info');
           router.replace('/worker/login');
           return;
         }
-        setError(json.error?.message || 'Failed to search customers.');
+        if (res.status === 403) {
+          setError(json.error?.message || 'Store access denied. Worker lacks assignment to this store.');
+          return;
+        }
+        // Handle 500, 503, or temporary DB/network failure safely without logging worker out
+        setError(json.error?.message || 'Customer search is temporarily unavailable. Please try again.');
         return;
       }
 
       setCustomers(json.data || []);
       setHasSearched(true);
-    } catch {
+      lastExecutedQueryRef.current = trimmed;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        return;
+      }
+      if (currentSeq !== lastSearchSeqRef.current) {
+        return;
+      }
+      console.error('[WorkerCustomerSearch] Search error:', err);
       setError('Network communication failed. Please check your connection and retry.');
     } finally {
-      setLoading(false);
+      if (currentSeq === lastSearchSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [router]);
 
@@ -62,13 +106,28 @@ export default function WorkerCustomerSearchPage() {
       if (searchTerm.trim().length >= 2) {
         performSearch(searchTerm);
       } else {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+        lastSearchSeqRef.current += 1;
+        lastExecutedQueryRef.current = '';
         setCustomers([]);
         setHasSearched(false);
+        setLoading(false);
       }
     }, 350);
 
     return () => clearTimeout(timer);
   }, [searchTerm, performSearch]);
+
+  // Clean up any pending network requests on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const handleSelectCustomer = (customer) => {
     const query = new URLSearchParams({

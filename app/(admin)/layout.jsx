@@ -7,7 +7,7 @@
  * - Slice 13 Scope: Admin Access Control, Security & Session Governance
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -20,9 +20,13 @@ export default function AdminLayout({ children }) {
   const [adminUser, setAdminUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);
   const [networkError, setNetworkError] = useState(false);
+  const [serviceError, setServiceError] = useState(null);
+  const [permissionError, setPermissionError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     setMounted(true);
@@ -46,24 +50,59 @@ export default function AdminLayout({ children }) {
     if (isLoginPage) {
       setCheckingAuth(false);
       setNetworkError(false);
+      setServiceError(null);
+      setPermissionError(null);
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setCheckingAuth(true);
     setNetworkError(false);
+    setServiceError(null);
+    setPermissionError(null);
 
     try {
       const res = await fetch('/api/v1/admin/auth/me', {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
+        signal: controller.signal,
       });
 
-      if (!res.ok || res.status === 401 || res.status === 403) {
+      // 401: Confirmed unauthenticated / expired / revoked session -> redirect to login
+      if (res.status === 401) {
         if (typeof window !== 'undefined') {
           localStorage.removeItem('pondfish_admin_user');
-          window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
+          const currentPath = window.location.pathname || '/admin';
+          window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(currentPath)}`;
         }
+        return;
+      }
+
+      // 403: Role / permission denial -> show access denied, do NOT redirect-loop to login
+      if (res.status === 403) {
+        setPermissionError('Administrative privileges required to access this portal.');
+        setAdminUser(null);
+        return;
+      }
+
+      // Handle server/database infrastructure errors (500, 502, 503, etc.) without redirecting or clearing session
+      if (!res.ok) {
+        let errorMsg = 'Session verification temporarily unavailable. Please retry.';
+        try {
+          const errJson = await res.json();
+          if (errJson?.error?.message) {
+            errorMsg = errJson.error.message;
+          }
+        } catch {}
+        console.warn(`[AdminLayout] Server returned status ${res.status}: ${errorMsg}`);
+        setServiceError({ status: res.status, message: errorMsg });
+        setAdminUser(null);
         return;
       }
 
@@ -74,26 +113,34 @@ export default function AdminLayout({ children }) {
           localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
         }
       } else {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('pondfish_admin_user');
-          window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(pathname || '/admin')}`;
-        }
-        return;
+        console.warn('[AdminLayout] Incomplete auth response:', data);
+        setServiceError({ status: 200, message: 'Invalid session profile data received.' });
+        setAdminUser(null);
       }
     } catch (err) {
-      // Handle network errors separately from confirmed unauthorized responses
-      console.error('[AdminLayout] Session verification network error:', err);
+      if (err.name === 'AbortError') {
+        return;
+      }
+      console.error('[AdminLayout] Session verification error:', err);
       setNetworkError(true);
+      setAdminUser(null);
     } finally {
-      setCheckingAuth(false);
+      if (!controller.signal.aborted) {
+        setCheckingAuth(false);
+      }
     }
-  }, [isLoginPage, pathname]);
+  }, [isLoginPage]);
 
   // Verify administrative credentials on mount or when navigating to/from login page
-  // Does NOT re-verify on every internal route navigation to avoid redundant latency
+  // Does NOT re-verify on every internal route navigation to prevent redundant latency and connection pool spikes
   useEffect(() => {
     verifyAuth();
-  }, [isLoginPage, verifyAuth]);
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [verifyAuth]);
 
   // Handle ESC key and scroll lock for mobile drawer
   useEffect(() => {
@@ -161,8 +208,16 @@ export default function AdminLayout({ children }) {
     );
   }
 
-  // If network connection failed during authentication check, display clear retry screen rather than misleading authenticated shell
-  if (networkError && !adminUser) {
+  // If network connection failed or server is temporarily unavailable during authentication check, display clear retry screen rather than misleading authenticated shell
+  if ((networkError || serviceError) && !adminUser) {
+    const is503 = serviceError?.status === 503;
+    const title = serviceError
+      ? (is503 ? 'Service Temporarily Unavailable' : 'Server Connection Issue')
+      : 'Connection Failure';
+    const message = serviceError
+      ? (serviceError.message || 'The database is temporarily busy. Your session is preserved. Please click retry.')
+      : 'Unable to verify administrative credentials due to a transient network error. Please check your internet connection and retry.';
+
     return (
       <div style={{
         minHeight: '100vh',
@@ -191,9 +246,9 @@ export default function AdminLayout({ children }) {
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <div style={{ fontSize: '18px', fontWeight: '800', color: '#0F2C59', marginBottom: '8px' }}>Connection Failure</div>
+          <div style={{ fontSize: '18px', fontWeight: '800', color: '#0F2C59', marginBottom: '8px' }}>{title}</div>
           <p style={{ fontSize: '13px', color: '#64748B', lineHeight: '1.6', margin: '0 0 24px' }}>
-            Unable to verify administrative credentials due to a transient network error. Please check your internet connection and retry.
+            {message}
           </p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <button
@@ -225,6 +280,60 @@ export default function AdminLayout({ children }) {
               }}
             >
               Sign In Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If authorization was denied (HTTP 403), display clear permission error rather than redirect loop to login
+  if (permissionError && !adminUser) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#F0F5FA',
+        color: '#0F2C59',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        padding: '24px',
+      }}>
+        <div style={{
+          maxWidth: '440px',
+          width: '100%',
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #E2E8F0',
+          padding: '36px 28px',
+          textAlign: 'center',
+          boxShadow: '0 8px 24px rgba(15, 44, 89, 0.08)',
+        }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#FEF3C7', color: '#D97706', marginBottom: '16px' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </div>
+          <div style={{ fontSize: '18px', fontWeight: '800', color: '#0F2C59', marginBottom: '8px' }}>Access Denied</div>
+          <p style={{ fontSize: '13px', color: '#64748B', lineHeight: '1.6', margin: '0 0 24px' }}>
+            {permissionError}
+          </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '10px 20px',
+                background: '#1E56A0',
+                color: '#FFFFFF',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '700',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Sign In with Different Account
             </button>
           </div>
         </div>
