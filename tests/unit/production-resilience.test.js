@@ -386,3 +386,204 @@ test('Production Resilience: Additional Regression Tests', async (t) => {
     }
   });
 });
+
+test('Production Resilience: Worker Engine Regression & Cache Isolation', async (t) => {
+  const workerEngine = require('../../lib/engines/worker');
+  const workerRepo = require('../../lib/db/repositories/workerRepository');
+  const bookingRepo = require('../../lib/db/repositories/bookingRepository');
+  const inventoryRepo = require('../../lib/db/repositories/inventoryRepository');
+  const auditEngine = require('../../lib/engines/audit');
+  const origQuery = pool.query;
+
+  await t.test('loadWorkerSessionRegistry enforces 2-second in-process TTL cache', async () => {
+    let dbQueryCount = 0;
+    pool.query = async (text, params) => {
+      if (typeof text === 'string' && text.includes('FROM settings WHERE key = $1')) {
+        dbQueryCount++;
+        return {
+          rows: [{
+            value: JSON.stringify({
+              'sess-1': { expiresAt: Date.now() + 60000, workerId: 'w-1' }
+            })
+          }]
+        };
+      }
+      return origQuery.apply(pool, [text, params]);
+    };
+
+    try {
+      workerEngine.invalidateWorkerSessionRegistryCache();
+      
+      // First call: hits DB
+      const reg1 = await workerEngine.loadWorkerSessionRegistry();
+      assert.strictEqual(dbQueryCount, 1, 'First call must query DB');
+      assert.ok(reg1['sess-1'], 'Registry must contain sess-1');
+
+      // Second call immediately within TTL: hits cache, does not query DB
+      const reg2 = await workerEngine.loadWorkerSessionRegistry();
+      assert.strictEqual(dbQueryCount, 1, 'Second call within TTL must hit cache without querying DB');
+      assert.deepStrictEqual(reg2, reg1);
+
+      // Invalidate cache: next call must query DB
+      workerEngine.invalidateWorkerSessionRegistryCache();
+      const reg3 = await workerEngine.loadWorkerSessionRegistry();
+      assert.strictEqual(dbQueryCount, 2, 'Call after cache invalidation must query DB');
+      assert.ok(reg3['sess-1']);
+    } finally {
+      pool.query = origQuery;
+      workerEngine.invalidateWorkerSessionRegistryCache();
+    }
+  });
+
+  await t.test('completeBookingOrder executes transactional fulfillment without returning session registry', async () => {
+    const origGetPool = pool.getPool;
+    let clientReleased = false;
+    let queryLog = [];
+
+    const mockClient = {
+      query: async (sql, params) => {
+        const s = typeof sql === 'string' ? sql.trim() : '';
+        queryLog.push(s);
+        if (s === 'BEGIN') return {};
+        if (s.startsWith('SELECT * FROM bookings')) {
+          return {
+            rows: [{
+              id: 'b-100',
+              store_id: 'store-alpha',
+              status: 'CONFIRMED',
+              customer_id: 'cust-1',
+              booking_code: 'BK-100',
+              total_amount: 500,
+              sub_credit_used: 0,
+              razorpay_paid: 500,
+              expires_at: new Date(Date.now() + 3600000).toISOString(),
+            }],
+          };
+        }
+        if (s.startsWith('SELECT * FROM booking_items')) {
+          return {
+            rows: [{
+              id: 'item-1',
+              booking_id: 'b-100',
+              fish_id: 'fish-1',
+              quantity_kg: 2,
+            }],
+          };
+        }
+        if (s === 'COMMIT') return {};
+        if (s === 'ROLLBACK') return {};
+        return { rows: [] };
+      },
+      release: () => {
+        clientReleased = true;
+      },
+    };
+
+    const origConnect = pool.getPool().connect;
+    pool.getPool().connect = async () => mockClient;
+
+    const origConsume = inventoryRepo.consumeReservedInventoryAtomic;
+    const origCreateTx = bookingRepo.createTransactionAtomic;
+    const origUpdateStatus = bookingRepo.updateBookingStatus;
+    const origFindBooking = bookingRepo.findBookingForWorker;
+    const origAuditLog = auditEngine.recordAuditLog;
+
+    let inventoryConsumed = false;
+    let transactionCreated = false;
+    let statusUpdated = false;
+    let auditLogged = false;
+
+    inventoryRepo.consumeReservedInventoryAtomic = async () => {
+      inventoryConsumed = true;
+    };
+    bookingRepo.createTransactionAtomic = async () => {
+      transactionCreated = true;
+      return { id: 'tx-100', total_amount: 500 };
+    };
+    bookingRepo.updateBookingStatus = async () => {
+      statusUpdated = true;
+    };
+    bookingRepo.findBookingForWorker = async () => ({
+      id: 'b-100',
+      status: 'COMPLETED',
+      booking_code: 'BK-100',
+    });
+    auditEngine.recordAuditLog = async () => {
+      auditLogged = true;
+      return { id: 'audit-1' };
+    };
+
+    try {
+      const result = await workerEngine.completeBookingOrder({
+        bookingId: 'b-100',
+        workerId: 'w-1',
+        workerStoreId: 'store-alpha',
+      });
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.booking.id, 'b-100');
+      assert.strictEqual(result.transaction.id, 'tx-100');
+      assert.strictEqual(inventoryConsumed, true, 'Inventory must be consumed atomically');
+      assert.strictEqual(transactionCreated, true, 'Transaction record must be created');
+      assert.strictEqual(statusUpdated, true, 'Booking status must be updated');
+      assert.strictEqual(auditLogged, true, 'Audit log must be recorded');
+      assert.strictEqual(clientReleased, true, 'Client must be released');
+      assert.ok(queryLog.includes('BEGIN'), 'Must begin transaction');
+      assert.ok(queryLog.includes('COMMIT'), 'Must commit transaction');
+      // Verify it did NOT return activeRegistry
+      assert.strictEqual(result['sess-1'], undefined, 'Must not return session registry');
+    } finally {
+      pool.getPool().connect = origConnect;
+      inventoryRepo.consumeReservedInventoryAtomic = origConsume;
+      bookingRepo.createTransactionAtomic = origCreateTx;
+      bookingRepo.updateBookingStatus = origUpdateStatus;
+      bookingRepo.findBookingForWorker = origFindBooking;
+      auditEngine.recordAuditLog = origAuditLog;
+    }
+  });
+
+  await t.test('updateWorkerByAdmin returns updated worker object and handles store reassignment', async () => {
+    const origFind = workerRepo.findWorkerById;
+    const origUpdate = workerRepo.updateWorker;
+    const origAuditLog = auditEngine.recordAuditLog;
+
+    workerRepo.findWorkerById = async (id) => ({
+      id,
+      name: 'Test Worker',
+      mobile_number: '9876543210',
+      store_id: 'store-alpha',
+      active: true,
+    });
+
+    let updatedParams = null;
+    workerRepo.updateWorker = async (id, updates) => {
+      updatedParams = updates;
+      return {
+        id,
+        name: updates.name || 'Test Worker',
+        mobile_number: updates.mobile_number || '9876543210',
+        store_id: updates.store_id || 'store-alpha',
+        active: updates.active !== undefined ? updates.active : true,
+      };
+    };
+    auditEngine.recordAuditLog = async () => ({ id: 'audit-1' });
+
+    try {
+      const result = await workerEngine.updateWorkerByAdmin(
+        'w-1',
+        { store_id: 'store-beta' },
+        { actorId: 'admin-1', ip: '127.0.0.1' }
+      );
+
+      assert.strictEqual(result.id, 'w-1');
+      assert.strictEqual(result.store_id, 'store-beta');
+      assert.strictEqual(updatedParams.store_id, 'store-beta');
+      // Ensure it returned the worker object, not a session registry
+      assert.strictEqual(result['sess-1'], undefined);
+    } finally {
+      workerRepo.findWorkerById = origFind;
+      workerRepo.updateWorker = origUpdate;
+      auditEngine.recordAuditLog = origAuditLog;
+    }
+  });
+});
