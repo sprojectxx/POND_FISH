@@ -4,8 +4,12 @@
  * Traceability: ADMIN-01 — Admin Login Specification
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server.js';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 const rbacEngine = require('../../../../../../lib/engines/rbac');
+const { isDatabaseConnectionError } = require('../../../../../../lib/db/pool');
 
 export const dynamic = 'force-dynamic';
 
@@ -71,12 +75,41 @@ export async function POST(request) {
       );
     }
 
+    if (
+      error.code === 'SESSION_REGISTRY_UNAVAILABLE' ||
+      error.status === 503 ||
+      error.isConnectionError ||
+      isDatabaseConnectionError(error)
+    ) {
+      console.error('[API ERROR] POST /api/v1/admin/auth/login: Database or session registry unavailable:', error.message);
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'DATABASE_UNAVAILABLE',
+            message: 'Authentication service is temporarily unavailable. Please retry in a few moments.',
+          },
+        },
+        { status: 503 }
+      );
+    }
+
     const isAuthConfigError = error.code === 'MISSING_AUTH_CONFIG' || (error.message && error.message.includes('JWT_SECRET'));
     if (isAuthConfigError) {
       console.error('[AUTH CONFIG ERROR] FATAL: JWT_SECRET environment variable is missing in production runtime.');
-    } else {
-      console.error('[API ERROR] POST /api/v1/admin/auth/login:', error);
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'AUTH_CONFIG_ERROR',
+            message: 'Authentication service configuration error.',
+          },
+        },
+        { status: 500 }
+      );
     }
+
+    console.error('[API ERROR] POST /api/v1/admin/auth/login:', error);
     return NextResponse.json(
       {
         success: false,

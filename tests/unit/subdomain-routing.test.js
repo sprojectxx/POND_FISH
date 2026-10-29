@@ -112,5 +112,53 @@ test('Subdomain Routing Unit Tests', async (t) => {
     const location = res.headers.get('location');
     assert.ok(location.includes('/login'), `Expected redirect to /login, got: ${location}`);
   });
-});
+  await t.test('10. Production custom domain pondfish.in/ passes through to public portal', async () => {
+    const req = new Request('https://pondfish.in/', {
+      headers: { host: 'pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    assert.strictEqual(res.headers.get('x-middleware-rewrite'), null, 'Apex domain must not be rewritten');
+  });
 
+  await t.test('11. Production custom domain admin.pondfish.in/ redirects unauthenticated admin to /login', async () => {
+    const req = new Request('https://admin.pondfish.in/', {
+      headers: { host: 'admin.pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    assert.strictEqual(res.status, 307);
+    const location = res.headers.get('location');
+    assert.ok(location.includes('/login'), `Expected redirect to /login, got: ${location}`);
+  });
+
+  await t.test('12. Production custom domain worker.pondfish.in/ redirects unauthenticated worker to /login', async () => {
+    const req = new Request('https://worker.pondfish.in/', {
+      headers: { host: 'worker.pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    assert.strictEqual(res.status, 307);
+    const location = res.headers.get('location');
+    assert.ok(location.includes('/login'), `Expected redirect to /login, got: ${location}`);
+  });
+
+  await t.test('13. Production custom domain tv.pondfish.in/ rewrites internally to /tv', async () => {
+    const req = new Request('https://tv.pondfish.in/', {
+      headers: { host: 'tv.pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    const rewriteHeader = res.headers.get('x-middleware-rewrite');
+    assert.ok(rewriteHeader && rewriteHeader.includes('/tv'), `Expected rewrite to /tv, got: ${rewriteHeader}`);
+  });
+
+  await t.test('14. Production custom domain www.pondfish.in/ passes through to public portal', async () => {
+    const req = new Request('https://www.pondfish.in/', {
+      headers: { host: 'www.pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    assert.strictEqual(res.headers.get('x-middleware-rewrite'), null, 'www domain must not be rewritten');
+  });
+});

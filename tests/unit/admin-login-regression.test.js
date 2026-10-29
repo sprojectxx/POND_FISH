@@ -202,6 +202,49 @@ test('Admin Login & Multi-Portal Authentication Regression Suite', async (t) => 
     );
   });
 
+  await t.test('5b. POST /api/v1/admin/auth/login returns 503 DATABASE_UNAVAILABLE on database connection exhaustion', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = TEST_SECRET;
+
+    adminRepository.findAdminByEmail = async () => {
+      const dbErr = new Error('EMAXCONNSESSION: max clients reached in session mode - max clients are limited to pool_size:15');
+      dbErr.code = 'EMAXCONNSESSION';
+      throw dbErr;
+    };
+
+    const { POST } = await import('../../app/api/v1/admin/auth/login/route.js');
+    const req = new Request('https://admin.pondfish.in/api/v1/admin/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@pondfish.in', password: 'test' }),
+    });
+    const res = await POST(req);
+    assert.strictEqual(res.status, 503);
+    const body = await res.json();
+    assert.strictEqual(body.success, false);
+    assert.strictEqual(body.error.code, 'DATABASE_UNAVAILABLE');
+  });
+
+  await t.test('5c. POST /api/v1/admin/auth/login returns 500 AUTH_CONFIG_ERROR when JWT_SECRET missing in production', async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.JWT_SECRET;
+
+    adminRepository.findAdminByEmail = async () => MOCK_ADMIN;
+    adminRepository.verifyPassword = () => true;
+
+    const { POST } = await import('../../app/api/v1/admin/auth/login/route.js');
+    const req = new Request('https://admin.pondfish.in/api/v1/admin/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@pondfish.in', password: 'test' }),
+    });
+    const res = await POST(req);
+    assert.strictEqual(res.status, 500);
+    const body = await res.json();
+    assert.strictEqual(body.success, false);
+    assert.strictEqual(body.error.code, 'AUTH_CONFIG_ERROR');
+  });
+
   await t.test('6. Middleware Edge Runtime JWT verification matches issued tokens', async () => {
     process.env.JWT_SECRET = TEST_SECRET;
 
