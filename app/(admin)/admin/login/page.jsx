@@ -92,17 +92,26 @@ export default function AdminLoginPage() {
         localStorage.setItem('pondfish_admin_user', JSON.stringify(data.admin));
 
         const params = new URLSearchParams(window.location.search);
-        let destination = params.get('redirect') || '/admin';
+        let destination = (params.get('redirect') || '').trim();
+
+        // Detect if accessing through an admin portal subdomain or direct path
+        const host = (window.location.hostname || '').toLowerCase();
+        const isSubdomain = host.startsWith('admin.') || host.startsWith('pond-fish-admin') || host.includes('-admin-') || host.includes('-admin.');
+        const defaultDest = isSubdomain ? '/' : '/admin';
 
         // Validate redirect destination: prevent open redirects, protocol injection, and login loops
         if (
-          !destination.startsWith('/admin') ||
+          !destination ||
+          !destination.startsWith('/') ||
+          destination === '/login' ||
+          destination.startsWith('/login?') ||
+          destination.startsWith('/login/') ||
           destination.startsWith('/admin/login') ||
           destination.includes('//') ||
           destination.includes('\\') ||
           destination.includes(':')
         ) {
-          destination = '/admin';
+          destination = defaultDest;
         }
 
         window.location.href = destination;

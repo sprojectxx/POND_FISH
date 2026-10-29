@@ -24,7 +24,7 @@ export default function WorkerLayout({ children }) {
   const [logoutError, setLogoutError] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const isLoginPage = pathname === '/worker/login';
+  const isLoginPage = pathname === '/worker/login' || pathname?.startsWith('/worker/login') || pathname === '/login' || pathname?.startsWith('/login');
 
   useEffect(() => {
     setMounted(true);

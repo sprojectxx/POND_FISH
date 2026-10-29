@@ -15,7 +15,7 @@ import './admin.css';
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
-  const isLoginPage = pathname === '/admin/login' || pathname?.startsWith('/admin/login');
+  const isLoginPage = pathname === '/admin/login' || pathname?.startsWith('/admin/login') || pathname === '/login' || pathname?.startsWith('/login');
 
   const [adminUser, setAdminUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);

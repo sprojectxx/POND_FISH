@@ -71,7 +71,12 @@ export async function POST(request) {
       );
     }
 
-    console.error('[API ERROR] POST /api/v1/admin/auth/login:', error);
+    const isAuthConfigError = error.code === 'MISSING_AUTH_CONFIG' || (error.message && error.message.includes('JWT_SECRET'));
+    if (isAuthConfigError) {
+      console.error('[AUTH CONFIG ERROR] FATAL: JWT_SECRET environment variable is missing in production runtime.');
+    } else {
+      console.error('[API ERROR] POST /api/v1/admin/auth/login:', error);
+    }
     return NextResponse.json(
       {
         success: false,

@@ -9,7 +9,9 @@ function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing in production.');
+      const err = new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing in production.');
+      err.code = 'MISSING_AUTH_CONFIG';
+      throw err;
     }
     return 'pondfish-dev-only-secret-do-not-use-in-production';
   }
@@ -189,8 +191,22 @@ export async function middleware(request) {
   // Session token extraction from cookies or Authorization header
   const authHeader = request.headers?.get ? request.headers.get('authorization') : null;
   const bearerToken = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7).trim() : null;
-  const adminCookie = request.cookies?.get ? request.cookies.get('admin_session')?.value : null;
-  const workerCookie = request.cookies?.get ? (request.cookies.get('worker_session')?.value || request.cookies.get('pf_session')?.value) : null;
+  let adminCookie = request.cookies?.get ? request.cookies.get('admin_session')?.value : null;
+  let workerCookie = request.cookies?.get ? (request.cookies.get('worker_session')?.value || request.cookies.get('pf_session')?.value) : null;
+
+  if (!adminCookie || !workerCookie) {
+    const rawCookie = request.headers?.get ? request.headers.get('cookie') : '';
+    if (rawCookie) {
+      if (!adminCookie) {
+        const match = rawCookie.match(/(?:^|;\s*)admin_session=([^;]+)/);
+        if (match) adminCookie = decodeURIComponent(match[1]).trim();
+      }
+      if (!workerCookie) {
+        const match = rawCookie.match(/(?:^|;\s*)(?:worker_session|pf_session)=([^;]+)/);
+        if (match) workerCookie = decodeURIComponent(match[1]).trim();
+      }
+    }
+  }
 
   const adminToken = adminCookie || bearerToken;
   const workerToken = workerCookie || bearerToken; // Worker token MUST never inherit adminCookie
