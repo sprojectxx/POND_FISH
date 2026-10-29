@@ -587,3 +587,189 @@ test('Production Resilience: Worker Engine Regression & Cache Isolation', async 
     }
   });
 });
+
+
+test('Production Resilience: Connection Pool Lifecycle, Metrics & Query Serialization', async (t) => {
+  const { getPool, getPoolMetrics, resetPool } = require('../../lib/db/pool');
+  const auditEngine = require('../../lib/engines/audit');
+  const workerEngine = require('../../lib/engines/worker');
+  const bookingEngine = require('../../lib/engines/booking');
+  const bookingRepo = require('../../lib/db/repositories/bookingRepository');
+  const inventoryRepo = require('../../lib/db/repositories/inventoryRepository');
+  const customerRepo = require('../../lib/db/repositories/customerRepository');
+
+  await t.test('getPoolMetrics returns active pool statistics without exposing connection secrets', () => {
+    const metrics = getPoolMetrics();
+    assert.ok(['ACTIVE', 'CLOSED'].includes(metrics.status));
+    assert.strictEqual(typeof metrics.totalCount, 'number');
+    assert.strictEqual(typeof metrics.idleCount, 'number');
+    assert.strictEqual(typeof metrics.waitingCount, 'number');
+    assert.strictEqual(typeof metrics.max, 'number');
+    // Invariant: zero connection string, password, or url properties exposed
+    assert.strictEqual(metrics.password, undefined);
+    assert.strictEqual(metrics.connectionString, undefined);
+  });
+
+  await t.test('completeBookingOrder releases connection immediately after COMMIT, before audit logging', async () => {
+    let clientReleasedBeforeAudit = false;
+    let isClientReleased = false;
+
+    const mockClient = {
+      query: async (sql) => {
+        const s = typeof sql === 'string' ? sql.trim() : '';
+        if (s === 'BEGIN') return {};
+        if (s.startsWith('SELECT * FROM bookings')) {
+          return {
+            rows: [{
+              id: 'b-pool-test',
+              store_id: 'store-alpha',
+              status: 'CONFIRMED',
+              customer_id: 'cust-pool',
+              booking_code: 'BK-POOL-1',
+              total_amount: 300,
+              sub_credit_used: 0,
+              razorpay_paid: 300,
+              expires_at: new Date(Date.now() + 3600000).toISOString(),
+            }],
+          };
+        }
+        if (s.startsWith('SELECT * FROM booking_items')) {
+          return { rows: [{ id: 'item-p1', booking_id: 'b-pool-test', fish_id: 'fish-p1', quantity_kg: 1 }] };
+        }
+        if (s === 'COMMIT') return {};
+        if (s === 'ROLLBACK') return {};
+        return { rows: [] };
+      },
+      release: () => {
+        isClientReleased = true;
+      },
+    };
+
+    const origConnect = pool.getPool().connect;
+    pool.getPool().connect = async () => mockClient;
+
+    const origConsume = inventoryRepo.consumeReservedInventoryAtomic;
+    const origCreateTx = bookingRepo.createTransactionAtomic;
+    const origUpdateStatus = bookingRepo.updateBookingStatus;
+    const origFindBooking = bookingRepo.findBookingForWorker;
+    const origAuditLog = auditEngine.recordAuditLog;
+
+    inventoryRepo.consumeReservedInventoryAtomic = async () => {};
+    bookingRepo.createTransactionAtomic = async () => ({ id: 'tx-p1', total_amount: 300 });
+    bookingRepo.updateBookingStatus = async () => {};
+    bookingRepo.findBookingForWorker = async () => ({ id: 'b-pool-test', status: 'COMPLETED' });
+
+    auditEngine.recordAuditLog = async () => {
+      // Check whether client has ALREADY been released when audit log is triggered
+      if (isClientReleased) {
+        clientReleasedBeforeAudit = true;
+      }
+      return { id: 'audit-p1' };
+    };
+
+    try {
+      const res = await workerEngine.completeBookingOrder({
+        bookingId: 'b-pool-test',
+        workerId: 'w-pool',
+        workerStoreId: 'store-alpha',
+      });
+
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(isClientReleased, true, 'Client must be released');
+      assert.strictEqual(clientReleasedBeforeAudit, true, 'Client must be released immediately on COMMIT before audit logging');
+    } finally {
+      pool.getPool().connect = origConnect;
+      inventoryRepo.consumeReservedInventoryAtomic = origConsume;
+      bookingRepo.createTransactionAtomic = origCreateTx;
+      bookingRepo.updateBookingStatus = origUpdateStatus;
+      bookingRepo.findBookingForWorker = origFindBooking;
+      auditEngine.recordAuditLog = origAuditLog;
+    }
+  });
+
+  await t.test('cancelBooking releases connection immediately after COMMIT, before audit logging', async () => {
+    let clientReleasedBeforeAudit = false;
+    let isClientReleased = false;
+
+    const mockClient = {
+      query: async (sql) => {
+        const s = typeof sql === 'string' ? sql.trim() : '';
+        if (s === 'BEGIN') return {};
+        if (s.startsWith('SELECT * FROM bookings')) {
+          return {
+            rows: [{
+              id: 'b-cancel-test',
+              customer_id: 'cust-cancel',
+              status: 'CONFIRMED',
+              booking_code: 'BK-CANCEL-1',
+              sub_credit_used: 0,
+              razorpay_paid: 200,
+            }],
+          };
+        }
+        if (s.startsWith('SELECT * FROM booking_items')) {
+          return { rows: [] };
+        }
+        if (s === 'COMMIT') return {};
+        if (s === 'ROLLBACK') return {};
+        return { rows: [] };
+      },
+      release: () => {
+        isClientReleased = true;
+      },
+    };
+
+    const origConnect = pool.getPool().connect;
+    pool.getPool().connect = async () => mockClient;
+
+    const subRepo = require('../../lib/db/repositories/subscriptionRepository');
+    const origUpdateStatus = bookingRepo.updateBookingStatus;
+    const origAuditLog = auditEngine.recordAuditLog;
+    const origRestoreCredits = subRepo.restoreCustomerBookingCredits;
+
+    bookingRepo.updateBookingStatus = async () => ({ id: 'b-cancel-test', status: 'CANCELLED' });
+    subRepo.restoreCustomerBookingCredits = async () => ({ amountRestored: 200, resultingBalance: 200 });
+
+    auditEngine.recordAuditLog = async () => {
+      if (isClientReleased) {
+        clientReleasedBeforeAudit = true;
+      }
+      return { id: 'audit-cancel-1' };
+    };
+
+    try {
+      const res = await bookingEngine.cancelBooking({
+        customerId: 'cust-cancel',
+        bookingId: 'b-cancel-test',
+      });
+
+      assert.strictEqual(res.status, 'CANCELLED');
+      assert.strictEqual(isClientReleased, true, 'Client must be released');
+      assert.strictEqual(clientReleasedBeforeAudit, true, 'Client must be released immediately on COMMIT before audit logging');
+    } finally {
+      pool.getPool().connect = origConnect;
+      bookingRepo.updateBookingStatus = origUpdateStatus;
+      auditEngine.recordAuditLog = origAuditLog;
+      subRepo.restoreCustomerBookingCredits = origRestoreCredits;
+    }
+  });
+
+  await t.test('Serverless pool configuration activates max: 1 and idleTimeout: 1000ms when VERCEL environment is present', async () => {
+    const origVercel = process.env.VERCEL;
+    const origDbPoolMax = process.env.DB_POOL_MAX;
+    try {
+      process.env.VERCEL = '1';
+      delete process.env.DB_POOL_MAX;
+      await resetPool();
+      const p = getPool();
+      assert.strictEqual(p.options.max, 1, 'Serverless pool max should be bounded to 1 per instance');
+      assert.strictEqual(p.options.idleTimeoutMillis, 1000, 'Serverless idle timeout should be 1000ms');
+    } finally {
+      if (origVercel !== undefined) process.env.VERCEL = origVercel;
+      else delete process.env.VERCEL;
+      if (origDbPoolMax !== undefined) process.env.DB_POOL_MAX = origDbPoolMax;
+      else delete process.env.DB_POOL_MAX;
+      await resetPool();
+    }
+  });
+});
