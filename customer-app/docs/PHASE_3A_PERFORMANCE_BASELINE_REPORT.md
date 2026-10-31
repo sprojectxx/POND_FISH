@@ -9,6 +9,7 @@
 **Original Phase 3A Report Commit:** `e15da2d65ceeef09c850a5b08a384232a00c7269`  
 **Report Evidence-Correction Commit:** `63792f7aa042a4292413e3f035dc7ed9ba53ac94`  
 **Measurement Interpretation Commit:** `fdbcfdb99f6f7e01582e85becd9b746426255019`  
+**Evidence Precision Commit:** `2506f739de7ed65f4fa8c384bf9ea0b41b1ecd3b`  
 **Phase:** 3A — Empirical Measurement & Baseline Diagnosis Only  
 
 ---
@@ -92,6 +93,7 @@ The Android build configuration was inspected directly in [`customer-app/android
 | **Original Phase 3A SHA** | `e15da2d65ceeef09c850a5b08a384232a00c7269` | [Source-confirmed] | Original baseline report commit |
 | **Evidence-Correction SHA**| `63792f7aa042a4292413e3f035dc7ed9ba53ac94` | [Source-confirmed] | Report evidence-correction commit |
 | **Interpretation SHA**    | `fdbcfdb99f6f7e01582e85becd9b746426255019` | [Source-confirmed] | Measurement interpretation commit |
+| **Evidence Precision SHA**| `2506f739de7ed65f4fa8c384bf9ea0b41b1ecd3b` | [Source-confirmed] | Final Phase 3A evidence precision correction |
 
 > [!NOTE]
 > **Build Configuration Distinction**:
@@ -174,7 +176,7 @@ The following timeline presents an **illustrative stitched sequence** combining 
 The following table presents native Activity launch measurements alongside analytical estimates for time to first visible catalogue content.  
 **Measurement Source Distinction**: Native Activity startup was directly measured on Android via `am start-activity -W`. Network endpoint latencies were measured separately using Node.js `perf_hooks` querying `https://pondfish.in`. Profile and catalogue request durations were not captured as part of one simultaneous Android-device network trace. The cumulative totals represent an illustrative stitched estimate combining both sources, not a single unified device trace.
 
-| Stage | Cold Server / Cold App (Estimated) | Warm Server / Cold App (Observed Flow) | Warm Server / Warm App (Estimated) | Measurement Source & Classification |
+| Stage | Cold Server / Cold App (Estimated) | Warm Server / Cold App (Stitched Estimate) | Warm Server / Warm App (Estimated) | Measurement Source & Classification |
 | :--- | :---: | :---: | :---: | :--- |
 | **Native Activity Displayed** | 227.0 ms | 227.0 ms | 54.0 ms | Android `am start-activity -W` [Directly measured] |
 | **Splash Screen Timer Delay** | 600.0 ms | 600.0 ms | 0.0 ms | Source inspection of `SplashScreen.jsx` [Source-confirmed] |
@@ -514,7 +516,7 @@ Phase 3A is strictly a baseline measurement and documentation phase with no appl
   # cancelled 0
   # skipped 0
   # todo 0
-  # duration_ms 1419.20
+  # duration_ms 1404.8224
   ```
 - **Scope**: Re-executes all 58 unit tests covering Phase 1 responsiveness/auth-storage race handling and Phase 2 virtualization/filtering/image validation logic. Confirms 100% test pass rate with zero regressions.
 
