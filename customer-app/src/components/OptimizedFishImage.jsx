@@ -2,13 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 
 /**
+ * Validates whether a remote image URI is non-empty string.
+ *
+ * @param {string|null|undefined} uri
+ * @returns {boolean}
+ */
+export function isValidImageUri(uri) {
+  return Boolean(uri && typeof uri === 'string' && uri.trim().length > 0);
+}
+
+/**
  * OptimizedFishImage
  * 
- * Reusable product image component with graceful fallback handling:
+ * Reusable product image component providing safe remote image loading and error fallbacks:
  * 1. Validates remote URI presence before triggering native image decode.
- * 2. Catches remote network errors and 404s via onError to present fallback placeholder.
- * 3. Never speculatively rewrites image URLs with query params not supported by backend storage.
- * 4. Memoized to avoid image reloads on parent component state updates.
+ * 2. Catches remote network errors and 404s via onError to present a local fallback placeholder.
+ * 3. Does not modify or rewrite image URLs (no speculative CDN query parameters).
+ * 4. Memoized to avoid unnecessary image reloading on parent component re-renders.
  */
 function OptimizedFishImage({
   uri,
@@ -19,14 +29,13 @@ function OptimizedFishImage({
   testID,
 }) {
   const [hasError, setHasError] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
 
   // Reset error state if image URI prop changes
   useEffect(() => {
     setHasError(false);
   }, [uri]);
 
-  const hasValidUri = Boolean(uri && typeof uri === 'string' && uri.trim().length > 0);
+  const hasValidUri = isValidImageUri(uri);
 
   if (!hasValidUri || hasError) {
     return (
@@ -44,12 +53,7 @@ function OptimizedFishImage({
       source={{ uri }}
       style={style}
       resizeMode={resizeMode}
-      onError={() => {
-        setHasError(true);
-        setIsLoading(false);
-      }}
-      onLoadStart={() => setIsLoading(true)}
-      onLoadEnd={() => setIsLoading(false)}
+      onError={() => setHasError(true)}
       testID={testID || 'optimized-image'}
     />
   );
@@ -67,3 +71,4 @@ const styles = StyleSheet.create({
 });
 
 export default React.memo(OptimizedFishImage);
+

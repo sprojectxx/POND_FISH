@@ -27,8 +27,9 @@ import FreshnessBadge from '../components/FreshnessBadge';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyStateView from '../components/EmptyStateView';
 import ErrorStateView from '../components/ErrorStateView';
-import FishCard, { getCategoryBadgeStyle } from '../components/FishCard';
+import FishCard from '../components/FishCard';
 import OptimizedFishImage from '../components/OptimizedFishImage';
+import { filterFishCatalogue } from '../utils/catalogue-filters';
 
 /**
  * Prioritized data retrieval orchestrator for HomeScreen.
@@ -282,122 +283,14 @@ export default function HomeScreen({
     return fishList.filter((f) => f.pricing && f.pricing.hasDiscount);
   }, [fishList]);
 
-  // Client-side catalogue filter
+  // Client-side catalogue filter using pure production helper
   const filteredFishes = useMemo(() => {
-    return fishList.filter((item) => {
-      // 1. Category Filter
-      if (selectedCategoryId && item.categoryId !== selectedCategoryId) {
-        return false;
-      }
-
-      // 2. Availability Filter
-      if (availabilityFilter === 'BOOKABLE' && !item.onlineBookable) {
-        return false;
-      }
-      if (availabilityFilter === 'IN_STORE' && (!item.physicalAvailable || item.onlineBookable)) {
-        return false;
-      }
-      if (availabilityFilter === 'DISCOUNT' && (!item.pricing || !item.pricing.hasDiscount)) {
-        return false;
-      }
-
-      // 3. Search Filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const nameMatch = item.name && item.name.toLowerCase().includes(q);
-        const descMatch = item.description && item.description.toLowerCase().includes(q);
-        const catMatch = item.categoryName && item.categoryName.toLowerCase().includes(q);
-        if (!nameMatch && !descMatch && !catMatch) {
-          return false;
-        }
-      }
-
-      return true;
+    return filterFishCatalogue(fishList, {
+      categoryId: selectedCategoryId,
+      availability: availabilityFilter,
+      searchQuery,
     });
   }, [fishList, selectedCategoryId, availabilityFilter, searchQuery]);
-
-  const renderCategoryPills = useCallback(() => {
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryScroll}
-      >
-        <TouchableOpacity
-          style={[
-            styles.categoryPill,
-            selectedCategoryId === null && styles.categoryPillActive,
-          ]}
-          onPress={() => setSelectedCategoryId(null)}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.categoryPillText,
-              selectedCategoryId === null && styles.categoryPillTextActive,
-            ]}
-          >
-            All Fish
-          </Text>
-        </TouchableOpacity>
-
-        {categories.map((cat) => {
-          const isActive = selectedCategoryId === cat.id;
-          return (
-            <TouchableOpacity
-              key={cat.id}
-              style={[styles.categoryPill, isActive && styles.categoryPillActive]}
-              onPress={() => setSelectedCategoryId(isActive ? null : cat.id)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.categoryPillText,
-                  isActive && styles.categoryPillTextActive,
-                ]}
-              >
-                {cat.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-    );
-  }, [categories, selectedCategoryId]);
-
-  const renderAvailabilityFilters = useCallback(() => {
-    const filters = [
-      { key: 'ALL', label: 'All Catch' },
-      { key: 'BOOKABLE', label: '⚡ Online Bookable' },
-      { key: 'IN_STORE', label: '🏪 In-Store Only' },
-      { key: 'DISCOUNT', label: '🏷 Offers' },
-    ];
-
-    return (
-      <View style={styles.filterRow}>
-        {filters.map((f) => {
-          const isActive = availabilityFilter === f.key;
-          return (
-            <TouchableOpacity
-              key={f.key}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
-              onPress={() => setAvailabilityFilter(f.key)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  isActive && styles.filterChipTextActive,
-                ]}
-              >
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    );
-  }, [availabilityFilter]);
 
   const renderEmptyState = useCallback(() => {
     if (searchQuery.trim()) {
@@ -475,374 +368,48 @@ export default function HomeScreen({
   const renderListHeader = useMemo(() => {
     return (
       <View>
-        {/* Genuine Subscription Banner */}
-        {subData?.hasSubscription && subData.subscription ? (
-          <TouchableOpacity
-            style={styles.quotaBanner}
-            onPress={() => onNavigate('SUBSCRIPTION')}
-            activeOpacity={0.88}
-          >
-            <View style={styles.quotaMedalCircle}>
-              <Text style={{ fontSize: 16 }}>🎖</Text>
-            </View>
-            <View style={{ flex: 1, paddingHorizontal: 8 }}>
-              <Text style={styles.quotaTitle}>
-                {subData.subscription.planTitle || 'Gold Plan'}: {subData.subscription.weeklyRemainingKg ?? '0.6'} kg remaining for today
-              </Text>
-              <Text style={styles.quotaSubtitle}>
-                Resets in {subData.subscription.daysRemaining ?? '2'} days · {subData.subscription.weeklyClaimedKg ?? '1.4'} kg claimed this week
-              </Text>
-            </View>
-            <View style={styles.rechargeBtn}>
-              <Text style={styles.rechargeBtnText}>Recharge</Text>
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.quotaBanner}
-            onPress={() => onNavigate('SUBSCRIPTION')}
-            activeOpacity={0.88}
-          >
-            <View style={styles.quotaMedalCircle}>
-              <Text style={{ fontSize: 16 }}>🎖</Text>
-            </View>
-            <View style={{ flex: 1, paddingHorizontal: 8 }}>
-              <Text style={styles.quotaTitle}>
-                Gold Plan: 0.6 kg remaining for today
-              </Text>
-              <Text style={styles.quotaSubtitle}>
-                Resets in 2 days · 1.4 kg claimed this week
-              </Text>
-            </View>
-            <View style={styles.rechargeBtn}>
-              <Text style={styles.rechargeBtnText}>Recharge</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Live Catch Truck Tracking Card or Honest Cold Chain Assurance */}
-        {trackingData?.active && trackingData.truckNumber ? (
-          <TouchableOpacity
-            style={styles.liveTruckCard}
-            onPress={() => onNavigate('LIVE_TRACKING')}
-            activeOpacity={0.9}
-          >
-            <View style={styles.truckCardTopRow}>
-              <View style={styles.truckLiveBadge}>
-                <View style={styles.greenPulseDot} />
-                <Text style={styles.truckLiveText}>
-                  Fresh Catch Truck #{trackingData.truckNumber} Published Live
-                </Text>
-              </View>
-              <View style={styles.etaPill}>
-                <Text style={styles.etaPillText}>ETA 18 mins</Text>
-              </View>
-            </View>
-
-            <View style={styles.truckCardMidRow}>
-              <View style={styles.truckIconCircle}>
-                <Text style={{ fontSize: 18 }}>🚚</Text>
-              </View>
-              <View style={{ flex: 1, paddingHorizontal: 10 }}>
-                <Text style={styles.truckFarmTitle}>
-                  {trackingData.origin?.name
-                    ? `Departed ${trackingData.origin.name} · En route`
-                    : 'Departed Godavari Farm · En route'}
-                </Text>
-                <Text style={styles.truckDestSubtitle}>
-                  Destination: {trackingData.destination?.name || 'Madhapur Cold Hub'}
-                </Text>
-              </View>
-              <View style={styles.trackLiveBtn}>
-                <Text style={styles.trackLiveBtnText}>Track Live ✈</Text>
-              </View>
-            </View>
-
-            <View style={styles.truckCardBottomRow}>
-              <View style={styles.coldChainTag}>
-                <Text style={styles.shieldSmall}>🛡</Text>
-                <Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>
-              </View>
-              <Text style={styles.gpsSyncText}>GPS Live Sync</Text>
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.liveTruckCard}
-            onPress={() => onNavigate('LIVE_TRACKING')}
-            activeOpacity={0.9}
-          >
-            <View style={styles.truckCardTopRow}>
-              <View style={styles.truckLiveBadge}>
-                <View style={styles.greenPulseDot} />
-                <Text style={styles.truckLiveText}>Fresh Catch Truck #OD-04 Published Live</Text>
-              </View>
-              <View style={styles.etaPill}>
-                <Text style={styles.etaPillText}>ETA 18 mins</Text>
-              </View>
-            </View>
-
-            <View style={styles.truckCardMidRow}>
-              <View style={styles.truckIconCircle}>
-                <Text style={{ fontSize: 18 }}>🚚</Text>
-              </View>
-              <View style={{ flex: 1, paddingHorizontal: 10 }}>
-                <Text style={styles.truckFarmTitle}>Departed Godavari Farm · En route</Text>
-                <Text style={styles.truckDestSubtitle}>Destination: Madhapur Cold Hub</Text>
-              </View>
-              <View style={styles.trackLiveBtn}>
-                <Text style={styles.trackLiveBtnText}>Track Live ✈</Text>
-              </View>
-            </View>
-
-            <View style={styles.truckCardBottomRow}>
-              <View style={styles.coldChainTag}>
-                <Text style={styles.shieldSmall}>🛡</Text>
-                <Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>
-              </View>
-              <Text style={styles.gpsSyncText}>GPS Live Sync</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Scan Counter Bill Quick Action Banner */}
-        <TouchableOpacity
-          style={styles.scanBillQuickCard}
-          onPress={() => onNavigate('SCAN_BILL')}
-          activeOpacity={0.88}
-        >
-          <View style={styles.subQuickLeft}>
-            <View style={styles.scanBillQuickIcon}>
-              <Text style={{ fontSize: 18 }}>🧾</Text>
-            </View>
-            <View style={{ flex: 1, paddingHorizontal: 10 }}>
-              <Text style={styles.subQuickTitle}>Purchased at Store Counter?</Text>
-              <Text style={styles.subQuickSubtitle}>
-                Scan printed bill to apply weekly subscription quota & credit
-              </Text>
-            </View>
-          </View>
-          <View style={styles.scanBillQuickBtn}>
-            <Text style={styles.scanBillQuickBtnText}>Scan Bill →</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Offers on Selected Fishes */}
-        {discountedFish.length > 0 && (
-          <View style={styles.flashSaleContainer}>
-            <View style={styles.flashHeaderRow}>
-              <View style={styles.flashIconCircle}>
-                <Text style={{ fontSize: 16 }}>🔥</Text>
-              </View>
-              <View style={{ flex: 1, paddingLeft: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.flashSectionTitle}>Offers on Selected Fishes</Text>
-                  <View style={styles.flashBadgeRed}>
-                    <Text style={styles.flashBadgeRedText}>FLASH SALE</Text>
-                  </View>
-                  <View style={styles.timerBadge}>
-                    <Text style={styles.timerBadgeText}>⏱ Ends in 03h:24m</Text>
-                  </View>
-                </View>
-                <Text style={styles.flashSectionSubtitle}>
-                  Limited stocks at verified farm-gate prices
-                </Text>
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.flashCardsScroll}
-            >
-              {discountedFish.map((item) => {
-                const discountText = item.pricing?.discount?.percent
-                  ? `${item.pricing.discount.percent}% OFF`
-                  : item.pricing?.discount?.flatAmount
-                  ? `₹${item.pricing.discount.flatAmount} OFF`
-                  : '20% OFF';
-
-                return (
-                  <View key={item.id} style={styles.flashCard}>
-                    <View style={styles.flashCardTop}>
-                      <View style={styles.discountTag}>
-                        <Text style={styles.discountTagText}>{discountText}</Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => toggleFavorite(item.id)}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      >
-                        <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
-                          {favorites[item.id] ? '♥' : '♡'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity
-                      onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
-                      style={styles.flashImageBox}
-                      activeOpacity={0.85}
-                    >
-                      <OptimizedFishImage
-                        uri={item.imageUrl}
-                        style={styles.flashImage}
-                        resizeMode="cover"
-                        testID={`flash-image-${item.id}`}
-                      />
-                    </TouchableOpacity>
-
-                    <View style={styles.weightAddRow}>
-                      <Text style={styles.weightText}>1000 g</Text>
-                      <TouchableOpacity
-                        style={styles.addBtnOutline}
-                        onPress={() => handleAddToCart(item)}
-                        disabled={addingFishId === item.id}
-                        activeOpacity={0.8}
-                      >
-                        {addingFishId === item.id ? (
-                          <ActivityIndicator size="small" color="#10B981" />
-                        ) : (
-                          <Text style={styles.addBtnOutlineText}>+ ADD</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.pricingRow}>
-                      <Text style={styles.currentPrice}>₹{item.pricing?.effectivePrice || item.unitPrice}</Text>
-                      <Text style={styles.originalPrice}>₹{item.unitPrice}</Text>
-                    </View>
-
-                    <Text style={styles.flashFishName} numberOfLines={2}>
-                      {item.name}
-                    </Text>
-
-                    <View style={styles.saveRatingRow}>
-                      <View style={styles.saveTag}>
-                        <Text style={styles.saveTagText}>
-                          Save ₹{(item.unitPrice - (item.pricing?.effectivePrice || item.unitPrice)) || 70}
-                        </Text>
-                      </View>
-                      <Text style={styles.ratingText}>★ 4.8</Text>
-                    </View>
-
-                    <View style={styles.flashCardFooter}>
-                      <Text style={styles.flameText}>🔥 Only 3 left</Text>
-                      <Text style={styles.cardCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Previously bought Section */}
-        {fishList.length > 0 && (
-          <View style={styles.previouslyBoughtContainer}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeading}>Previously bought</Text>
-              <TouchableOpacity onPress={() => onNavigate('BOOKING_HISTORY')}>
-                <Text style={styles.seeAllText}>See all</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.prevBoughtScroll}
-            >
-              {fishList.slice(0, 4).map((item) => (
-                <View key={`prev-${item.id}`} style={styles.prevBoughtCard}>
-                  <TouchableOpacity
-                    style={styles.prevHeartBtn}
-                    onPress={() => toggleFavorite(item.id)}
-                  >
-                    <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
-                      {favorites[item.id] ? '♥' : '♡'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
-                    style={styles.prevImageBox}
-                  >
-                    <OptimizedFishImage
-                      uri={item.imageUrl}
-                      style={styles.prevImage}
-                      resizeMode="cover"
-                      testID={`prev-image-${item.id}`}
-                    />
-                  </TouchableOpacity>
-                  <View style={styles.carouselDotsRow}>
-                    <View style={[styles.cDot, styles.cDotActive]} />
-                    <View style={styles.cDot} />
-                    <View style={styles.cDot} />
-                  </View>
-                  <View style={styles.prevMetaRow}>
-                    <Text style={styles.prevWeightText}>500 g</Text>
-                    <TouchableOpacity
-                      style={styles.prevAddBtn}
-                      onPress={() => handleAddToCart(item)}
-                    >
-                      <Text style={styles.prevAddBtnText}>ADD</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.prevPricingRow}>
-                    <Text style={styles.prevPriceText}>₹{item.pricing?.effectivePrice || item.unitPrice}</Text>
-                    {Boolean(item.pricing?.hasDiscount) && (
-                      <Text style={styles.prevStrikePrice}>₹{item.unitPrice}</Text>
-                    )}
-                  </View>
-                  <Text style={styles.prevFishName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <View style={styles.prevRatingRow}>
-                    <Text style={styles.prevRatingText}>★ 4.8</Text>
-                    <Text style={styles.prevReviewCount}>(1,323)</Text>
-                  </View>
-                  <View style={styles.prevDeliveryRow}>
-                    <Text style={styles.prevDeliveryText}>⚡ 8 mins • </Text>
-                    <Text style={item.physicalAvailable ? styles.inStockText : styles.lowStockText}>
-                      {item.physicalAvailable ? 'In stock' : '3 left'}
-                    </Text>
-                  </View>
-                  <Text style={styles.prevCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Primary Fish Catalogue Section */}
-        <View style={styles.availableSectionHeader}>
-          <View>
-            <Text style={styles.sectionHeading}>Available Fishes</Text>
-            <Text style={styles.availableSub}>
-              Fresh lake catches ready for instant delivery or quota claim
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.sortFilterBtn}>
-            <Text style={styles.sortFilterText}>Sort & Filter ☵</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Dynamic Category Pills */}
-        {renderCategoryPills()}
-
-        {/* Availability Filter Chips */}
-        {renderAvailabilityFilters()}
+        <DashboardBanners
+          subData={subData}
+          trackingData={trackingData}
+          onNavigate={onNavigate}
+        />
+        <FlashSaleCarousel
+          discountedFish={discountedFish}
+          favorites={favorites}
+          addingFishId={addingFishId}
+          onToggleFav={toggleFavorite}
+          onAddToCart={handleAddToCart}
+          onNavigate={onNavigate}
+        />
+        <PreviouslyBoughtCarousel
+          fishList={fishList}
+          favorites={favorites}
+          onToggleFav={toggleFavorite}
+          onAddToCart={handleAddToCart}
+          onNavigate={onNavigate}
+        />
+        <CatalogueHeaderControls
+          categories={categories}
+          selectedCategoryId={selectedCategoryId}
+          onSelectCategory={setSelectedCategoryId}
+          availabilityFilter={availabilityFilter}
+          onSelectAvailability={setAvailabilityFilter}
+        />
       </View>
     );
   }, [
     subData,
     trackingData,
+    onNavigate,
     discountedFish,
-    fishList,
     favorites,
     addingFishId,
     toggleFavorite,
     handleAddToCart,
-    onNavigate,
-    renderCategoryPills,
-    renderAvailabilityFilters,
+    fishList,
+    categories,
+    selectedCategoryId,
+    availabilityFilter,
   ]);
 
   const renderEmptyComponent = useMemo(() => {
@@ -1017,6 +584,485 @@ export default function HomeScreen({
     </View>
   );
 }
+
+/**
+ * Dashboard top banners: Subscription Quota, Live GPS Truck Tracking, Scan Bill CTA.
+ * Memoized to prevent re-renders when favorites, adding-to-cart, or catalogue filters change.
+ */
+const DashboardBanners = React.memo(function DashboardBanners({ subData, trackingData, onNavigate }) {
+  return (
+    <View>
+      {/* Genuine Subscription Banner */}
+      {subData?.hasSubscription && subData.subscription ? (
+        <TouchableOpacity
+          style={styles.quotaBanner}
+          onPress={() => onNavigate('SUBSCRIPTION')}
+          activeOpacity={0.88}
+        >
+          <View style={styles.quotaMedalCircle}>
+            <Text style={{ fontSize: 16 }}>🎖</Text>
+          </View>
+          <View style={{ flex: 1, paddingHorizontal: 8 }}>
+            <Text style={styles.quotaTitle}>
+              {subData.subscription.planTitle || 'Gold Plan'}: {subData.subscription.weeklyRemainingKg ?? '0.6'} kg remaining for today
+            </Text>
+            <Text style={styles.quotaSubtitle}>
+              Resets in {subData.subscription.daysRemaining ?? '2'} days · {subData.subscription.weeklyClaimedKg ?? '1.4'} kg claimed this week
+            </Text>
+          </View>
+          <View style={styles.rechargeBtn}>
+            <Text style={styles.rechargeBtnText}>Recharge</Text>
+          </View>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={styles.quotaBanner}
+          onPress={() => onNavigate('SUBSCRIPTION')}
+          activeOpacity={0.88}
+        >
+          <View style={styles.quotaMedalCircle}>
+            <Text style={{ fontSize: 16 }}>🎖</Text>
+          </View>
+          <View style={{ flex: 1, paddingHorizontal: 8 }}>
+            <Text style={styles.quotaTitle}>
+              Gold Plan: 0.6 kg remaining for today
+            </Text>
+            <Text style={styles.quotaSubtitle}>
+              Resets in 2 days · 1.4 kg claimed this week
+            </Text>
+          </View>
+          <View style={styles.rechargeBtn}>
+            <Text style={styles.rechargeBtnText}>Recharge</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Live Catch Truck Tracking Card or Honest Cold Chain Assurance */}
+      {trackingData?.active && trackingData.truckNumber ? (
+        <TouchableOpacity
+          style={styles.liveTruckCard}
+          onPress={() => onNavigate('LIVE_TRACKING')}
+          activeOpacity={0.9}
+        >
+          <View style={styles.truckCardTopRow}>
+            <View style={styles.truckLiveBadge}>
+              <View style={styles.greenPulseDot} />
+              <Text style={styles.truckLiveText}>
+                Fresh Catch Truck #{trackingData.truckNumber} Published Live
+              </Text>
+            </View>
+            <View style={styles.etaPill}>
+              <Text style={styles.etaPillText}>ETA 18 mins</Text>
+            </View>
+          </View>
+
+          <View style={styles.truckCardMidRow}>
+            <View style={styles.truckIconCircle}>
+              <Text style={{ fontSize: 18 }}>🚚</Text>
+            </View>
+            <View style={{ flex: 1, paddingHorizontal: 10 }}>
+              <Text style={styles.truckFarmTitle}>
+                {trackingData.origin?.name
+                  ? `Departed ${trackingData.origin.name} · En route`
+                  : 'Departed Godavari Farm · En route'}
+              </Text>
+              <Text style={styles.truckDestSubtitle}>
+                Destination: {trackingData.destination?.name || 'Madhapur Cold Hub'}
+              </Text>
+            </View>
+            <View style={styles.trackLiveBtn}>
+              <Text style={styles.trackLiveBtnText}>Track Live ✈</Text>
+            </View>
+          </View>
+
+          <View style={styles.truckCardBottomRow}>
+            <View style={styles.coldChainTag}>
+              <Text style={styles.shieldSmall}>🛡</Text>
+              <Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>
+            </View>
+            <Text style={styles.gpsSyncText}>GPS Live Sync</Text>
+          </View>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={styles.liveTruckCard}
+          onPress={() => onNavigate('LIVE_TRACKING')}
+          activeOpacity={0.9}
+        >
+          <View style={styles.truckCardTopRow}>
+            <View style={styles.truckLiveBadge}>
+              <View style={styles.greenPulseDot} />
+              <Text style={styles.truckLiveText}>Fresh Catch Truck #OD-04 Published Live</Text>
+            </View>
+            <View style={styles.etaPill}>
+              <Text style={styles.etaPillText}>ETA 18 mins</Text>
+            </View>
+          </View>
+
+          <View style={styles.truckCardMidRow}>
+            <View style={styles.truckIconCircle}>
+              <Text style={{ fontSize: 18 }}>🚚</Text>
+            </View>
+            <View style={{ flex: 1, paddingHorizontal: 10 }}>
+              <Text style={styles.truckFarmTitle}>Departed Godavari Farm · En route</Text>
+              <Text style={styles.truckDestSubtitle}>Destination: Madhapur Cold Hub</Text>
+            </View>
+            <View style={styles.trackLiveBtn}>
+              <Text style={styles.trackLiveBtnText}>Track Live ✈</Text>
+            </View>
+          </View>
+
+          <View style={styles.truckCardBottomRow}>
+            <View style={styles.coldChainTag}>
+              <Text style={styles.shieldSmall}>🛡</Text>
+              <Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>
+            </View>
+            <Text style={styles.gpsSyncText}>GPS Live Sync</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Scan Counter Bill Quick Action Banner */}
+      <TouchableOpacity
+        style={styles.scanBillQuickCard}
+        onPress={() => onNavigate('SCAN_BILL')}
+        activeOpacity={0.88}
+      >
+        <View style={styles.subQuickLeft}>
+          <View style={styles.scanBillQuickIcon}>
+            <Text style={{ fontSize: 18 }}>🧾</Text>
+          </View>
+          <View style={{ flex: 1, paddingHorizontal: 10 }}>
+            <Text style={styles.subQuickTitle}>Purchased at Store Counter?</Text>
+            <Text style={styles.subQuickSubtitle}>
+              Scan printed bill to apply weekly subscription quota & credit
+            </Text>
+          </View>
+        </View>
+        <View style={styles.scanBillQuickBtn}>
+          <Text style={styles.scanBillQuickBtnText}>Scan Bill →</Text>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+/**
+ * Offers on Selected Fishes horizontal carousel.
+ * Memoized to update only when discountedFish, favorites, or addingFishId change.
+ */
+const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
+  discountedFish,
+  favorites,
+  addingFishId,
+  onToggleFav,
+  onAddToCart,
+  onNavigate,
+}) {
+  if (!discountedFish || discountedFish.length === 0) return null;
+
+  return (
+    <View style={styles.flashSaleContainer}>
+      <View style={styles.flashHeaderRow}>
+        <View style={styles.flashIconCircle}>
+          <Text style={{ fontSize: 16 }}>🔥</Text>
+        </View>
+        <View style={{ flex: 1, paddingLeft: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.flashSectionTitle}>Offers on Selected Fishes</Text>
+            <View style={styles.flashBadgeRed}>
+              <Text style={styles.flashBadgeRedText}>FLASH SALE</Text>
+            </View>
+            <View style={styles.timerBadge}>
+              <Text style={styles.timerBadgeText}>⏱ Ends in 03h:24m</Text>
+            </View>
+          </View>
+          <Text style={styles.flashSectionSubtitle}>
+            Limited stocks at verified farm-gate prices
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.flashCardsScroll}
+      >
+        {discountedFish.map((item) => {
+          const discountText = item.pricing?.discount?.percent
+            ? `${item.pricing.discount.percent}% OFF`
+            : item.pricing?.discount?.flatAmount
+            ? `₹${item.pricing.discount.flatAmount} OFF`
+            : '20% OFF';
+
+          return (
+            <View key={item.id} style={styles.flashCard}>
+              <View style={styles.flashCardTop}>
+                <View style={styles.discountTag}>
+                  <Text style={styles.discountTagText}>{discountText}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => onToggleFav(item.id)}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
+                    {favorites[item.id] ? '♥' : '♡'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
+                style={styles.flashImageBox}
+                activeOpacity={0.85}
+              >
+                <OptimizedFishImage
+                  uri={item.imageUrl}
+                  style={styles.flashImage}
+                  resizeMode="cover"
+                  testID={`flash-image-${item.id}`}
+                />
+              </TouchableOpacity>
+
+              <View style={styles.weightAddRow}>
+                <Text style={styles.weightText}>1000 g</Text>
+                <TouchableOpacity
+                  style={styles.addBtnOutline}
+                  onPress={() => onAddToCart(item)}
+                  disabled={addingFishId === item.id}
+                  activeOpacity={0.8}
+                >
+                  {addingFishId === item.id ? (
+                    <ActivityIndicator size="small" color="#10B981" />
+                  ) : (
+                    <Text style={styles.addBtnOutlineText}>+ ADD</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.pricingRow}>
+                <Text style={styles.currentPrice}>₹{item.pricing?.effectivePrice || item.unitPrice}</Text>
+                <Text style={styles.originalPrice}>₹{item.unitPrice}</Text>
+              </View>
+
+              <Text style={styles.flashFishName} numberOfLines={2}>
+                {item.name}
+              </Text>
+
+              <View style={styles.saveRatingRow}>
+                <View style={styles.saveTag}>
+                  <Text style={styles.saveTagText}>
+                    Save ₹{(item.unitPrice - (item.pricing?.effectivePrice || item.unitPrice)) || 70}
+                  </Text>
+                </View>
+                <Text style={styles.ratingText}>★ 4.8</Text>
+              </View>
+
+              <View style={styles.flashCardFooter}>
+                <Text style={styles.flameText}>🔥 Only 3 left</Text>
+                <Text style={styles.cardCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+});
+
+/**
+ * Previously bought horizontal carousel.
+ * Memoized to update only when fishList or favorites change.
+ */
+const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
+  fishList,
+  favorites,
+  onToggleFav,
+  onAddToCart,
+  onNavigate,
+}) {
+  if (!fishList || fishList.length === 0) return null;
+
+  return (
+    <View style={styles.previouslyBoughtContainer}>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeading}>Previously bought</Text>
+        <TouchableOpacity onPress={() => onNavigate('BOOKING_HISTORY')}>
+          <Text style={styles.seeAllText}>See all</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.prevBoughtScroll}
+      >
+        {fishList.slice(0, 4).map((item) => (
+          <View key={`prev-${item.id}`} style={styles.prevBoughtCard}>
+            <TouchableOpacity
+              style={styles.prevHeartBtn}
+              onPress={() => onToggleFav(item.id)}
+            >
+              <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
+                {favorites[item.id] ? '♥' : '♡'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
+              style={styles.prevImageBox}
+            >
+              <OptimizedFishImage
+                uri={item.imageUrl}
+                style={styles.prevImage}
+                resizeMode="cover"
+                testID={`prev-image-${item.id}`}
+              />
+            </TouchableOpacity>
+            <View style={styles.carouselDotsRow}>
+              <View style={[styles.cDot, styles.cDotActive]} />
+              <View style={styles.cDot} />
+              <View style={styles.cDot} />
+            </View>
+            <View style={styles.prevMetaRow}>
+              <Text style={styles.prevWeightText}>500 g</Text>
+              <TouchableOpacity
+                style={styles.prevAddBtn}
+                onPress={() => onAddToCart(item)}
+              >
+                <Text style={styles.prevAddBtnText}>ADD</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.prevPricingRow}>
+              <Text style={styles.prevPriceText}>₹{item.pricing?.effectivePrice || item.unitPrice}</Text>
+              {Boolean(item.pricing?.hasDiscount) && (
+                <Text style={styles.prevStrikePrice}>₹{item.unitPrice}</Text>
+              )}
+            </View>
+            <Text style={styles.prevFishName} numberOfLines={2}>
+              {item.name}
+            </Text>
+            <View style={styles.prevRatingRow}>
+              <Text style={styles.prevRatingText}>★ 4.8</Text>
+              <Text style={styles.prevReviewCount}>(1,323)</Text>
+            </View>
+            <View style={styles.prevDeliveryRow}>
+              <Text style={styles.prevDeliveryText}>⚡ 8 mins • </Text>
+              <Text style={item.physicalAvailable ? styles.inStockText : styles.lowStockText}>
+                {item.physicalAvailable ? 'In stock' : '3 left'}
+              </Text>
+            </View>
+            <Text style={styles.prevCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+});
+
+/**
+ * Available Fishes section header, Category Pills, and Availability Filter Chips.
+ * Memoized to re-render only when categories or active filter selections change.
+ */
+const CatalogueHeaderControls = React.memo(function CatalogueHeaderControls({
+  categories,
+  selectedCategoryId,
+  onSelectCategory,
+  availabilityFilter,
+  onSelectAvailability,
+}) {
+  const filters = [
+    { key: 'ALL', label: 'All Catch' },
+    { key: 'BOOKABLE', label: '⚡ Online Bookable' },
+    { key: 'IN_STORE', label: '🏪 In-Store Only' },
+    { key: 'DISCOUNT', label: '🏷 Offers' },
+  ];
+
+  return (
+    <View>
+      {/* Primary Fish Catalogue Section */}
+      <View style={styles.availableSectionHeader}>
+        <View>
+          <Text style={styles.sectionHeading}>Available Fishes</Text>
+          <Text style={styles.availableSub}>
+            Fresh lake catches ready for instant delivery or quota claim
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.sortFilterBtn}>
+          <Text style={styles.sortFilterText}>Sort & Filter ☵</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Dynamic Category Pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryScroll}
+      >
+        <TouchableOpacity
+          style={[
+            styles.categoryPill,
+            selectedCategoryId === null && styles.categoryPillActive,
+          ]}
+          onPress={() => onSelectCategory(null)}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.categoryPillText,
+              selectedCategoryId === null && styles.categoryPillTextActive,
+            ]}
+          >
+            All Fish
+          </Text>
+        </TouchableOpacity>
+
+        {categories.map((cat) => {
+          const isActive = selectedCategoryId === cat.id;
+          return (
+            <TouchableOpacity
+              key={cat.id}
+              style={[styles.categoryPill, isActive && styles.categoryPillActive]}
+              onPress={() => onSelectCategory(isActive ? null : cat.id)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.categoryPillText,
+                  isActive && styles.categoryPillTextActive,
+                ]}
+              >
+                {cat.name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Availability Filter Chips */}
+      <View style={styles.filterRow}>
+        {filters.map((f) => {
+          const isActive = availabilityFilter === f.key;
+          return (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              onPress={() => onSelectAvailability(f.key)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  isActive && styles.filterChipTextActive,
+                ]}
+              >
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
