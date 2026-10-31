@@ -24,9 +24,79 @@ export function setUnauthorizedHandler(callback) {
 }
 
 /**
- * Builds an option-aware deduplication identity key for in-flight GET requests.
- * Accounts for URL, authenticated token identity, skipUnauthorizedHandler,
- * effectiveTimeoutMs, and sorted non-auth/non-content-type headers.
+ * Supported fetch options affecting HTTP request/response semantics.
+ */
+const SUPPORTED_SEMANTIC_FETCH_OPTIONS = [
+  'cache',
+  'credentials',
+  'integrity',
+  'keepalive',
+  'mode',
+  'priority',
+  'redirect',
+  'referrer',
+  'referrerPolicy',
+];
+
+const KNOWN_REQUEST_OPTIONS = new Set([
+  'method',
+  'headers',
+  'timeoutMs',
+  'timeout',
+  'signal',
+  'bypassDedup',
+  'skipUnauthorizedHandler',
+  ...SUPPORTED_SEMANTIC_FETCH_OPTIONS,
+]);
+
+/**
+ * Checks whether an incoming request can be safely deduplicated.
+ * Non-GET methods, explicit bypasses, requests with bodies, or requests with
+ * unsupported or unrepresentable options safely bypass deduplication.
+ */
+function evaluateDeduplicatable(isGet, options) {
+  if (!isGet || options.bypassDedup) {
+    return false;
+  }
+  // GET requests with a body are non-standard; bypass deduplication safely
+  if (options.body !== undefined && options.body !== null) {
+    return false;
+  }
+  // Check for unknown options or unrepresentable non-primitive option values
+  for (const key of Object.keys(options)) {
+    if (!KNOWN_REQUEST_OPTIONS.has(key)) {
+      // Unsupported or unrepresented fetch option - bypass deduplication safely
+      return false;
+    }
+    if (SUPPORTED_SEMANTIC_FETCH_OPTIONS.includes(key)) {
+      const val = options[key];
+      if (val !== undefined && typeof val !== 'string' && typeof val !== 'boolean' && typeof val !== 'number') {
+        // Complex or non-serializable option value - bypass deduplication
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * Extracts and deterministically sorts supported semantic fetch options.
+ */
+function extractSemanticFetchOptions(options) {
+  const semantic = [];
+  for (const key of SUPPORTED_SEMANTIC_FETCH_OPTIONS) {
+    if (options[key] !== undefined) {
+      semantic.push([key, options[key]]);
+    }
+  }
+  return semantic;
+}
+
+/**
+ * Builds an option-aware, collision-safe deduplication identity key for in-flight GET requests.
+ * Uses a deterministically sorted array of [name, value] tuples serialized via JSON.stringify
+ * to prevent delimiter collisions. Incorporates URL, authenticated token identity,
+ * skipUnauthorizedHandler, effectiveTimeoutMs, and supported semantic fetch options.
  * Never logs credentials or sensitive headers.
  */
 function buildDeduplicationKey({
@@ -35,25 +105,47 @@ function buildDeduplicationKey({
   skipUnauthorizedHandler = false,
   effectiveTimeoutMs = DEFAULT_TIMEOUT_MS,
   headers = {},
+  semanticOptions = null,
+  fetchOptions = null,
 }) {
-  const sortedHeaders = [];
+  const normalizedHeaders = [];
   if (headers && typeof headers === 'object') {
     const keys = Object.keys(headers).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     for (const k of keys) {
       const lower = k.toLowerCase();
       // Exclude Authorization (captured by requestToken) and default Content-Type
       if (lower !== 'authorization' && lower !== 'content-type') {
-        sortedHeaders.push(`${lower}=${String(headers[k])}`);
+        normalizedHeaders.push([lower, String(headers[k])]);
       }
     }
   }
-  const headerPart = sortedHeaders.length > 0 ? `|h=${sortedHeaders.join('&')}` : '';
-  const skipFlag = skipUnauthorizedHandler ? '1' : '0';
-  return `GET:${url}:${requestToken || 'ANON'}:skip401=${skipFlag}:to=${effectiveTimeoutMs}${headerPart}`;
+
+  let semanticList = semanticOptions;
+  if (!semanticList && fetchOptions && typeof fetchOptions === 'object') {
+    semanticList = extractSemanticFetchOptions(fetchOptions);
+  }
+
+  const parts = [
+    'GET',
+    url,
+    requestToken || 'ANON',
+    `skip401=${skipUnauthorizedHandler ? '1' : '0'}`,
+    `to=${effectiveTimeoutMs}`,
+  ];
+
+  if (normalizedHeaders.length > 0) {
+    parts.push(`h=${JSON.stringify(normalizedHeaders)}`);
+  }
+
+  if (semanticList && semanticList.length > 0) {
+    parts.push(`opts=${JSON.stringify(semanticList)}`);
+  }
+
+  return parts.join(':');
 }
 
 // Registry of active in-flight GET requests for safe request deduplication
-// Key: "GET:<url>:<token|ANON>:skip401=<0|1>:to=<ms>[|h=<sorted_headers>]"
+// Key: "GET:<url>:<token|ANON>:skip401=<0|1>:to=<ms>[:h=<json>][:opts=<json>]"
 // Value: {
 //   key: string,
 //   subscribers: Set<{ resolve, reject, signal, cleanup }>,
@@ -64,6 +156,7 @@ const inFlightGetRequests = new Map();
 
 function clearInFlightRequests() {
   for (const [key, entry] of inFlightGetRequests.entries()) {
+    entry.isSettled = true;
     try {
       if (entry.controller) {
         entry.controller.abort('In-flight requests cleared');
@@ -78,6 +171,7 @@ function clearInFlightRequests() {
         sub.reject(err);
       } catch (_) {}
     }
+    entry.subscribers.clear();
   }
   inFlightGetRequests.clear();
 }
@@ -343,8 +437,8 @@ function request(endpoint, options = {}) {
     }
 
     // In-flight GET deduplication evaluation
-    // Deduplicate strictly for GET requests when bypassDedup is not requested
-    const isDeduplicatable = isGet && !options.bypassDedup;
+    // Deduplicate strictly for GET requests with valid, supported options when bypassDedup is not requested
+    const isDeduplicatable = evaluateDeduplicatable(isGet, options);
     const dedupKey = isDeduplicatable
       ? buildDeduplicationKey({
           url,
@@ -352,11 +446,12 @@ function request(endpoint, options = {}) {
           skipUnauthorizedHandler: Boolean(options.skipUnauthorizedHandler),
           effectiveTimeoutMs,
           headers: options.headers,
+          fetchOptions: options,
         })
       : null;
 
     if (!dedupKey) {
-      // Non-GET mutation or bypassDedup: direct execution with its own controller
+      // Non-GET mutation, bypassDedup, or unrepresented options: direct execution with its own controller
       const hasAbortController = typeof AbortController !== 'undefined';
       const controller = hasAbortController ? new AbortController() : null;
       let callerAbortListener = null;
@@ -391,8 +486,12 @@ function request(endpoint, options = {}) {
       }
     }
 
-    // In-flight GET deduplication: either join existing entry or create new initiator entry
+    // In-flight GET deduplication: either join existing active entry or create new initiator entry
     let entry = inFlightGetRequests.get(dedupKey);
+    // If entry is settled or marked inactive, do not join; create fresh entry
+    if (entry && entry.isSettled) {
+      entry = null;
+    }
     const isInitiator = !entry;
 
     if (isInitiator) {
@@ -437,7 +536,10 @@ function request(endpoint, options = {}) {
           }
         } finally {
           entry.isSettled = true;
-          inFlightGetRequests.delete(dedupKey);
+          // Stale-entry protection: delete only if this exact entry is still current in registry
+          if (inFlightGetRequests.get(dedupKey) === entry) {
+            inFlightGetRequests.delete(dedupKey);
+          }
         }
       })();
     }
@@ -477,7 +579,10 @@ function request(endpoint, options = {}) {
               try {
                 entry.controller.abort(options.signal.reason);
               } catch (_) {}
-              inFlightGetRequests.delete(dedupKey);
+              entry.isSettled = true;
+              if (inFlightGetRequests.get(dedupKey) === entry) {
+                inFlightGetRequests.delete(dedupKey);
+              }
             }
           }
         };

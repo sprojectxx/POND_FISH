@@ -55,6 +55,13 @@
  *   - 5.21: Timeout cleanup in registry: request timing out removes entry from Map
  *   - 5.22: All callers aborting when AbortController is available cleans up registry immediately
  *   - 5.23: buildDeduplicationKey: validates option-aware hashing, header sorting, and token segregation
+ *   - 5.24: Stale entry race: old request aborting all subscribers does not delete replacement entry on settle
+ *   - 5.25: Stale entry race: clearInFlightRequests followed by immediate new same-key request preserves new entry
+ *   - 5.26: Replacement subscriber isolation: old request settlement cannot resolve or reject subscribers belonging to replacement entry
+ *   - 5.27: Collision-safe headers: header value containing = and & versus separate headers produce distinct keys
+ *   - 5.28: Header case-insensitivity: different casing produces equivalent deduplication keys
+ *   - 5.29: Semantic fetch options: differing credentials, cache, or mode produce distinct keys
+ *   - 5.30: Unsupported or unrepresented options safely bypass deduplication
  * Suite 6: [Production Integration & Static Checks] Cart & Home Data Ownership and Invariants
  *   - 6.1: Navigating to CART does not trigger fetchCartSummary from App shell
  *   - 6.2: App shell handleCartUpdated updates cartSummary and item count from mutations
@@ -65,6 +72,7 @@
  *   - 6.7: [Static Source Check] App.jsx calls api.clearInFlightRequests on logout
  *   - 6.8: [Static Source Check] api.js implements in-flight deduplication registry and exports management methods
  *   - 6.9: [Static Source Check] api.js implements option-aware buildDeduplicationKey
+ *   - 6.10: [Static Source Check] api.js implements identity-safe deletion and collision-safe keys
  */
 
 const { test, describe } = require('node:test');
@@ -106,6 +114,19 @@ function loadHomeScreenOrchestrator() {
 }
 
 /**
+ * Creates a deterministic deferred promise for race-free asynchronous test coordination.
+ */
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+/**
  * Loads the real production api.js client module into an isolated test context.
  * Enables testing real setUnauthorizedHandler and skipUnauthorizedHandler logic.
  */
@@ -117,7 +138,7 @@ function loadProductionApiModule(mockStorage = {}, mockFetch = null, customAbort
   code = code.replace(/export\s+function\s+setUnauthorizedHandler/g, 'exports.setUnauthorizedHandler = function setUnauthorizedHandler');
   code = code.replace(/export\s+const\s+api\s*=\s*\{/g, 'const api = {');
 
-  code += '\nexports.api = api;\nexports.request = request;\nexports.buildDeduplicationKey = buildDeduplicationKey;';
+  code += '\nexports.api = api;\nexports.request = request;\nexports.buildDeduplicationKey = buildDeduplicationKey;\nexports.inFlightGetRequests = inFlightGetRequests;\nexports.evaluateDeduplicatable = evaluateDeduplicatable;';
 
   const m = { exports: {} };
   const fn = new Function('exports', 'require', 'mockAuthStorage', 'fetch', '__DEV__', 'process', 'FormData', 'AbortController', 'console', code);
@@ -1408,7 +1429,339 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       });
 
       assert.equal(keyH1, keyH2, 'Headers must sort case-insensitively and ignore Authorization / Content-Type');
-      assert.ok(keyH1.includes('|h=a-index=bottom&z-index=top'));
+      assert.ok(keyH1.includes('h=[["a-index","bottom"],["z-index","top"]]'));
+    });
+
+    test('5.24: Stale entry race: old request aborting all subscribers does not delete replacement entry on settle', async () => {
+      const d1 = createDeferred();
+      const d2 = createDeferred();
+      let fetchCallCount = 0;
+
+      const mockFetch = (url, opts) => {
+        fetchCallCount++;
+        const currentDeferred = fetchCallCount === 1 ? d1 : d2;
+        if (opts?.signal) {
+          opts.signal.addEventListener('abort', () => {
+            const err = new Error('Aborted');
+            err.name = 'AbortError';
+            try { currentDeferred.reject(err); } catch (_) {}
+          });
+        }
+        return currentDeferred.promise;
+      };
+
+      const { api: productionApi, inFlightGetRequests } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      const c1 = new AbortController();
+      const p1 = productionApi.getCart({ signal: c1.signal });
+
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(productionApi.getInFlightRequestCount(), 1);
+
+      // Caller 1 aborts, causing all subscribers to detach and entry to be removed from map
+      c1.abort('Caller 1 abort');
+      await assert.rejects(p1, (err) => {
+        assert.equal(err.code, 'API_ABORTED');
+        return true;
+      });
+
+      // Immediately start request 2 with identical key
+      const p2 = productionApi.getCart();
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(productionApi.getInFlightRequestCount(), 1);
+      const replacementEntry = Array.from(inFlightGetRequests.values())[0];
+      assert.ok(replacementEntry, 'Replacement entry must exist in registry');
+
+      // Now settle request 1 (simulating slow abort settlement in background)
+      try {
+        d1.reject(new Error('AbortError'));
+      } catch (_) {}
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Assert that replacement entry was NOT deleted by request 1's finally block
+      assert.equal(productionApi.getInFlightRequestCount(), 1);
+      assert.equal(Array.from(inFlightGetRequests.values())[0], replacementEntry);
+
+      // Now resolve request 2
+      d2.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { items: ['replacement-cart'] } }),
+      });
+
+      const res2 = await p2;
+      assert.deepEqual(res2.data, { items: ['replacement-cart'] });
+      assert.equal(productionApi.getInFlightRequestCount(), 0, 'Registry must be 0 after replacement settles');
+    });
+
+    test('5.25: Stale entry race: clearInFlightRequests followed by immediate new same-key request preserves new entry', async () => {
+      const d1 = createDeferred();
+      const d2 = createDeferred();
+      let fetchCallCount = 0;
+
+      const mockFetch = (url, opts) => {
+        fetchCallCount++;
+        const currentDeferred = fetchCallCount === 1 ? d1 : d2;
+        if (opts?.signal) {
+          opts.signal.addEventListener('abort', () => {
+            const err = new Error('Aborted');
+            err.name = 'AbortError';
+            try { currentDeferred.reject(err); } catch (_) {}
+          });
+        }
+        return currentDeferred.promise;
+      };
+
+      const { api: productionApi, inFlightGetRequests } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      const p1 = productionApi.getCart();
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(productionApi.getInFlightRequestCount(), 1);
+
+      // Session reset / logout clears in-flight requests
+      productionApi.clearInFlightRequests();
+      await assert.rejects(p1, (err) => {
+        assert.equal(err.code, 'API_SESSION_RESET');
+        return true;
+      });
+
+      // Immediately launch a new same-key request
+      const p2 = productionApi.getCart();
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(productionApi.getInFlightRequestCount(), 1);
+      const replacementEntry = Array.from(inFlightGetRequests.values())[0];
+
+      // Request 1 settles in background
+      try {
+        d1.reject(new Error('AbortError'));
+      } catch (_) {}
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Old request settle must NOT delete replacement entry
+      assert.equal(productionApi.getInFlightRequestCount(), 1);
+      assert.equal(Array.from(inFlightGetRequests.values())[0], replacementEntry);
+
+      // Settle request 2 successfully
+      d2.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { items: ['new-session-cart'] } }),
+      });
+
+      const res2 = await p2;
+      assert.deepEqual(res2.data, { items: ['new-session-cart'] });
+      assert.equal(productionApi.getInFlightRequestCount(), 0);
+    });
+
+    test('5.26: Replacement subscriber isolation: old request settlement cannot resolve or reject subscribers belonging to replacement entry', async () => {
+      const d1 = createDeferred();
+      const d2 = createDeferred();
+      let fetchCallCount = 0;
+
+      const mockFetch = () => {
+        fetchCallCount++;
+        return fetchCallCount === 1 ? d1.promise : d2.promise;
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      const p1 = productionApi.getCart();
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Clear in-flight requests (simulating logout/reset)
+      productionApi.clearInFlightRequests();
+      await assert.rejects(p1, (err) => {
+        assert.equal(err.code, 'API_SESSION_RESET');
+        return true;
+      });
+
+      // Replacement request 2 starts
+      let r2Settled = false;
+      const p2 = productionApi.getCart().then(
+        (val) => { r2Settled = true; return val; },
+        (err) => { r2Settled = true; throw err; }
+      );
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Old request 1 now resolves with obsolete data
+      d1.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { items: ['obsolete-stale-data'] } }),
+      });
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Replacement request 2 MUST NOT have settled with old request 1's data
+      assert.equal(r2Settled, false, 'Replacement request must not be resolved by old request');
+
+      // Now resolve replacement request 2 with fresh data
+      d2.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { items: ['fresh-data'] } }),
+      });
+
+      const res2 = await p2;
+      assert.deepEqual(res2.data, { items: ['fresh-data'] });
+    });
+
+    test('5.27: Collision-safe headers: header value containing = and & versus separate headers produce distinct keys', async () => {
+      const { buildDeduplicationKey } = loadProductionApiModule();
+
+      const keySingleWithDelimiters = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/fish',
+        headers: { 'x-param': 'a=1&b=2' },
+      });
+
+      const keyMultipleHeaders = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/fish',
+        headers: { 'x-param': 'a=1', b: '2' },
+      });
+
+      assert.notEqual(
+        keySingleWithDelimiters,
+        keyMultipleHeaders,
+        'Header serialization with JSON tuples must prevent delimiter collision'
+      );
+      assert.ok(keySingleWithDelimiters.includes('h=[["x-param","a=1&b=2"]]'));
+      assert.ok(keyMultipleHeaders.includes('h=[["b","2"],["x-param","a=1"]]'));
+
+      // Also verify via real requests that they execute separate network fetches
+      const fetchCalls = [];
+      const mockFetch = async (url, opts) => {
+        fetchCalls.push(opts.headers);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [] }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      await Promise.all([
+        request('/customer/fish', { headers: { 'x-param': 'a=1&b=2' } }),
+        request('/customer/fish', { headers: { 'x-param': 'a=1', b: '2' } }),
+      ]);
+
+      assert.equal(fetchCalls.length, 2, 'Requests with collision-prone header strings must make 2 distinct fetches');
+    });
+
+    test('5.28: Header case-insensitivity: different casing produces equivalent deduplication keys', async () => {
+      const { buildDeduplicationKey } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        async () => {
+          await new Promise((r) => setTimeout(r, 20));
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ success: true, data: ['shared'] }),
+          };
+        }
+      );
+
+      const keyUpper = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/fish',
+        headers: { 'X-Cache-Control': 'max-age=300', 'Accept-Language': 'en-US' },
+      });
+
+      const keyLower = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/fish',
+        headers: { 'accept-language': 'en-US', 'x-cache-control': 'max-age=300' },
+      });
+
+      assert.equal(keyUpper, keyLower, 'Header keys must normalize case-insensitively');
+      assert.ok(keyUpper.includes('h=[["accept-language","en-US"],["x-cache-control","max-age=300"]]'));
+    });
+
+    test('5.29: Semantic fetch options: differing credentials, cache, or mode produce distinct keys', async () => {
+      const { buildDeduplicationKey } = loadProductionApiModule();
+
+      const keyCache1 = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/fish',
+        fetchOptions: { cache: 'no-store' },
+      });
+
+      const keyCache2 = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/fish',
+        fetchOptions: { cache: 'reload' },
+      });
+
+      const keyCreds = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/fish',
+        fetchOptions: { credentials: 'include' },
+      });
+
+      assert.notEqual(keyCache1, keyCache2, 'Different cache options must produce distinct keys');
+      assert.ok(keyCache1.includes('opts=[["cache","no-store"]]'));
+      assert.ok(keyCache2.includes('opts=[["cache","reload"]]'));
+      assert.ok(keyCreds.includes('opts=[["credentials","include"]]'));
+
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [] }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      await Promise.all([
+        request('/customer/fish', { cache: 'no-store' }),
+        request('/customer/fish', { cache: 'reload' }),
+      ]);
+
+      assert.equal(fetchCount, 2, 'Requests with different semantic cache options must not coalesce');
+    });
+
+    test('5.30: Unsupported or unrepresented options safely bypass deduplication', async () => {
+      const { evaluateDeduplicatable, request, inFlightGetRequests } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        async () => {
+          await new Promise((r) => setTimeout(r, 20));
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ success: true, data: 'direct' }),
+          };
+        }
+      );
+
+      // Verify evaluateDeduplicatable predicate
+      assert.equal(evaluateDeduplicatable(true, { unknownOption: 'custom' }), false);
+      assert.equal(evaluateDeduplicatable(true, { body: '{"payload":1}' }), false);
+      assert.equal(evaluateDeduplicatable(true, { cache: { invalid: 'object' } }), false);
+      assert.equal(evaluateDeduplicatable(true, { cache: 'no-cache' }), true);
+      assert.equal(evaluateDeduplicatable(false, {}), false);
+
+      // In real requests: concurrent requests with unsupported option do not join Map
+      const p1 = request('/customer/fish', { unknownOption: 'alpha' });
+      const p2 = request('/customer/fish', { unknownOption: 'beta' });
+
+      // In-flight Map must remain empty because both bypassed deduplication
+      assert.equal(inFlightGetRequests.size, 0, 'Requests bypassing dedup must not register in in-flight Map');
+
+      const [r1, r2] = await Promise.all([p1, p2]);
+      assert.equal(r1.data, 'direct');
+      assert.equal(r2.data, 'direct');
     });
   });
 
@@ -1618,6 +1971,21 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.ok(
         apiCode.includes('effectiveTimeoutMs'),
         'buildDeduplicationKey must inspect effectiveTimeoutMs'
+      );
+    });
+
+    test('6.10: [Static Source Check] api.js implements identity-safe deletion and collision-safe keys', () => {
+      assert.ok(
+        apiCode.includes('inFlightGetRequests.get(dedupKey) === entry'),
+        'api.js must check entry identity before deleting from inFlightGetRequests'
+      );
+      assert.ok(
+        apiCode.includes('SUPPORTED_SEMANTIC_FETCH_OPTIONS'),
+        'api.js must define SUPPORTED_SEMANTIC_FETCH_OPTIONS'
+      );
+      assert.ok(
+        apiCode.includes('evaluateDeduplicatable'),
+        'api.js must define evaluateDeduplicatable'
       );
     });
   });
