@@ -23,8 +23,37 @@ export function setUnauthorizedHandler(callback) {
   onUnauthorizedCallback = callback;
 }
 
+/**
+ * Builds an option-aware deduplication identity key for in-flight GET requests.
+ * Accounts for URL, authenticated token identity, skipUnauthorizedHandler,
+ * effectiveTimeoutMs, and sorted non-auth/non-content-type headers.
+ * Never logs credentials or sensitive headers.
+ */
+function buildDeduplicationKey({
+  url,
+  requestToken,
+  skipUnauthorizedHandler = false,
+  effectiveTimeoutMs = DEFAULT_TIMEOUT_MS,
+  headers = {},
+}) {
+  const sortedHeaders = [];
+  if (headers && typeof headers === 'object') {
+    const keys = Object.keys(headers).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    for (const k of keys) {
+      const lower = k.toLowerCase();
+      // Exclude Authorization (captured by requestToken) and default Content-Type
+      if (lower !== 'authorization' && lower !== 'content-type') {
+        sortedHeaders.push(`${lower}=${String(headers[k])}`);
+      }
+    }
+  }
+  const headerPart = sortedHeaders.length > 0 ? `|h=${sortedHeaders.join('&')}` : '';
+  const skipFlag = skipUnauthorizedHandler ? '1' : '0';
+  return `GET:${url}:${requestToken || 'ANON'}:skip401=${skipFlag}:to=${effectiveTimeoutMs}${headerPart}`;
+}
+
 // Registry of active in-flight GET requests for safe request deduplication
-// Key: "GET:<url>:<token|ANON>"
+// Key: "GET:<url>:<token|ANON>:skip401=<0|1>:to=<ms>[|h=<sorted_headers>]"
 // Value: {
 //   key: string,
 //   subscribers: Set<{ resolve, reject, signal, cleanup }>,
@@ -81,6 +110,7 @@ async function executeNetworkRequest({
   effectiveTimeoutMs,
   options,
   controller,
+  callerSignal = null,
 }) {
   const {
     timeoutMs: _unusedTimeoutMs,
@@ -133,17 +163,17 @@ async function executeNetworkRequest({
           }, effectiveTimeoutMs);
         }
 
-        if (options.signal) {
+        if (callerSignal) {
           fallbackAbortListener = () => {
             const abortErr = new Error(`Request to ${endpoint} was cancelled by caller (socket not cancelled)`);
             abortErr.code = 'API_ABORTED';
             abortErr.isAborted = true;
             abortErr.networkCancelled = false;
-            abortErr.reason = options.signal.reason || 'Operation cancelled by caller';
+            abortErr.reason = callerSignal.reason || 'Operation cancelled by caller';
             reject(abortErr);
           };
-          if (typeof options.signal.addEventListener === 'function') {
-            options.signal.addEventListener('abort', fallbackAbortListener);
+          if (typeof callerSignal.addEventListener === 'function') {
+            callerSignal.addEventListener('abort', fallbackAbortListener);
           }
         }
       });
@@ -155,15 +185,16 @@ async function executeNetworkRequest({
       })();
 
       try {
-        const result = (effectiveTimeoutMs > 0 || options.signal)
+        const shouldRace = effectiveTimeoutMs > 0 || Boolean(callerSignal);
+        const result = shouldRace
           ? await Promise.race([fetchAndParse, cancellationPromise])
           : await fetchAndParse;
         response = result.resp;
         json = result.parsed;
       } finally {
         if (fallbackTimer) clearTimeout(fallbackTimer);
-        if (fallbackAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
-          options.signal.removeEventListener('abort', fallbackAbortListener);
+        if (fallbackAbortListener && callerSignal && typeof callerSignal.removeEventListener === 'function') {
+          callerSignal.removeEventListener('abort', fallbackAbortListener);
         }
       }
     } else {
@@ -171,7 +202,7 @@ async function executeNetworkRequest({
       try {
         json = await response.json();
       } catch (parseErr) {
-        if (didTimeout || (options.signal?.aborted && !controller) || parseErr.name === 'AbortError') {
+        if (didTimeout || parseErr.name === 'AbortError') {
           throw parseErr;
         }
         json = {};
@@ -195,7 +226,7 @@ async function executeNetworkRequest({
       abortErr.code = 'API_ABORTED';
       abortErr.isAborted = true;
       abortErr.networkCancelled = Boolean(controller);
-      abortErr.reason = options.signal?.reason || err.reason || err.message;
+      abortErr.reason = callerSignal?.reason || options.signal?.reason || err.reason || err.message;
       throw abortErr;
     }
 
@@ -314,7 +345,15 @@ function request(endpoint, options = {}) {
     // In-flight GET deduplication evaluation
     // Deduplicate strictly for GET requests when bypassDedup is not requested
     const isDeduplicatable = isGet && !options.bypassDedup;
-    const dedupKey = isDeduplicatable ? `GET:${url}:${requestToken || 'ANON'}` : null;
+    const dedupKey = isDeduplicatable
+      ? buildDeduplicationKey({
+          url,
+          requestToken,
+          skipUnauthorizedHandler: Boolean(options.skipUnauthorizedHandler),
+          effectiveTimeoutMs,
+          headers: options.headers,
+        })
+      : null;
 
     if (!dedupKey) {
       // Non-GET mutation or bypassDedup: direct execution with its own controller
@@ -343,6 +382,7 @@ function request(endpoint, options = {}) {
           effectiveTimeoutMs,
           options,
           controller,
+          callerSignal: controller ? null : (options.signal || null),
         });
       } finally {
         if (callerAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
@@ -379,6 +419,7 @@ function request(endpoint, options = {}) {
             effectiveTimeoutMs,
             options,
             controller,
+            callerSignal: null, // Shared network request MUST NOT inherit initiating subscriber's signal
           });
 
           entry.isSettled = true;
@@ -436,6 +477,7 @@ function request(endpoint, options = {}) {
               try {
                 entry.controller.abort(options.signal.reason);
               } catch (_) {}
+              inFlightGetRequests.delete(dedupKey);
             }
           }
         };
@@ -461,6 +503,7 @@ export const api = {
    */
   clearInFlightRequests,
   getInFlightRequestCount,
+  buildDeduplicationKey,
   setUnauthorizedHandler: (cb) => setUnauthorizedHandler(cb),
 
   /**

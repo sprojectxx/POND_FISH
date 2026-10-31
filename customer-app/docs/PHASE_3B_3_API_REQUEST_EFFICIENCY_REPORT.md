@@ -24,7 +24,7 @@ Phase 3B.3 resolves these structural and network inefficiencies through four coo
 - **Workstream C (Category & Home Data Ownership):** `fetchHomeDataOrchestrated` in `customer-app/src/screens/HomeScreen.jsx` reuses existing categories on non-refresh transitions, preventing redundant network requests, while enforcing full refetching on user pull-to-refresh (`isRefresh = true`). The critical fish catalogue remains strictly Priority 1, unblocking visual display immediately upon arrival.
 - **Workstream D (Account & Lifecycle Safety):** `api.clearInFlightRequests()` is integrated into `App.jsx`'s logout handler (`handleLogout`), cancelling active in-flight requests on session clearance. Request keys are bound to token identity, preventing cross-user data leakage. Centralized single-owner HTTP 401 handling from Phase 3B.2 is fully preserved.
 
-All 103 unit and integration tests in the customer app suite pass with zero failures (100% pass rate). Production Metro bundling and Android release compilation (`assembleRelease`) completed with zero errors.
+All 114 unit and integration tests in the customer app suite pass with zero failures (100% pass rate). All 308 tests in the root ecosystem suite pass with zero failures across both parallel (`npm test`) and sequential (`node --test --test-concurrency=1`) runs. Production Metro bundling and Android release compilation (`assembleRelease` in 1m 9s) completed with zero errors.
 
 ---
 
@@ -97,25 +97,55 @@ Before implementing changes, a source audit of request ownership was conducted a
 
 ## 4. Workstream B: Safe In-Flight GET Request Deduplication
 
-### 4.1 Architecture and Key Construction
-In `customer-app/src/services/api.js`, an in-flight request registry was introduced:
+### 4.1 Architecture and Request-Option Aware Key Construction
+In `customer-app/src/services/api.js`, an in-flight request registry is maintained:
 ```javascript
 const inFlightGetRequests = new Map();
 ```
 
-The request key is constructed from:
+#### Deduplication Identity Isolation
+Early iterations keyed entries simply as `GET:<url>:<token|ANON>`. However, an audit revealed that this was insufficient when different callers requested the same URL and token with differing request semantics. Most critically, during app launch:
+- **Startup Profile Validation (`startup-session.js`):** Invokes `getProfile` with `{ skipUnauthorizedHandler: true, timeoutMs: 5000 }`.
+- **Normal Authenticated Request (`HomeScreen.jsx` / `ProfileScreen.jsx`):** Invokes `getProfile` with `{ skipUnauthorizedHandler: false, timeoutMs: 15000 }` (defaults).
+
+If coalesced:
+1. **Startup-First Order:** The normal user request would share the probe's promise, suppressing the centralized `onUnauthorizedCallback` when an authentication failure occurs, leaving the user stranded without navigation to login.
+2. **Normal-First Order:** The startup probe would share the normal request, causing a startup probe 401 to trigger an unexpected global logout sequence.
+
+To guarantee complete behavioral isolation, `buildDeduplicationKey` incorporates all response-semantic parameters:
 ```javascript
-const method = (options.method || 'GET').toUpperCase();
-const isGet = method === 'GET';
-const isDeduplicatable = isGet && !options.bypassDedup;
-const dedupKey = isDeduplicatable ? `GET:${url}:${requestToken || 'ANON'}` : null;
+function buildDeduplicationKey({
+  url,
+  requestToken,
+  skipUnauthorizedHandler = false,
+  effectiveTimeoutMs = DEFAULT_TIMEOUT_MS,
+  headers = {},
+}) {
+  const sortedHeaders = [];
+  if (headers && typeof headers === 'object') {
+    const keys = Object.keys(headers).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    for (const k of keys) {
+      const lower = k.toLowerCase();
+      // Exclude Authorization (captured by requestToken) and default Content-Type
+      if (lower !== 'authorization' && lower !== 'content-type') {
+        sortedHeaders.push(`${lower}=${String(headers[k])}`);
+      }
+    }
+  }
+  const headerPart = sortedHeaders.length > 0 ? `|h=${sortedHeaders.join('&')}` : '';
+  const skipFlag = skipUnauthorizedHandler ? '1' : '0';
+  return `GET:${url}:${requestToken || 'ANON'}:skip401=${skipFlag}:to=${effectiveTimeoutMs}${headerPart}`;
+}
 ```
 
 **Key Invariants:**
 - **GET Requests Only:** Non-GET methods (`POST`, `PUT`, `PATCH`, `DELETE`) evaluate `dedupKey = null` and bypass deduplication completely. Every mutation creates its own independent HTTP socket request.
 - **URL & Query Parameter Specificity:** `url` includes the complete request path and serialized query parameters (e.g. `/api/v1/customer/fish?category_id=cat_1` vs `/api/v1/customer/fish?category_id=cat_2`), ensuring distinct queries never coalesce.
 - **Authorization Token Scoping:** The key includes the active Android Keystore session token (or `'ANON'`), preventing cross-user request coalescing during session transitions.
-- **Bypass Option:** Callers can pass `bypassDedup: true` (e.g. during pull-to-refresh) to force a distinct network request.
+- **401 Handler Isolation:** `skip401=1` and `skip401=0` requests produce disjoint keys and never coalesce. Neither call suppresses or inherits the global unauthorized handler of the other, regardless of arrival order.
+- **Timeout Isolation:** Requests with different timeouts (e.g. 5000ms vs 15000ms) run independently.
+- **Header Isolation:** Distinct non-authorization, non-content-type headers are sorted case-insensitively, preventing semantic header clashes.
+- **Credential Protection:** In-flight keys and header values are kept in memory and are never written to application logs.
 
 ### 4.2 Uniform Subscriber Lifecycle & Settle Cleanup
 Every caller awaiting an in-flight request is treated uniformly as a subscriber:
@@ -124,7 +154,9 @@ let entry = inFlightGetRequests.get(dedupKey);
 const isInitiator = !entry;
 
 if (isInitiator) {
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const hasAbortController = typeof AbortController !== 'undefined';
+  const controller = hasAbortController ? new AbortController() : null;
+
   entry = {
     key: dedupKey,
     subscribers: new Set(),
@@ -136,7 +168,17 @@ if (isInitiator) {
   // Background network execution
   (async () => {
     try {
-      const json = await executeNetworkRequest({ ... });
+      const json = await executeNetworkRequest({
+        url,
+        endpoint,
+        method,
+        headers,
+        requestToken,
+        effectiveTimeoutMs,
+        options,
+        controller,
+        callerSignal: null, // Shared network request MUST NOT inherit initiating subscriber's signal
+      });
       entry.isSettled = true;
       for (const sub of Array.from(entry.subscribers)) {
         entry.subscribers.delete(sub);
@@ -161,7 +203,9 @@ if (isInitiator) {
 **Non-Caching Settle Invariant:**
 In the `finally` block of the underlying execution, `inFlightGetRequests.delete(dedupKey)` is called immediately upon settlement (success, failure, or timeout). Responses and errors are **never cached** across distinct invocations. Any subsequent call after settlement dispatches a fresh network request.
 
-### 4.3 Cancellation Isolation
+### 4.3 Cancellation Isolation & AbortController Fallback Mechanics
+
+#### Cancellation Isolation when `AbortController` is Available
 If Caller A provides `signalA` and aborts (e.g., component unmounts), Caller A is detached from `entry.subscribers` and its promise rejects with `API_ABORTED`. Crucially, the underlying network socket is **not aborted** as long as other subscribers remain in `entry.subscribers`:
 ```javascript
 const onCallerAbort = () => {
@@ -180,11 +224,19 @@ const onCallerAbort = () => {
       try {
         entry.controller.abort(options.signal.reason);
       } catch (_) {}
+      inFlightGetRequests.delete(dedupKey);
     }
   }
 };
 ```
 If and only if **all** subscribers have aborted does `entry.controller.abort()` fire on the wire.
+
+#### Cancellation Fallback when `AbortController` is Unavailable
+In environments where native `AbortController` is unavailable:
+1. **No Signal Inheritance:** `executeNetworkRequest` is invoked with `callerSignal: null`. The shared fetch does not race against any single subscriber's signal.
+2. **Independent Subscriber Detachment:** Each subscriber attaches its own abort listener to its individual subscriber promise. If Caller A aborts, Caller A detaches and rejects with `code: 'API_ABORTED'`, `networkCancelled: false`, leaving Caller B actively listening.
+3. **Socket Boundary:** Because no native `AbortController` is present, the underlying HTTP socket cannot be physically cancelled (`networkCancelled: false`). Timeout is enforced via `fallbackTimer`.
+4. **Resolution Guarantee:** When the underlying request finishes, any remaining subscribers (e.g. Caller B) receive the completed response data. If all subscribers detach, the request finishes cleanly in the background and removes the entry in `finally`.
 
 ### 4.4 Data Isolation
 To prevent object mutation bugs across co-subscribers sharing the same response, `cloneResponse(json)` provides deep payload isolation so that one subscriber modifying `res.data` cannot mutate the other subscriber's data.
@@ -323,9 +375,9 @@ Execution command:
 npm test --prefix customer-app
 ```
 **Results:**
-- **Total Tests:** 103
+- **Total Tests:** 114
 - **Total Suites:** 12
-- **Pass:** 103
+- **Pass:** 114
 - **Fail:** 0
 - **Cancelled:** 0
 - **Skipped:** 0
@@ -346,7 +398,7 @@ npm test --prefix customer-app
    - 401 coordination & single-owner unauthorized handling (2.1–2.8)
    - Navigation guard & onboarding gate transitions (3.1–3.4)
    - Static source structural invariants (4.1–4.5)
-4. **Phase 3B.3 In-Flight GET Request Deduplication Suite (New Suite 5):** 13/13 passed
+4. **Phase 3B.3 In-Flight GET Request Deduplication Suite (Suite 5):** 23/23 passed
    - `5.1`: Multiple identical concurrent GET requests share exactly 1 low-level network fetch.
    - `5.2`: Distinct GET requests with different query parameters execute separate fetches.
    - `5.3`: Distinct session tokens execute separate fetches.
@@ -360,7 +412,17 @@ npm test --prefix customer-app
    - `5.11`: Pre-aborted caller signal fails fast without making a network call.
    - `5.12`: `clearInFlightRequests()` aborts active in-flight requests with `API_SESSION_RESET`.
    - `5.13`: Data isolation: co-subscribers receive isolated clones of response payload.
-5. **Phase 3B.3 Cart & Home Data Ownership Suite (New Suite 6):** 8/8 passed
+   - `5.14`: Request identity isolation: startup profile probe (`skipUnauthorizedHandler: true`) and normal profile request (`skipUnauthorizedHandler: false`) do NOT coalesce into one request.
+   - `5.15`: Startup-first ordering: 401 on startup probe does not invoke global unauthorized handler.
+   - `5.16`: Normal-first ordering: 401 on normal request invokes global unauthorized handler with rejected token.
+   - `5.17`: Timeout isolation: requests with different `timeoutMs` do not share in-flight entry.
+   - `5.18`: Header isolation: requests with different custom headers do not share in-flight entry.
+   - `5.19`: Direct mutations (POST, PUT, DELETE) are never cancelled by `clearInFlightRequests()`.
+   - `5.20`: Cancellation fallback when `AbortController` is NOT available: Caller A aborting does NOT fail Caller B; Caller B receives data; `networkCancelled: false` reported accurately.
+   - `5.21`: Timeout cleanup in registry: request timing out removes entry from Map.
+   - `5.22`: All callers aborting when `AbortController` is available cleans up registry immediately.
+   - `5.23`: `buildDeduplicationKey`: validates option-aware hashing, header sorting, and token segregation.
+5. **Phase 3B.3 Cart & Home Data Ownership Suite (Suite 6):** 9/9 passed
    - `6.1`: Navigating to `CART` does not trigger `fetchCartSummary` from App shell.
    - `6.2`: App shell `handleCartUpdated` updates `cartSummary` and item count from mutations.
    - `6.3`: `fetchHomeDataOrchestrated` reuses `existingCategories` without refetching on non-refresh transitions.
@@ -369,8 +431,25 @@ npm test --prefix customer-app
    - `6.6`: Static check: `App.jsx` excludes `CART` from `fetchCartSummary` trigger.
    - `6.7`: Static check: `App.jsx` calls `api.clearInFlightRequests` on logout.
    - `6.8`: Static check: `api.js` implements in-flight deduplication registry and exports management methods.
+   - `6.9`: Static check: `api.js` implements option-aware `buildDeduplicationKey`.
 
-### 7.2 Metro Production Bundle Verification
+### 7.2 Root Ecosystem Test Suite (`npm test` & Concurrency 1)
+Execution commands:
+```bash
+npm test
+node --test --test-concurrency=1 "tests/**/*.test.js"
+```
+**Results:**
+- **Total Tests:** 308
+- **Total Suites:** 53
+- **Pass:** 308
+- **Fail:** 0
+- **Cancelled:** 0
+- **Skipped:** 0
+- **Pass Rate:** **100.0%**
+- **Outcome:** Clean pass across all unit and integration tests across the entire PondFish ecosystem.
+
+### 7.3 Metro Production Bundle Verification
 Execution command:
 ```bash
 cd customer-app; npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/build/test.bundle
@@ -381,13 +460,13 @@ cd customer-app; npx react-native bundle --platform android --dev false --entry-
 - Syntax errors: 0
 - Transform cache: clean
 
-### 7.3 Android Release Compilation (`assembleRelease`)
+### 7.4 Android Release Compilation (`assembleRelease`)
 Execution command:
 ```bash
 cd customer-app/android; ./gradlew assembleRelease
 ```
 **Result:**
-- Output: `BUILD SUCCESSFUL in 1m 13s`
+- Output: `BUILD SUCCESSFUL in 1m 9s`
 - Actionable tasks: 262 (9 executed, 253 up-to-date)
 - Release APK: Generated successfully at `customer-app/android/app/build/outputs/apk/release/app-release.apk`
 - Exit code: `0`
@@ -399,18 +478,21 @@ cd customer-app/android; ./gradlew assembleRelease
 | File | Change Description |
 | :--- | :--- |
 | [`customer-app/App.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/App.jsx) | Excluded `currentScreen === 'CART'` from authenticated `fetchCartSummary` effect trigger; added `api.clearInFlightRequests()` to `handleLogout`. |
-| [`customer-app/src/services/api.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js) | Implemented `inFlightGetRequests` registry, uniform subscriber model, cancellation isolation, settle cleanup, response cloning, and exported `clearInFlightRequests` and `getInFlightRequestCount`. |
+| [`customer-app/src/services/api.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js) | Implemented option-aware `buildDeduplicationKey`, uniform subscriber model, AbortController fallback mechanics, cancellation isolation, settle cleanup, response cloning, and exported `clearInFlightRequests`, `getInFlightRequestCount`, and `buildDeduplicationKey`. |
 | [`customer-app/src/screens/HomeScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/HomeScreen.jsx) | Added `existingCategories` support in `fetchHomeDataOrchestrated` to reuse loaded categories on non-refresh transitions; added `categoriesRef` in `HomeScreen` to pass cached categories without triggering hook dependency loops. |
-| [`tests/unit/customer-app-phase3-startup.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase3-startup.test.js) | Added Suite 5 (13 tests) for in-flight GET request deduplication and Suite 6 (8 tests) for cart/home request ownership and static code structure checks. |
+| [`tests/unit/customer-app-phase3-startup.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase3-startup.test.js) | Added Suite 5 (23 tests) for option-aware in-flight GET request deduplication, 401 identity isolation, cancellation fallbacks, and Suite 6 (9 tests) for cart/home request ownership and static code structure checks. |
 | [`customer-app/docs/PHASE_3B_3_API_REQUEST_EFFICIENCY_REPORT.md`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/docs/PHASE_3B_3_API_REQUEST_EFFICIENCY_REPORT.md) | Comprehensive engineering and verification report for Phase 3B.3. |
 
 ---
 
 ## 9. Final Phase 3B.3 Status
 
-All Phase 3B.3 objectives have been successfully achieved:
+All Phase 3B.3 objectives and corrections have been successfully achieved:
 1. Cart request duplication between `App.jsx` and `CartScreen.jsx` eliminated.
-2. Safe, non-caching in-flight GET deduplication active across the application.
-3. Category re-fetching on non-refresh transitions eliminated while keeping pull-to-refresh and priority 1 catalogue paint intact.
-4. Account lifecycle and token boundaries safely protected.
-5. 103/103 tests passing; production Metro bundle and Android release build verified.
+2. Request identity isolation established with option-aware `buildDeduplicationKey` preventing startup probe and authenticated request coalescing.
+3. Centralized single-owner HTTP 401 handling strictly isolated and preserved across startup and normal flows.
+4. Robust cancellation fallback when `AbortController` is unavailable, ensuring individual subscriber aborts never fail co-subscribers.
+5. Category re-fetching on non-refresh transitions eliminated while keeping pull-to-refresh and priority 1 catalogue paint intact.
+6. Account lifecycle and token boundaries safely protected.
+7. 114/114 customer-app tests passing; 308/308 root tests passing; production Metro bundle and Android release build verified.
+
