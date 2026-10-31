@@ -6,7 +6,8 @@
 **Application Directory:** `customer-app/`  
 **Target Branch:** `main`  
 **Approved Phase 2 Baseline Commit:** `fa0387df8a09bea7d70e5a5a97b2a5ceb493f820`  
-**Phase 3A Report Commit Reference:** `e15da2d65ceeef09c850a5b08a384232a00c7269`  
+**Original Phase 3A Report Commit:** `e15da2d65ceeef09c850a5b08a384232a00c7269`  
+**Report Evidence-Correction Commit:** `63792f7aa042a4292413e3f035dc7ed9ba53ac94`  
 **Phase:** 3A — Empirical Measurement & Baseline Diagnosis Only  
 
 ---
@@ -21,7 +22,7 @@ Profiling was conducted directly on a physical realme Android 16 device (`realme
 Every finding and claim in this report is strictly classified under one of four evidence tiers:
 - **[Source-confirmed]**: Verified directly by inspecting production source code or build configuration in the repository.
 - **[Directly measured]**: Quantified through reproducible hardware, network, or OS profiler measurements in the test environment.
-- **[Inferred / hypothesis]**: Plausible engineering inference or candidate hypothesis where causal proof requires further backend/client experiments.
+- **[Inferred / hypothesis]**: Plausible engineering inference or candidate hypothesis where causal proof requires further backend or client experiments.
 - **[Not measured / unavailable]**: Metric or test condition not captured in the current test environment.
 
 ---
@@ -31,25 +32,26 @@ Every finding and claim in this report is strictly classified under one of four 
 1. **Application Startup & First Content Delay**:
    - **[Directly measured]** Native cold activity startup is rapid: **median 227.0 ms** (range 219–328 ms), and warm resume takes **median 54.0 ms** (range 51–66 ms).
    - **[Source-confirmed]** [`SplashScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/SplashScreen.jsx#L86-L88) enforces a hardcoded **600 ms `setTimeout`** before initiating `checkSession()`.
-   - **[Directly measured]** Client-observed network latency for [`/api/v1/customer/fish`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js#L362) was **2,028.7 ms TTFB** on cold invocation and **658.9 ms TTFB** on warmed invocation, returning 14,019 bytes uncompressed JSON (`content-encoding: none`).
-   - **[Inferred / hypothesis]** Cumulative time to first visible catalogue content is estimated at **2.3 to 3.8 seconds** from cold launch, driven sequentially by native launch, the 600 ms splash timer, profile check, `/fish` network latency, and initial card image paint. Removing the splash timer is hypothesized to initiate network requests 600 ms earlier, though the exact end-to-end reduction must be measured after modification.
+   - **[Directly measured]** Client-observed network latency for [`/api/v1/customer/fish`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js#L362) measured from the test environment was **2,028.7 ms TTFB** on cold invocation and **658.9 ms TTFB** on warmed invocation, returning 14,019 bytes uncompressed JSON (`content-encoding: none`). The cause of the cold vs warmed difference is unknown.
+   - **[Inferred / hypothesis]** Cumulative time to first visible catalogue content is analytically estimated at **2.3 to 3.8 seconds** from cold launch, driven sequentially by native launch, the 600 ms splash timer, profile check, `/fish` network latency, and initial card image paint. Removing the splash timer is hypothesized to initiate network requests 600 ms earlier, though the exact end-to-end user impact must be validated after modification.
 
 2. **Image Asset Weight & Process Memory Consumption**:
    - **[Source-confirmed]** The catalogue comprises 21 fish records referencing **20 unique remote PNG images** hosted on Supabase Storage.
-   - **[Directly measured]** Aggregate measured download volume for all 20 unique images is **44,376,391 bytes ≈ 44.38 MB (42.32 MiB)**, averaging **2,218,819.55 bytes ≈ 2.22 MB (2.12 MiB)** per image.
+   - **[Directly measured]** Total measured image-inventory size for all 20 unique images is **44,376,391 bytes ≈ 44.38 MB (42.32 MiB)**, averaging **2,218,819.55 bytes ≈ 2.22 MB (2.12 MiB)** per image. This represents the total size of the catalogue image inventory on the static server, not a guaranteed per-session download.
    - **[Directly measured]** Image pixel dimensions range from **1536x1024 to 2172x724 pixels**, whereas mobile cards render in a container of **~565x330 physical pixels** (density: 2.975x).
    - **[Directly measured]** Process-level memory (`dumpsys meminfo`) increased from **85.5 MB Total PSS (31.8 MB Native Heap, 25.7 MB bitmaps)** at launch to **175.2 MB Total PSS (107.7 MB Native Heap, 114.8 MB bitmaps across 28 allocations)** after scrolling through the catalogue.
-   - **[Inferred / hypothesis]** While `dumpsys meminfo` establishes process-level bitmap allocation increases rather than per-image isolation, decoding high-resolution remote PNGs without explicit downsampling is hypothesized to contribute substantially to the native heap surge. Configuring `resizeMethod="resize"` represents a candidate experiment for Phase 3B.
+   - **[Inferred / hypothesis]** `dumpsys meminfo` establishes overall process-level bitmap allocation increases rather than per-component isolation. In React Native, `<Image>` without explicit downsampling is hypothesized to contribute to native heap growth when decoding high-resolution remote PNGs. Configuring `resizeMethod="resize"` represents a candidate experiment for Phase 3B.
 
-3. **UI Virtualization & Scrolling Performance**:
-   - **[Directly measured]** Phase 2 FlatList 2-column virtualization maintains smooth scrolling on physical hardware:
+3. **Scrolling & Frame-Time Performance Context**:
+   - **[Directly measured]** Under `dumpsys gfxinfo`:
      - Normal catalogue scrolling: **2.29% janky frames** (6/262 frames; 50th percentile: 20 ms, 90th percentile: 26 ms).
      - Rapid fling scrolling: **0.69% janky frames** (1/145 frames; 50th percentile: 13 ms, 90th percentile: 17 ms).
+   - **[Directly measured Context]** On a 120 Hz display (frame interval ~8.33 ms), median frame durations of **20 ms** (normal scrolling) and **13 ms** (rapid fling) exceed the single-frame budget (taking ~1.5 to 2.4 vsync intervals). A low jank percentage from `dumpsys gfxinfo` indicates that few frames missed their compositor presentation deadline, but frame durations above 8.33 ms show that rendering is not operating at a constant 120 FPS. Furthermore, `dumpsys gfxinfo` measures native Android graphics pipeline latency and does not establish React Native JavaScript thread frame intervals or touch response latency.
 
-4. **Duplicate API Requests & Potential Keystore Overhead**:
+4. **Duplicate API Requests & Potential Storage Overhead**:
    - **[Source-confirmed]** Navigating to [`CartScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/CartScreen.jsx) triggers a duplicate concurrent fetch of `GET /api/v1/customer/cart` (invoked simultaneously by [`App.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/App.jsx#L91-L95) and `CartScreen.jsx`).
-   - **[Source-confirmed]** In [`customer-app/src/services/auth-storage.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/auth-storage.js#L64-L66), `getAuthTokens()` reads Keychain via `readCredentialsDirect()` on every outgoing API request without an in-memory session token cache.
-   - **[Inferred / hypothesis]** Repeated asynchronous Keychain reads represent a source-confirmed potential overhead that warrants dedicated profiling and candidate in-memory caching.
+   - **[Source-confirmed]** In [`customer-app/src/services/auth-storage.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/auth-storage.js#L64-L66), `getAuthTokens()` makes repeated calls through the Keychain storage API (`Keychain.getGenericPassword()`) on every outgoing API request without an in-memory session token cache.
+   - **[Inferred / hypothesis]** Repeated calls through the Keychain storage API represent a source-confirmed pattern that warrants dedicated profiling and candidate in-memory caching.
 
 ---
 
@@ -64,7 +66,7 @@ Every finding and claim in this report is strictly classified under one of four 
 | **CPU Architecture** | `arm64-v8a` (Qualcomm Snapdragon 6 Gen 1 octa-core) | [Directly measured] |
 | **Total System RAM** | 7,481,904 kB (~8 GB LPDDR4X) | [Directly measured] |
 | **Display Resolution** | 1264 x 2780 pixels (1.5K Curved AMOLED) | [Directly measured] |
-| **Display Refresh Rate** | 120 Hz (Choreographer frame deadline: 8.33 ms / 16.66 ms) | [Directly measured] |
+| **Display Refresh Rate** | 120 Hz (Display frame interval: ~8.33 ms; 60 Hz interval: ~16.67 ms) | [Directly measured] |
 | **Display Metrics** | Physical Density: 560 dpi; Override Density: 476 dpi (density factor: 2.975x) | [Directly measured] |
 | **Network Connectivity** | Dual: High-speed Wi-Fi (802.11ac, ~150 Mbps) + 5G SA mobile network | [Directly measured] |
 | **Profiling Tools Used** | ADB v1.0.41, `dumpsys gfxinfo`, `dumpsys meminfo`, `logcat`, Node.js `perf_hooks` | [Directly measured] |
@@ -86,11 +88,12 @@ The Android build configuration was inspected directly in [`customer-app/android
 | **JavaScript Engine** | Hermes Bytecode (`__DEV__ = false`) | [Source-confirmed] | Bundle compiled to Hermes bytecode; distinct from Android Java/Kotlin code minification |
 | **Target SDK / Min SDK** | Target: 34 (Android 14) / Min: 24 (Android 7.0) | [Source-confirmed] | Tested on physical Android 16 preview |
 | **Approved Baseline SHA** | `fa0387df8a09bea7d70e5a5a97b2a5ceb493f820` | [Source-confirmed] | Approved Phase 2 commit |
-| **Phase 3A Commit Reference**| `e15da2d65ceeef09c850a5b08a384232a00c7269` | [Source-confirmed] | Baseline report commit |
+| **Original Phase 3A SHA** | `e15da2d65ceeef09c850a5b08a384232a00c7269` | [Source-confirmed] | Original baseline report commit |
+| **Evidence-Correction SHA**| `63792f7aa042a4292413e3f035dc7ed9ba53ac94` | [Source-confirmed] | Report evidence-correction commit |
 
 > [!NOTE]
 > **Build Configuration Distinction**:
-> While the JavaScript bundle is pre-compiled to Hermes bytecode in the release APK, the Android native Java/Kotlin code has `minifyEnabled false`. Therefore, Android code shrinking, dead-code stripping, and symbol obfuscation via R8/ProGuard are currently disabled in the Gradle release configuration.
+> In this release build, the JavaScript bundle is pre-compiled to Hermes bytecode, but the Android native Java/Kotlin code has `minifyEnabled false`. Therefore, Android code shrinking, dead-code elimination, and symbol obfuscation via R8/ProGuard are currently disabled in Gradle.
 
 ---
 
@@ -126,8 +129,10 @@ Evidence: **[Directly measured]**
 | **Median** | **HOT** | **54.0 ms** | **58.0 ms** | **ok** |
 | **Range** | **HOT** | **51 – 66 ms** | **56 – 70 ms** | — |
 
-### 4.3 Startup Stage Sequence & Observed Flow
+### 4.3 Startup Stage Sequence & Observed Flow (Warmed-Request Example)
 Evidence: **[Source-confirmed]** & **[Directly measured]**
+
+The following timeline illustrates the chronological stages observed on the device when the backend returns a warmed response (~659 ms). Note: A complete cold end-to-end trace with a simultaneous cold backend query (where `/fish` takes ~2,028 ms) was **not captured as a single instrumented Android trace**.
 
 ```
 [0 ms]       Native Process Fork (Zygote) & Android Application Creation  [Directly measured]
@@ -138,46 +143,49 @@ Evidence: **[Source-confirmed]** & **[Directly measured]**
 [+245 ms]    SplashScreen.jsx Mounts                                      [Source-confirmed]
              └── setTimeout(checkSession, 600ms)                          [Source-confirmed]
 [+845 ms]    checkSession() Executes:
-             ├── getAuthTokens() (Keychain / Android KeyStore read)       [Source-confirmed]
+             ├── getAuthTokens() (Keychain storage read)                  [Source-confirmed]
              └── api.getProfile() (HTTPS Call to pondfish.in)             [Directly measured: ~380 ms]
 [+1270 ms]   handleNavigate('HOME') triggers; HomeScreen.jsx Mounts       [Source-confirmed]
 [+1285 ms]   fetchHomeDataOrchestrated() fires:
-             ├── api.getFish() (Primary Catalogue API)                    [Directly measured: ~660 - 2,028 ms]
+             ├── api.getFish() (Primary Catalogue API)                    [Directly measured: ~659 ms (warmed)]
              ├── api.getCategories()                                      [Directly measured: ~470 ms (concurrent)]
              ├── api.getSubscription()                                    [Directly measured: ~350 ms (concurrent)]
              ├── api.getCustomerLiveTracking()                            [Directly measured: ~285 ms (concurrent)]
              └── api.getCart() (from App.jsx shell)                       [Directly measured: ~320 ms (concurrent)]
-[+1945 ms]   api.getFish() completes (Warm: ~659 ms; Cold: ~2,028 ms)     [Directly measured]
+[+1945 ms]   api.getFish() completes (Warmed response: ~659 ms)           [Directly measured]
 [+1970 ms]   FishCard instances mount; FlatList unblocks skeleton         [Source-confirmed]
-[+2350 ms]   First fish card remote image decoded and painted on screen   [Inferred / hypothesis]
+[+2350 ms]   First fish card remote image painted on screen               [Inferred / hypothesis]
 ```
 
 ---
 
 ## 5. First Visible Catalogue Timing
 
-| Stage | Cold Server / Cold App | Warm Server / Cold App | Warm Server / Warm App | Evidence Classification |
-| :--- | :---: | :---: | :---: | :---: |
-| **Native Activity Displayed** | 227.0 ms | 227.0 ms | 54.0 ms | [Directly measured] |
-| **Splash Screen Timer Delay** | 600.0 ms | 600.0 ms | 0.0 ms | [Source-confirmed] |
-| **Auth Check & Profile Fetch** | ~425 ms | ~425 ms | 0.0 ms | [Directly measured: ~380ms network + Keystore] |
-| **HomeScreen Mounting** | ~30 ms | ~30 ms | ~15 ms | [Inferred / hypothesis] |
-| **Catalogue API Response (`/fish`)** | 2,028.7 ms | 658.9 ms | 0.0 ms (cached state) | [Directly measured] |
-| **First Card Image Paint** | ~450 ms | ~380 ms | ~80 ms | [Inferred / hypothesis] |
-| **Estimated Total to First Visible Content** | **~3,760 ms** | **~2,322 ms** | **~149 ms** | [Inferred / hypothesis] |
+The following table presents native Activity launch measurements alongside analytical estimates for time to first visible catalogue content.  
+**Measurement Source Distinction**: Native Activity startup was directly measured on Android via `am start-activity -W`. Network endpoint latencies were measured using Node.js `perf_hooks` querying `https://pondfish.in`. The cumulative totals represent an analytical estimate combining both sources, not a single unified device trace.
+
+| Stage | Cold Server / Cold App (Estimated) | Warm Server / Cold App (Observed Flow) | Warm Server / Warm App (Estimated) | Measurement Source & Classification |
+| :--- | :---: | :---: | :---: | :--- |
+| **Native Activity Displayed** | 227.0 ms | 227.0 ms | 54.0 ms | Android `am start-activity -W` [Directly measured] |
+| **Splash Screen Timer Delay** | 600.0 ms | 600.0 ms | 0.0 ms | Source inspection of `SplashScreen.jsx` [Source-confirmed] |
+| **Auth Check & Profile Fetch** | ~425 ms | ~425 ms | 0.0 ms | Node.js `perf_hooks` profile check + storage read [Inferred / hypothesis] |
+| **HomeScreen Mounting** | ~30 ms | ~30 ms | ~15 ms | React Native component mount [Inferred / hypothesis] |
+| **Catalogue API Response (`/fish`)** | 2,028.7 ms | 658.9 ms | 0.0 ms | Node.js `perf_hooks` GET `/fish` [Directly measured] |
+| **First Card Image Paint** | ~450 ms | ~380 ms | ~80 ms | Network image download & render [Inferred / hypothesis] |
+| **Estimated Total to First Visible Content** | **~3,760 ms** | **~2,322 ms** | **~149 ms** | Analytical estimate combining sources [Inferred / hypothesis] |
 
 > [!NOTE]
 > **Measurement Distinction**:
-> Native Activity startup (`am start-activity -W`) measures when Android finishes drawing the initial activity window (median **227 ms**). Time to first visible catalogue content measures the complete user journey until fish cards appear on screen. The estimated 2.3–3.8 second cold delay is driven by the 600 ms splash timer, profile check, and backend `/fish` network response time.
+> Native Activity startup (`am start-activity -W`) measures when Android finishes drawing the initial activity window (median **227.0 ms**). Time to first visible catalogue content measures the complete user journey until fish cards appear on screen. The estimated 2.3–3.8 second cold delay is driven by the 600 ms splash timer, profile check, and `/fish` network response latency.
 
 ---
 
 ## 6. API Request Inventory & Timing
 
-Network performance against `https://pondfish.in` was empirically measured via Node.js `perf_hooks` over high-speed connectivity, isolating DNS lookup, TCP connect, TLS handshake, time to first byte (TTFB), total transfer duration, and payload size.
+Network performance against `https://pondfish.in` was empirically measured via Node.js `perf_hooks` over high-speed connectivity, isolating DNS lookup, TCP connect, TLS handshake, client-observed time to first byte (TTFB), total transfer duration, and payload size.
 
 | API Route | HTTP Method | Auth Required | Status | DNS (ms) | TCP (ms) | TLS (ms) | Client TTFB (ms) | Total (ms) | Bytes | Content-Encoding | Blocks UI? | Evidence Classification |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | `/api/v1/customer/fish` (cold) | GET | No | 200 OK | 74.4 | 32.1 | 52.4 | 2,028.7 | 2,031.1 | 14,019 B | none | **YES (Catalogue)** | [Directly measured] |
 | `/api/v1/customer/fish` (warmed) | GET | No | 200 OK | 0.0 | 0.0 | 0.0 | 658.9 | 659.1 | 14,019 B | none | **YES (Catalogue)** | [Directly measured] |
 | `/api/v1/customer/categories` | GET | No | 200 OK | 0.0 | 0.0 | 0.0 | 469.6 | 470.4 | 933 B | none | No (Filter chips) | [Directly measured] |
@@ -191,10 +199,10 @@ Network performance against `https://pondfish.in` was empirically measured via N
 ### Key API Observations:
 1. **[Directly measured] Zero Compression (`content-encoding: none`)**:
    All surveyed responses lacked gzip or Brotli compression headers. For the 14,019 byte `/fish` payload, transfer time over Wi-Fi/5G was negligible (~2 ms). On high-speed networks, compression would yield minimal latency improvements for a 14 KB payload, though it would reduce cellular data consumption.
-2. **[Directly measured] Client-Observed TTFB vs Server Execution**:
+2. **[Directly measured] Client-Observed TTFB Discrepancy**:
    `/api/v1/customer/fish` exhibited a client-observed TTFB of **2,028.7 ms** on cold request and settled at **658.9 ms** on repeated warmed requests.
-3. **[Inferred / hypothesis] Backend Latency Attribution**:
-   The exact split between database query execution, business logic formatting, and server compute cannot be confirmed without backend traces or `EXPLAIN ANALYZE` query plans. The discrepancy between cold and warmed TTFB suggests server-side computation or data caching effects.
+3. **[Not measured / unavailable] Server Execution Details**:
+   The cause of the difference between cold and warmed TTFB is **unknown**. Client-observed TTFB combines network transit with server processing; server-side execution traces and database query plans (`EXPLAIN ANALYZE`) are unavailable from this mobile repository environment.
 4. **[Directly measured] Secondary Call Concurrency**:
    Categories (~470 ms), subscription (~352 ms), GPS tracking (~285 ms), and cart summary (~320 ms) resolve in parallel without blocking the catalogue response, confirming Phase 1 non-blocking orchestration.
 
@@ -216,11 +224,11 @@ Network performance against `https://pondfish.in` was empirically measured via N
 - **Mechanism**: Every time the customer returns to `HomeScreen` (e.g., from Profile or Bookings), `fetchHomeDataOrchestrated` re-fetches `GET /api/v1/customer/categories`.
 - **Impact**: Category taxonomy (3 items: Freshwater, Marine, Shellfish) does not change during a user session. Re-fetching it on every tab visit creates unnecessary network requests.
 
-### 7.3 Repeated Keychain Reads (Potential Overhead)
-- **Evidence Classification**: **[Source-confirmed]** (potential overhead: **[Inferred / hypothesis]**)
+### 7.3 Repeated Keychain Storage Calls (Potential Overhead)
+- **Evidence Classification**: **[Source-confirmed]** (performance impact: **[Inferred / hypothesis]**)
 - **Location**: [`customer-app/src/services/api.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js#L60-L68) and [`customer-app/src/services/auth-storage.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/auth-storage.js#L64-L66)
-- **Mechanism**: Outgoing requests call `getAuthTokens()`, which executes `Keychain.getGenericPassword()`. Unlike device tokens (which use in-memory `cachedDeviceToken`), the authentication JWT has no in-memory cache variable.
-- **Clarification**: While source inspection confirms repeated Keychain reads on every API call, isolated per-call JNI timing was not directly micro-benchmarked. This represents a source-confirmed architectural inefficiency that requires dedicated profiling in Phase 3B.
+- **Mechanism**: Outgoing requests call `getAuthTokens()`, which executes repeated calls through the Keychain storage API (`Keychain.getGenericPassword()`). Unlike device tokens (which use in-memory `cachedDeviceToken`), the authentication token has no in-memory cache variable.
+- **Clarification**: Repeated calls through the Keychain storage API are confirmed by source inspection. The exact latency impact on the mobile runtime has not been independently measured and remains a hypothesis requiring dedicated profiling in Phase 3B.
 
 ---
 
@@ -253,8 +261,9 @@ Evidence: **[Directly measured]**
 | `white-pomfret.png` | 200 OK | image/png | 1,986,688 | 1,986,688 | PNG | 1536 x 1024 | ~565 x 330 px | public, max-age=3600 | `"14fe9773...-1"` |
 | **Totals / Averages** | **20 / 20 OK** | **image/png** | **44,376,391 B** | **44,376,391 B** | **PNG** | **~1750 x 920** | **~565 x 330 px** | **1 hour** | — |
 
-- **Exact Measured Aggregate Size**: **44,376,391 bytes ≈ 44.38 MB (decimal) ≈ 42.32 MiB (binary)**.
-- **Exact Arithmetic Average**: **2,218,819.55 bytes ≈ 2.22 MB (decimal) ≈ 2.12 MiB (binary)** per image.
+- **Total Measured Image-Inventory Size**: **44,376,391 bytes ≈ 44.38 MB (decimal) ≈ 42.32 MiB (binary)** across all 20 unique images in the catalogue.
+- **Arithmetic Average per Image**: **2,218,819.55 bytes ≈ 2.22 MB (decimal) ≈ 2.12 MiB (binary)**.
+- **Inventory Size vs Per-Session Download Distinction**: This figure represents the aggregate volume of all catalogue fish images hosted on the static server. It is **NOT** a guaranteed per-session download. Because of FlatList 2-column virtualization, only cards that enter the render window mount and request images; a user viewing only the initial screen items does not download the entire inventory. Actual per-session network download volume was **not measured via device-side packet capture**.
 - **Dimensional Comparison**: Display container on 476 dpi screen is **~565 x 330 physical pixels** (~0.18 MP). Source images are **1.5 to 1.7 megapixels** (~9x excess surface area).
 
 ---
@@ -268,14 +277,15 @@ Evidence: **[Directly measured]**
      - **In-Memory Bitmap Cache**: Holds decoded bitmap representations in native memory.
 2. **Process Memory Allocation Analysis**:
    - **[Directly measured]** Process bitmap allocations increased from **25.7 MB (12 allocations) to 114.8 MB (28 allocations)** after scrolling through the catalogue.
-   - **[Inferred / hypothesis]** In React Native on Android, `<Image>` uses default downsampling heuristics unless `resizeMethod="resize"` is specified. Because remote PNG dimensions exceed display containers by 3x–5x, Fresco is hypothesized to decode and retain oversized bitmaps. However, `dumpsys meminfo` measures overall process memory, not isolated per-component allocations.
-3. **Repeat-Visit Behavior**:
+   - **[Inferred / hypothesis]** `dumpsys meminfo` measures overall process memory and cannot isolate bitmap bytes attributable specifically to Fresco or individual `<Image>` components. However, because remote PNG dimensions exceed display containers by 3x–5x and `<Image>` lacks an explicit `resizeMethod="resize"`, decoding oversized assets is hypothesized to be a major contributor to process bitmap memory growth.
+3. **Repeat-Visit & Cache Header Behavior**:
    - **[Directly measured]** When navigating to Profile and returning to Home, images rendered immediately without network re-download.
-   - **[Directly measured]** `Cache-Control: public, max-age=3600` specifies a 1-hour cache lifetime. A customer launching the app after 1 hour will re-request the catalogue images over the network.
+   - **[Directly measured]** `Cache-Control: public, max-age=3600` specifies a 1-hour cache lifetime, and responses carry an `ETag` header.
+   - **[Inferred / hypothesis]** HTTP caching specifications allow conditional requests (`If-None-Match` with `ETag`) which return `304 Not Modified` with zero image body bytes if the server asset is unchanged. Whether Fresco performs conditional 304 revalidations or full re-downloads after the 1-hour expiration was **not measured via device network packet inspection**.
 
 ---
 
-## 10. Scrolling & Frame-Rate Measurements
+## 10. Scrolling & Frame-Time Measurements
 
 Frame rendering metrics were captured using Android's native Graphics Acceleration Profiler (`dumpsys gfxinfo com.pondfish.customer`) on physical hardware across standardized scrolling passes.  
 Evidence: **[Directly measured]**
@@ -308,8 +318,14 @@ adb shell dumpsys gfxinfo com.pondfish.customer
   - **99th percentile**: **28 ms**
 - **Slow UI Thread Frames**: 1
 
-### 10.3 Phase 2 Virtualization Assessment
-The measured jank rate (**0.69%–2.29%**) proves that Phase 2 FlatList 2-column virtualization and sub-tree memoization effectively maintain responsive rendering without UI thread blocking during continuous scroll interactions.
+### 10.3 Frame-Time Interpretation & Tooling Scope
+1. **Refresh Rate & Budget Context**:
+   - On a **120 Hz display** (such as the realme RMX3853 test device), the target frame interval is approximately **8.33 ms** (1/120s). On a standard **60 Hz display**, the target frame interval is approximately **16.67 ms** (1/60s).
+   - In that context, the reported median frame durations of **20 ms** (normal scrolling) and **13 ms** (rapid fling) exceed the single-frame budget for a 120 Hz display (spanning ~1.5 to 2.4 vsync periods). Even relative to a 60 Hz baseline (16.67 ms), the 20 ms normal scrolling median exceeds a single frame interval.
+   - Low janky-frame percentages (0.69%–2.29%) reported by `dumpsys gfxinfo` indicate that few frames missed their compositor presentation deadline under the platform's adaptive frame scheduling, but this metric alone does **not** prove smooth 120 Hz rendering or the absence of UI-thread blocking.
+2. **Measurement Scope of `dumpsys gfxinfo`**:
+   - `dumpsys gfxinfo` measures native Android graphics pipeline latencies (RenderThread draw command execution, ViewRootImpl synchronization, GPU command queueing, and compositor deadline misses).
+   - It does **NOT** measure React Native JavaScript thread frame intervals, JS event loop stalls, bridge traffic latency, or perceived touch latency.
 
 ---
 
@@ -332,7 +348,9 @@ adb shell dumpsys meminfo com.pondfish.customer
 1. **[Directly measured] Process Memory Elevation**:
    Scrolling through all 21 items in the catalogue increased Total PSS by **+89.7 MB (+105%)** and Native Heap by **+75.9 MB (+238%)**. Process-level `Bitmap (malloced)` increased from **25.7 MB (12 allocations) to 114.8 MB (28 allocations)**.
 2. **[Directly measured] Native Memory Retention**:
-   After navigating completely away to ProfileScreen and returning to HomeScreen, Total PSS remained at **169.1 MB** (96.4 MB bitmaps), indicating that Fresco retains decoded bitmap buffers in its in-memory pool.
+   After navigating completely away to ProfileScreen and returning to HomeScreen, Total PSS remained at **169.1 MB** (96.4 MB bitmaps), indicating that the process retains decoded bitmap allocations in memory.
+3. **[Not measured / unavailable] Per-Component Attribution**:
+   `dumpsys meminfo` reports total process memory; the exact allocation specifically attributable to fish card images versus other application or platform views was not separately isolated.
 
 ---
 
@@ -340,12 +358,12 @@ adb shell dumpsys meminfo com.pondfish.customer
 
 | Rank | Bottleneck Description | Category | Evidence Tier | Observed User Impact | Root Cause & Context |
 | :---: | :--- | :--- | :---: | :--- | :--- |
-| **1** | **Massive Remote Image Download Weight** | Network | **[Directly measured]** | **44.38 MB (42.32 MiB)** transfer for 20 images; ~2.22 MB (2.12 MiB) avg | Images stored as full-resolution PNGs (1536x1024 to 2172x724) on static storage. |
-| **2** | **Backend Cold Query Response Latency** | API / Network | **[Directly measured]** | **2,028.7 ms** cold TTFB on `/fish` (**658.9 ms** warm) | Client-observed latency discrepancy between cold and warmed invocations; server execution details require backend profiling. |
+| **1** | **Oversized Remote Image Inventory Assets** | Network / Assets | **[Directly measured]** | **44.38 MB (42.32 MiB)** total inventory size; ~2.22 MB (2.12 MiB) avg | Images stored as full-resolution PNGs (1536x1024 to 2172x724) on static storage; cards render in ~565x330px containers. |
+| **2** | **Backend Cold Query Response Latency** | API / Network | **[Directly measured]** | **2,028.7 ms** cold TTFB on `/fish` (**658.9 ms** warm) | Client-observed latency discrepancy between cold and warmed invocations; server execution details and cause are unknown. |
 | **3** | **Hardcoded Splash Screen Delay** | Client Startup | **[Source-confirmed]** | **600 ms** artificial delay before session check | `setTimeout(checkSession, 600)` in `SplashScreen.jsx` delays authentication and catalogue requests. |
 | **4** | **Process Bitmap Memory Elevation** | Memory | **[Directly measured]** | **+89.1 MB** process bitmap surge after scrolling | Process `Bitmap (malloced)` increases from 25.7 MB to 114.8 MB; `<Image>` uses default downsampling behavior. |
 | **5** | **Duplicate Cart Request on Navigation** | Network | **[Source-confirmed]** | **2x redundant calls** on Cart screen visit | `App.jsx` and `CartScreen.jsx` simultaneously fetch cart; static categories re-fetched on every HomeScreen mount. |
-| **6** | **Repeated Keychain Reads on Outgoing Requests** | Auth / IPC | **[Source-confirmed]** | Potential JNI/Keystore overhead on all API calls | `getAuthTokens()` reads Keychain via `readCredentialsDirect()` without in-memory token caching. |
+| **6** | **Repeated Calls Through Keychain Storage API** | Auth / Storage | **[Source-confirmed]** | Potential overhead on all outgoing API calls | `getAuthTokens()` calls Keychain via `readCredentialsDirect()` without in-memory token caching. |
 
 ---
 
@@ -372,10 +390,14 @@ adb shell dumpsys meminfo com.pondfish.customer
    Continuous battery discharge profiling requires specialized hardware power monitoring not available in this setup.
 2. **[Not measured / unavailable] Cellular RF Attenuation / 2G/3G Simulation**:
    Measurements used unthrottled 5G and Wi-Fi connections; programmable hardware network attenuators for packet drop were unavailable.
-3. **[Not measured / unavailable] Backend Query Execution Plans**:
-   PostgreSQL `EXPLAIN ANALYZE` execution plans on the production database cannot be captured from the mobile client repository.
+3. **[Not measured / unavailable] Backend Query Execution Plans & Server Traces**:
+   PostgreSQL `EXPLAIN ANALYZE` execution plans and server-side APM traces on the production database cannot be captured from the mobile client repository.
 4. **[Not measured / unavailable] Per-Component Bitmap Allocation Isolation**:
    `dumpsys meminfo` reports process-wide bitmap totals; isolating exact bitmap bytes per individual React Native `<Image>` component requires native Fresco heap dumps.
+5. **[Not measured / unavailable] Per-Session Device Network Data Volume**:
+   Actual network byte consumption for individual device user sessions was not captured via mobile packet capture or HTTP proxy metering.
+6. **[Not measured / unavailable] Network Cache Revalidation Verification**:
+   Whether Fresco performs conditional HTTP 304 revalidation or full asset downloads after cache expiration was not verified through device network traffic inspection.
 
 ---
 
@@ -418,13 +440,13 @@ The following technical recommendations are proposed for Phase 3B evaluation, or
 ---
 
 ### Recommendation 3: In-Memory Secure Session Token Caching
-- **Identified Problem**: `getAuthTokens()` executes Keychain lookup via `readCredentialsDirect()` on every outgoing API request.
+- **Identified Problem**: `getAuthTokens()` makes repeated calls through the Keychain storage API via `readCredentialsDirect()` on every outgoing API request.
 - **Evidence**: **[Source-confirmed]** [`customer-app/src/services/auth-storage.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/auth-storage.js#L64-L66).
 - **Proposed Technical Change**:
   - Maintain an in-memory session token reference (e.g., `cachedAuthTokens`) populated upon `saveAuthTokens()` and the initial splash `getAuthTokens()` read.
   - Invalidate `cachedAuthTokens = null` atomically inside `clearAuthTokens()`.
   - Serve subsequent `getAuthTokens()` calls from memory while preserving hardware Keystore persistence.
-- **Expected Benefit**: Eliminates redundant asynchronous Keychain reads across repeated API calls.
+- **Expected Benefit**: Eliminates redundant asynchronous Keychain storage reads across repeated API calls.
 - **Risk Level**: Low. Must preserve token matching and race protection established in Phase 1.
 - **Files Likely to Change**: `customer-app/src/services/auth-storage.js`.
 - **Regression Tests Required**: Phase 1 auth-storage unit tests (Sections 1.1–1.4).
@@ -475,7 +497,7 @@ TAP version 13
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 1438.49
+# duration_ms 1412.23
 ```
 
 ### 2. Root Ecosystem Test Suite
@@ -522,6 +544,6 @@ Exit Code: 0
 
 ## 17. Conclusion & Next Steps
 
-Phase 3A baseline profiling and evidence reconciliation are complete. All claims and figures have been strictly categorized into source-confirmed facts, directly measured observations, hypotheses for candidate experiments, and unavailable measurements.
+Phase 3A baseline profiling and measurement interpretation corrections are complete. All claims and figures have been strictly categorized into source-confirmed facts, directly measured observations, hypotheses for candidate experiments, and unavailable measurements.
 
 **STOP**: No application source code or production configuration has been altered. Phase 3B optimizations await independent review and approval.
