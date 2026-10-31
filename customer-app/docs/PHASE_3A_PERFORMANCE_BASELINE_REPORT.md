@@ -8,6 +8,7 @@
 **Approved Phase 2 Baseline Commit:** `fa0387df8a09bea7d70e5a5a97b2a5ceb493f820`  
 **Original Phase 3A Report Commit:** `e15da2d65ceeef09c850a5b08a384232a00c7269`  
 **Report Evidence-Correction Commit:** `63792f7aa042a4292413e3f035dc7ed9ba53ac94`  
+**Measurement Interpretation Commit:** `fdbcfdb99f6f7e01582e85becd9b746426255019`  
 **Phase:** 3A — Empirical Measurement & Baseline Diagnosis Only  
 
 ---
@@ -32,8 +33,8 @@ Every finding and claim in this report is strictly classified under one of four 
 1. **Application Startup & First Content Delay**:
    - **[Directly measured]** Native cold activity startup is rapid: **median 227.0 ms** (range 219–328 ms), and warm resume takes **median 54.0 ms** (range 51–66 ms).
    - **[Source-confirmed]** [`SplashScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/SplashScreen.jsx#L86-L88) enforces a hardcoded **600 ms `setTimeout`** before initiating `checkSession()`.
-   - **[Directly measured]** Client-observed network latency for [`/api/v1/customer/fish`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js#L362) measured from the test environment was **2,028.7 ms TTFB** on cold invocation and **658.9 ms TTFB** on warmed invocation, returning 14,019 bytes uncompressed JSON (`content-encoding: none`). The cause of the cold vs warmed difference is unknown.
-   - **[Inferred / hypothesis]** Cumulative time to first visible catalogue content is analytically estimated at **2.3 to 3.8 seconds** from cold launch, driven sequentially by native launch, the 600 ms splash timer, profile check, `/fish` network latency, and initial card image paint. Removing the splash timer is hypothesized to initiate network requests 600 ms earlier, though the exact end-to-end user impact must be validated after modification.
+   - **[Directly measured]** Client-observed network latency for [`/api/v1/customer/fish`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js#L362) measured from the test environment was **2,028.7 ms TTFB** on cold invocation and **658.9 ms TTFB** on warmed invocation, returning 14,019 bytes uncompressed JSON (`content-encoding: none`). The cause of the cold vs warmed difference is unknown; server-side execution time, database query plans (`EXPLAIN ANALYZE`), and APM traces were not available.
+   - **[Inferred / hypothesis]** Cumulative time to first visible catalogue content is analytically estimated at **2.3 to 3.8 seconds** from cold launch in an illustrative stitched sequence combining native launch, the 600 ms splash timer, profile check, `/fish` network latency, and initial card image paint. Removing the splash timer is hypothesized to initiate network requests 600 ms earlier, though the exact end-to-end user impact must be validated after modification.
 
 2. **Image Asset Weight & Process Memory Consumption**:
    - **[Source-confirmed]** The catalogue comprises 21 fish records referencing **20 unique remote PNG images** hosted on Supabase Storage.
@@ -90,6 +91,7 @@ The Android build configuration was inspected directly in [`customer-app/android
 | **Approved Baseline SHA** | `fa0387df8a09bea7d70e5a5a97b2a5ceb493f820` | [Source-confirmed] | Approved Phase 2 commit |
 | **Original Phase 3A SHA** | `e15da2d65ceeef09c850a5b08a384232a00c7269` | [Source-confirmed] | Original baseline report commit |
 | **Evidence-Correction SHA**| `63792f7aa042a4292413e3f035dc7ed9ba53ac94` | [Source-confirmed] | Report evidence-correction commit |
+| **Interpretation SHA**    | `fdbcfdb99f6f7e01582e85becd9b746426255019` | [Source-confirmed] | Measurement interpretation commit |
 
 > [!NOTE]
 > **Build Configuration Distinction**:
@@ -129,31 +131,39 @@ Evidence: **[Directly measured]**
 | **Median** | **HOT** | **54.0 ms** | **58.0 ms** | **ok** |
 | **Range** | **HOT** | **51 – 66 ms** | **56 – 70 ms** | — |
 
-### 4.3 Startup Stage Sequence & Observed Flow (Warmed-Request Example)
-Evidence: **[Source-confirmed]** & **[Directly measured]**
+### 4.3 Illustrative Stitched Startup Timeline (Warmed-Request Example)
+Evidence: **[Source-confirmed]**, **[Directly measured]**, & **[Inferred / hypothesis]**
 
-The following timeline illustrates the chronological stages observed on the device when the backend returns a warmed response (~659 ms). Note: A complete cold end-to-end trace with a simultaneous cold backend query (where `/fish` takes ~2,028 ms) was **not captured as a single instrumented Android trace**.
+The following timeline presents an **illustrative stitched sequence** combining separately captured measurements to demonstrate the startup flow when the backend returns a warmed `/fish` response (~659 ms).
+
+> [!IMPORTANT]
+> **Stitched Evidence Distinction vs. Single Device Trace**:
+> - **Native Android Startup Milestones** ([0 ms] to [+227 ms]) were measured directly on-device via Android `am start-activity -W` and `logcat`.
+> - **Component Mounting & Timer Sequences** are source-confirmed from React Native code structures (`SplashScreen.jsx`, `HomeScreen.jsx`).
+> - **Network Request Durations** (profile fetch ~380 ms, catalogue fetch ~659 ms warmed, secondary endpoints) were measured separately using Node.js `perf_hooks` and were **not captured as part of one simultaneous Android-device network trace**.
+> - Combining these separate measurements provides an illustrative flow, but does not establish exact on-device chronological timing.
+> - A unified cold launch trace capturing cold native startup and a cold `/fish` request (~2,028 ms) simultaneously was **not captured as a single instrumented device trace**.
 
 ```
-[0 ms]       Native Process Fork (Zygote) & Android Application Creation  [Directly measured]
-[+73 ms]     FirebaseApp & SoLoader Native Library Initialization         [Directly measured: logcat]
-[+121 ms]    MainActivity Creation & ViewRootImpl Surface Attachment      [Directly measured: logcat]
-[+227 ms]    Native Activity Displayed (LaunchState: COLD TotalTime)       [Directly measured: am start-activity]
-[+240 ms]    Hermes Engine Bytecode Execution & App.jsx Mount             [Source-confirmed]
-[+245 ms]    SplashScreen.jsx Mounts                                      [Source-confirmed]
-             └── setTimeout(checkSession, 600ms)                          [Source-confirmed]
-[+845 ms]    checkSession() Executes:
-             ├── getAuthTokens() (Keychain storage read)                  [Source-confirmed]
-             └── api.getProfile() (HTTPS Call to pondfish.in)             [Directly measured: ~380 ms]
-[+1270 ms]   handleNavigate('HOME') triggers; HomeScreen.jsx Mounts       [Source-confirmed]
-[+1285 ms]   fetchHomeDataOrchestrated() fires:
-             ├── api.getFish() (Primary Catalogue API)                    [Directly measured: ~659 ms (warmed)]
-             ├── api.getCategories()                                      [Directly measured: ~470 ms (concurrent)]
-             ├── api.getSubscription()                                    [Directly measured: ~350 ms (concurrent)]
-             ├── api.getCustomerLiveTracking()                            [Directly measured: ~285 ms (concurrent)]
-             └── api.getCart() (from App.jsx shell)                       [Directly measured: ~320 ms (concurrent)]
-[+1945 ms]   api.getFish() completes (Warmed response: ~659 ms)           [Directly measured]
-[+1970 ms]   FishCard instances mount; FlatList unblocks skeleton         [Source-confirmed]
+[0 ms]       Native Process Fork (Zygote) & Android Application Creation  [Android am start-activity / system]
+[+73 ms]     FirebaseApp & SoLoader Native Library Initialization         [Android logcat]
+[+121 ms]    MainActivity Creation & ViewRootImpl Surface Attachment      [Android logcat]
+[+227 ms]    Native Activity Displayed (LaunchState: COLD TotalTime)       [Android am start-activity -W]
+[+240 ms]    Hermes Engine Bytecode Execution & App.jsx Mount             [Source-confirmed structure]
+[+245 ms]    SplashScreen.jsx Mounts                                      [Source-confirmed structure]
+             └── setTimeout(checkSession, 600ms)                          [Source-confirmed code]
+[+845 ms]    checkSession() Executes:                                     [Stitched sequence estimate]
+             ├── getAuthTokens() (Keychain storage read)                  [Source-confirmed code]
+             └── api.getProfile() (HTTPS Call to pondfish.in)             [Independently measured Node.js perf_hooks: ~380 ms]
+[+1270 ms]   handleNavigate('HOME') triggers; HomeScreen.jsx Mounts       [Source-confirmed structure]
+[+1285 ms]   fetchHomeDataOrchestrated() fires:                           [Source-confirmed structure]
+             ├── api.getFish() (Primary Catalogue API)                    [Independently measured Node.js perf_hooks: ~659 ms (warmed)]
+             ├── api.getCategories()                                      [Independently measured Node.js perf_hooks: ~470 ms (concurrent)]
+             ├── api.getSubscription()                                    [Independently measured Node.js perf_hooks: ~350 ms (concurrent)]
+             ├── api.getCustomerLiveTracking()                            [Independently measured Node.js perf_hooks: ~285 ms (concurrent)]
+             └── api.getCart() (from App.jsx shell)                       [Independently measured Node.js perf_hooks: ~320 ms (concurrent)]
+[+1945 ms]   api.getFish() completes (Warmed response: ~659 ms)           [Independently measured Node.js perf_hooks]
+[+1970 ms]   FishCard instances mount; FlatList unblocks skeleton         [Source-confirmed structure]
 [+2350 ms]   First fish card remote image painted on screen               [Inferred / hypothesis]
 ```
 
@@ -162,7 +172,7 @@ The following timeline illustrates the chronological stages observed on the devi
 ## 5. First Visible Catalogue Timing
 
 The following table presents native Activity launch measurements alongside analytical estimates for time to first visible catalogue content.  
-**Measurement Source Distinction**: Native Activity startup was directly measured on Android via `am start-activity -W`. Network endpoint latencies were measured using Node.js `perf_hooks` querying `https://pondfish.in`. The cumulative totals represent an analytical estimate combining both sources, not a single unified device trace.
+**Measurement Source Distinction**: Native Activity startup was directly measured on Android via `am start-activity -W`. Network endpoint latencies were measured separately using Node.js `perf_hooks` querying `https://pondfish.in`. Profile and catalogue request durations were not captured as part of one simultaneous Android-device network trace. The cumulative totals represent an illustrative stitched estimate combining both sources, not a single unified device trace.
 
 | Stage | Cold Server / Cold App (Estimated) | Warm Server / Cold App (Observed Flow) | Warm Server / Warm App (Estimated) | Measurement Source & Classification |
 | :--- | :---: | :---: | :---: | :--- |
@@ -184,17 +194,21 @@ The following table presents native Activity launch measurements alongside analy
 
 Network performance against `https://pondfish.in` was empirically measured via Node.js `perf_hooks` over high-speed connectivity, isolating DNS lookup, TCP connect, TLS handshake, client-observed time to first byte (TTFB), total transfer duration, and payload size.
 
-| API Route | HTTP Method | Auth Required | Status | DNS (ms) | TCP (ms) | TLS (ms) | Client TTFB (ms) | Total (ms) | Bytes | Content-Encoding | Blocks UI? | Evidence Classification |
+| API Route | HTTP Method | Auth Required | Status | DNS (ms) | TCP (ms) | TLS (ms) | Client TTFB (ms) | Total (ms) | Bytes | Content-Encoding | Blocks First Catalogue Content? | Evidence Classification |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `/api/v1/customer/fish` (cold) | GET | No | 200 OK | 74.4 | 32.1 | 52.4 | 2,028.7 | 2,031.1 | 14,019 B | none | **YES (Catalogue)** | [Directly measured] |
-| `/api/v1/customer/fish` (warmed) | GET | No | 200 OK | 0.0 | 0.0 | 0.0 | 658.9 | 659.1 | 14,019 B | none | **YES (Catalogue)** | [Directly measured] |
-| `/api/v1/customer/categories` | GET | No | 200 OK | 0.0 | 0.0 | 0.0 | 469.6 | 470.4 | 933 B | none | No (Filter chips) | [Directly measured] |
-| `/api/v1/customer/profile` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 380.2 | 381.1 | 482 B | none | **YES (Splash/Auth)** | [Directly measured] |
-| `/api/v1/customer/cart` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 320.4 | 321.2 | 1,124 B | none | No (Badge counter) | [Directly measured] |
-| `/api/v1/customer/subscription` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 352.1 | 353.0 | 612 B | none | No (Quota widget) | [Directly measured] |
-| `/api/v1/customer/gps/live` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 285.2 | 287.7 | 340 B | none | No (GPS card) | [Directly measured] |
-| `/api/v1/customer/subscription/plans` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 300.6 | 301.8 | 1,480 B | none | No (Plan screen) | [Directly measured] |
+| `/api/v1/customer/fish` (cold) | GET | No | 200 OK | 74.4 | 32.1 | 52.4 | 2,028.7 | 2,031.1 | 14,019 B | none | **YES (Delays catalogue content)** | [Directly measured] |
+| `/api/v1/customer/fish` (warmed) | GET | No | 200 OK | 0.0 | 0.0 | 0.0 | 658.9 | 659.1 | 14,019 B | none | **YES (Delays catalogue content)** | [Directly measured] |
+| `/api/v1/customer/categories` | GET | No | 200 OK | 0.0 | 0.0 | 0.0 | 469.6 | 470.4 | 933 B | none | No (Secondary filter chips) | [Directly measured] |
+| `/api/v1/customer/profile` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 380.2 | 381.1 | 482 B | none | Indirectly (Gates splash navigation) | [Directly measured] |
+| `/api/v1/customer/cart` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 320.4 | 321.2 | 1,124 B | none | No (Cart badge counter) | [Directly measured] |
+| `/api/v1/customer/subscription` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 352.1 | 353.0 | 612 B | none | No (Quota card) | [Directly measured] |
+| `/api/v1/customer/gps/live` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 285.2 | 287.7 | 340 B | none | No (GPS tracking card) | [Directly measured] |
+| `/api/v1/customer/subscription/plans` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 300.6 | 301.8 | 1,480 B | none | No (Plans screen) | [Directly measured] |
 | `/api/v1/customer/bookings` | GET | Yes | 200 OK | 0.0 | 0.0 | 0.0 | 412.5 | 414.2 | 2,840 B | none | No (History screen) | [Directly measured] |
+
+> [!NOTE]
+> **Catalogue Content Availability vs. UI Thread Execution**:
+> The column **"Blocks First Catalogue Content?"** identifies whether an asynchronous API response delays the availability and presentation of catalogue content on screen. The `/fish` request delays replacing the HomeScreen skeleton with catalogue cards, and `/profile` gates transitioning from `SplashScreen` to `HomeScreen`. This reflects application-level content availability, **not** that the network request blocks the React Native UI thread or JavaScript thread. Asynchronous HTTP requests do not block thread execution while pending; thread blocking must not be inferred from API response timing.
 
 ### Key API Observations:
 1. **[Directly measured] Zero Compression (`content-encoding: none`)**:
@@ -202,7 +216,7 @@ Network performance against `https://pondfish.in` was empirically measured via N
 2. **[Directly measured] Client-Observed TTFB Discrepancy**:
    `/api/v1/customer/fish` exhibited a client-observed TTFB of **2,028.7 ms** on cold request and settled at **658.9 ms** on repeated warmed requests.
 3. **[Not measured / unavailable] Server Execution Details**:
-   The cause of the difference between cold and warmed TTFB is **unknown**. Client-observed TTFB combines network transit with server processing; server-side execution traces and database query plans (`EXPLAIN ANALYZE`) are unavailable from this mobile repository environment.
+   The cause of the difference between cold and warmed TTFB is **unknown**. Client-observed TTFB combines network transit with server processing; server-side execution time, database query plans (`EXPLAIN ANALYZE`), and APM traces were not available from this mobile repository environment.
 4. **[Directly measured] Secondary Call Concurrency**:
    Categories (~470 ms), subscription (~352 ms), GPS tracking (~285 ms), and cart summary (~320 ms) resolve in parallel without blocking the catalogue response, confirming Phase 1 non-blocking orchestration.
 
@@ -348,9 +362,9 @@ adb shell dumpsys meminfo com.pondfish.customer
 1. **[Directly measured] Process Memory Elevation**:
    Scrolling through all 21 items in the catalogue increased Total PSS by **+89.7 MB (+105%)** and Native Heap by **+75.9 MB (+238%)**. Process-level `Bitmap (malloced)` increased from **25.7 MB (12 allocations) to 114.8 MB (28 allocations)**.
 2. **[Directly measured] Native Memory Retention**:
-   After navigating completely away to ProfileScreen and returning to HomeScreen, Total PSS remained at **169.1 MB** (96.4 MB bitmaps), indicating that the process retains decoded bitmap allocations in memory.
+   After navigating completely away to ProfileScreen and returning to HomeScreen, Total PSS remained at **169.1 MB** (96.4 MB bitmaps), showing that process-level bitmap allocations remained elevated after navigation away from the catalogue.
 3. **[Not measured / unavailable] Per-Component Attribution**:
-   `dumpsys meminfo` reports total process memory; the exact allocation specifically attributable to fish card images versus other application or platform views was not separately isolated.
+   `dumpsys meminfo` reports total process memory; these allocations are not attributed specifically to fish card images, Fresco, or individual React Native components, as per-component allocations were not separately isolated.
 
 ---
 
@@ -359,7 +373,7 @@ adb shell dumpsys meminfo com.pondfish.customer
 | Rank | Bottleneck Description | Category | Evidence Tier | Observed User Impact | Root Cause & Context |
 | :---: | :--- | :--- | :---: | :--- | :--- |
 | **1** | **Oversized Remote Image Inventory Assets** | Network / Assets | **[Directly measured]** | **44.38 MB (42.32 MiB)** total inventory size; ~2.22 MB (2.12 MiB) avg | Images stored as full-resolution PNGs (1536x1024 to 2172x724) on static storage; cards render in ~565x330px containers. |
-| **2** | **Backend Cold Query Response Latency** | API / Network | **[Directly measured]** | **2,028.7 ms** cold TTFB on `/fish` (**658.9 ms** warm) | Client-observed latency discrepancy between cold and warmed invocations; server execution details and cause are unknown. |
+| **2** | **Client-observed /fish response latency** | API / Network | **[Directly measured]** | **2,028.7 ms** cold TTFB on `/fish` (**658.9 ms** warm) | Client-observed latency discrepancy between cold and warmed invocations. The cause is unknown; server-side execution time, database query plans (`EXPLAIN ANALYZE`), and APM traces were not available. |
 | **3** | **Hardcoded Splash Screen Delay** | Client Startup | **[Source-confirmed]** | **600 ms** artificial delay before session check | `setTimeout(checkSession, 600)` in `SplashScreen.jsx` delays authentication and catalogue requests. |
 | **4** | **Process Bitmap Memory Elevation** | Memory | **[Directly measured]** | **+89.1 MB** process bitmap surge after scrolling | Process `Bitmap (malloced)` increases from 25.7 MB to 114.8 MB; `<Image>` uses default downsampling behavior. |
 | **5** | **Duplicate Cart Request on Navigation** | Network | **[Source-confirmed]** | **2x redundant calls** on Cart screen visit | `App.jsx` and `CartScreen.jsx` simultaneously fetch cart; static categories re-fetched on every HomeScreen mount. |
@@ -445,7 +459,7 @@ The following technical recommendations are proposed for Phase 3B evaluation, or
 - **Proposed Technical Change**:
   - Maintain an in-memory session token reference (e.g., `cachedAuthTokens`) populated upon `saveAuthTokens()` and the initial splash `getAuthTokens()` read.
   - Invalidate `cachedAuthTokens = null` atomically inside `clearAuthTokens()`.
-  - Serve subsequent `getAuthTokens()` calls from memory while preserving hardware Keystore persistence.
+  - Serve subsequent `getAuthTokens()` calls from memory while preserving the existing secure Keychain-backed persistence, token lifecycle, and token-matching safeguards.
 - **Expected Benefit**: Eliminates redundant asynchronous Keychain storage reads across repeated API calls.
 - **Risk Level**: Low. Must preserve token matching and race protection established in Phase 1.
 - **Files Likely to Change**: `customer-app/src/services/auth-storage.js`.
@@ -480,70 +494,83 @@ The following technical recommendations are proposed for Phase 3B evaluation, or
 
 ---
 
-## 16. Test Suite & Build Verification
+## 16. Test Suite & Build Verification Chronology
 
-The current test suites and build checks remain fully green on the approved Phase 2 baseline:
+Phase 3A is strictly a baseline measurement and documentation phase with no application source code or build configuration changes. The verification evidence below explicitly distinguishes between tests freshly rerun during the Phase 3A report corrections and historical baseline records established during Phase 2.
 
-### 1. Customer App Test Suite
-```bash
-npm test --prefix customer-app
-```
-```
-TAP version 13
-# tests 58
-# suites 5
-# pass 58
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 1412.23
-```
+### 16.1 Rerun Verification: Customer App Unit Test Suite (Phase 3A Report Correction)
+- **Status**: **Rerun and verified during Phase 3A report correction**
+- **Command**:
+  ```bash
+  npm test --prefix customer-app
+  ```
+- **Output**:
+  ```
+  TAP version 13
+  # tests 58
+  # suites 5
+  # pass 58
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  # duration_ms 1419.20
+  ```
+- **Scope**: Re-executes all 58 unit tests covering Phase 1 responsiveness/auth-storage race handling and Phase 2 virtualization/filtering/image validation logic. Confirms 100% test pass rate with zero regressions.
 
-### 2. Root Ecosystem Test Suite
-```bash
-npm test
-```
-```
-TAP version 13
-1..52
-# tests 252
-# suites 7
-# pass 252
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 17057.4898
-```
-*(Note: Top-level Node TAP summary reports 0 skips; subtest `tests/integration/postgres-checkout-lifecycle.test.js` logs skip notice for dedicated test port 5433).*
+### 16.2 Historical Baseline Evidence: Root Ecosystem Test Suite (Recorded at Phase 2 Baseline)
+- **Status**: **Historical Phase 2 baseline record (Commit `fa0387df8a09bea7d70e5a5a97b2a5ceb493f820`); NOT rerun during this documentation-only correction**
+- **Command**:
+  ```bash
+  npm test
+  ```
+- **Recorded Baseline Output**:
+  ```
+  TAP version 13
+  1..52
+  # tests 252
+  # suites 7
+  # pass 252
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  # duration_ms 17057.4898
+  ```
+- **Integration Test Environment Limitation**: The top-level Node TAP summary reports 0 skips across the suite, but subtest `tests/integration/postgres-checkout-lifecycle.test.js` logs an internal skip notice when running against an offline dedicated PostgreSQL test instance on port 5433. Live PostgreSQL integration was not validated while its dedicated test instance was unavailable.
 
-### 3. Metro Production Bundle Check
-```bash
-cd customer-app
-npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output ./test_bundle.js
-```
-```
-info Writing bundle output to: ./test_bundle.js
-info Done writing bundle output
-Exit Code: 0
-```
+### 16.3 Historical Baseline Evidence: Metro Production Bundle (Recorded at Phase 2 Baseline)
+- **Status**: **Historical Phase 2 baseline check; NOT rerun during this documentation-only correction**
+- **Command**:
+  ```bash
+  cd customer-app
+  npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output ./test_bundle.js
+  ```
+- **Recorded Baseline Output**:
+  ```
+  info Writing bundle output to: ./test_bundle.js
+  info Done writing bundle output
+  Exit Code: 0
+  ```
 
-### 4. Android Native Release Compilation
-```bash
-cd customer-app/android
-.\gradlew.bat assembleRelease
-```
-```
-BUILD SUCCESSFUL in 40s
-262 actionable tasks: 9 executed, 253 up-to-date
-Exit Code: 0
-```
+### 16.4 Historical Baseline Evidence: Android Native Release Compilation (Recorded at Phase 2 Baseline)
+- **Status**: **Historical Phase 2 baseline build used for Phase 3A device profiling APK; NOT rerun during this documentation-only correction**
+- **Command**:
+  ```bash
+  cd customer-app/android
+  .\gradlew.bat assembleRelease
+  ```
+- **Recorded Baseline Output**:
+  ```
+  BUILD SUCCESSFUL in 40s
+  262 actionable tasks: 9 executed, 253 up-to-date
+  Exit Code: 0
+  ```
 
 ---
 
 ## 17. Conclusion & Next Steps
 
-Phase 3A baseline profiling and measurement interpretation corrections are complete. All claims and figures have been strictly categorized into source-confirmed facts, directly measured observations, hypotheses for candidate experiments, and unavailable measurements.
+Phase 3A baseline profiling, evidence precision reconciliation, and measurement interpretation corrections are complete. All claims and figures have been strictly categorized into source-confirmed facts, directly measured observations, hypotheses for candidate experiments, and unavailable measurements.
 
 **STOP**: No application source code or production configuration has been altered. Phase 3B optimizations await independent review and approval.
