@@ -26,6 +26,127 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyStateView from '../components/EmptyStateView';
 import ErrorStateView from '../components/ErrorStateView';
 
+/**
+ * Prioritized data retrieval orchestrator for HomeScreen.
+ * Separated for direct unit/integration testability without mounting full React Native view tree.
+ * 
+ * 1. Critical initial content (Fish catalogue) unblocks visual display immediately upon arrival.
+ * 2. Secondary content (Categories, Subscription, Tracking, Profile) loads concurrently in background.
+ * 3. Cart summary is owned authoritatively by App shell props (redundant fetch removed).
+ */
+export async function fetchHomeDataOrchestrated({
+  apiClient,
+  setFishList,
+  setCategories,
+  setSubData,
+  setTrackingData,
+  setCustomer,
+  setLoading,
+  setRefreshing,
+  setError,
+  abortControllerRef,
+  isMountedRef,
+  requestSeqRef,
+  isRefresh = false,
+}) {
+  // Cancel any previous in-flight requests
+  if (abortControllerRef.current) {
+    abortControllerRef.current.abort();
+  }
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  abortControllerRef.current = controller;
+
+  const currentSeq = ++requestSeqRef.current;
+
+  if (isRefresh) {
+    setRefreshing(true);
+  } else {
+    setLoading(true);
+    setError(null);
+  }
+
+  const signal = controller?.signal;
+
+  // Priority 1: Critical Fish Catalogue
+  const fishPromise = apiClient.getFish({}, { signal })
+    .then((res) => {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+      setFishList(res.data || []);
+      setError(null);
+      setLoading(false); // Unblock catalogue paint immediately
+    })
+    .catch((err) => {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+      if (err.code === 'API_ABORTED') return;
+      console.error('[HOME FISH LOAD ERROR]', err.message);
+      // Preserve existing fish list on refresh failure; only show error state if catalogue is empty
+      setFishList((prev) => {
+        if (!prev || prev.length === 0) {
+          setError(err.message || 'Unable to load today’s fish catalogue.');
+        }
+        return prev;
+      });
+      setLoading(false);
+    });
+
+  // Secondary Content (Executes concurrently in background without blocking fish catalogue)
+  const catsPromise = apiClient.getCategories({ signal })
+    .then((res) => {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+      setCategories(res.data || []);
+    })
+    .catch((err) => {
+      if (err.code !== 'API_ABORTED') {
+        console.warn('[HOME CATEGORIES NON-FATAL]', err.message);
+      }
+    });
+
+  const subPromise = apiClient.getSubscription({ signal })
+    .then((res) => {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+      setSubData(res.data || null);
+    })
+    .catch((err) => {
+      if (err.code !== 'API_ABORTED') {
+        console.warn('[HOME SUBSCRIPTION NON-FATAL]', err.message);
+      }
+    });
+
+  const trackingPromise = apiClient.getCustomerLiveTracking({ signal })
+    .then((res) => {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+      setTrackingData(res.data || null);
+    })
+    .catch((err) => {
+      if (err.code !== 'API_ABORTED') {
+        console.warn('[HOME TRACKING NON-FATAL]', err.message);
+      }
+    });
+
+  const profilePromise = apiClient.getProfile(null, { signal })
+    .then((res) => {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+      if (res.data) {
+        setCustomer(res.data);
+      }
+    })
+    .catch((err) => {
+      if (err.code !== 'API_ABORTED') {
+        console.warn('[HOME PROFILE NON-FATAL]', err.message);
+      }
+    });
+
+  // Await all independent requests to settle before terminating refresh indicator
+  try {
+    await Promise.allSettled([fishPromise, catsPromise, subPromise, trackingPromise, profilePromise]);
+  } finally {
+    if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  }
+}
+
 export default function HomeScreen({
   routeParams = {},
   onNavigate,
@@ -73,107 +194,23 @@ export default function HomeScreen({
     };
   }, []);
 
-  // Prioritized data retrieval:
-  // 1. Critical initial content (Fish catalogue) unblocks visual display immediately upon arrival.
-  // 2. Secondary content (Categories, Subscription, Tracking, Profile) loads concurrently in background.
-  // 3. Cart summary is owned authoritatively by App shell props (redundant fetch removed).
+  // Prioritized data retrieval delegating to fetchHomeDataOrchestrated
   const loadAllData = useCallback(async (isRefresh = false) => {
-    // Cancel any previous in-flight requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    abortControllerRef.current = controller;
-
-    const currentSeq = ++requestSeqRef.current;
-
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-      setError(null);
-    }
-
-    const signal = controller?.signal;
-
-    // Priority 1: Critical Fish Catalogue
-    const fishPromise = api.getFish({}, { signal })
-      .then((res) => {
-        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-        setFishList(res.data || []);
-        setError(null);
-        setLoading(false); // Unblock catalogue paint immediately
-      })
-      .catch((err) => {
-        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-        if (err.code === 'API_ABORTED') return;
-        console.error('[HOME FISH LOAD ERROR]', err.message);
-        // Preserve existing fish list on refresh failure; only show error state if catalogue is empty
-        setFishList((prev) => {
-          if (!prev || prev.length === 0) {
-            setError(err.message || 'Unable to load today’s fish catalogue.');
-          }
-          return prev;
-        });
-        setLoading(false);
-      });
-
-    // Secondary Content (Executes concurrently in background without blocking fish catalogue)
-    const catsPromise = api.getCategories({ signal })
-      .then((res) => {
-        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-        setCategories(res.data || []);
-      })
-      .catch((err) => {
-        if (err.code !== 'API_ABORTED') {
-          console.warn('[HOME CATEGORIES NON-FATAL]', err.message);
-        }
-      });
-
-    const subPromise = api.getSubscription({ signal })
-      .then((res) => {
-        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-        setSubData(res.data || null);
-      })
-      .catch((err) => {
-        if (err.code !== 'API_ABORTED') {
-          console.warn('[HOME SUBSCRIPTION NON-FATAL]', err.message);
-        }
-      });
-
-    const trackingPromise = api.getCustomerLiveTracking({ signal })
-      .then((res) => {
-        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-        setTrackingData(res.data || null);
-      })
-      .catch((err) => {
-        if (err.code !== 'API_ABORTED') {
-          console.warn('[HOME TRACKING NON-FATAL]', err.message);
-        }
-      });
-
-    const profilePromise = api.getProfile(null, { signal })
-      .then((res) => {
-        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-        if (res.data) {
-          setCustomer(res.data);
-        }
-      })
-      .catch((err) => {
-        if (err.code !== 'API_ABORTED') {
-          console.warn('[HOME PROFILE NON-FATAL]', err.message);
-        }
-      });
-
-    // Await all independent requests to settle before terminating refresh indicator
-    try {
-      await Promise.allSettled([fishPromise, catsPromise, subPromise, trackingPromise, profilePromise]);
-    } finally {
-      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
-        setRefreshing(false);
-        setLoading(false);
-      }
-    }
+    return fetchHomeDataOrchestrated({
+      apiClient: api,
+      setFishList,
+      setCategories,
+      setSubData,
+      setTrackingData,
+      setCustomer,
+      setLoading,
+      setRefreshing,
+      setError,
+      abortControllerRef,
+      isMountedRef,
+      requestSeqRef,
+      isRefresh,
+    });
   }, []);
 
   useEffect(() => {

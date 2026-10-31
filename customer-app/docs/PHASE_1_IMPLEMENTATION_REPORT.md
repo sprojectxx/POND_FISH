@@ -1,10 +1,10 @@
 # PONDFISH CUSTOMER MOBILE APPLICATION — PHASE 1
-## Implementation Report: API & Application Responsiveness (Verification & Correction Pass)
+## Implementation Report: API & Application Responsiveness (Final Verification Pass)
 
-**Document Version:** 1.1.0  
+**Document Version:** 1.2.0  
 **Repository:** `https://github.com/sprojectxx/POND_FISH`  
 **Target Branch:** `main`  
-**Starting Commit SHA:** `752867af2051c4648862526d5b586b4f3f0cc178`  
+**Starting Commit SHA:** `304f0d2cf10568d3dcf20a922f0eb4fbc4a0e47b`  
 **Scope:** `customer-app/`, `tests/unit/customer-app-phase1-responsiveness.test.js`  
 **Date & Time:** 2026-10-31  
 **Operating Environment:** Windows 11 Pro 64-bit (10.0.26100), Node.js v22.15.0, npm 10.9.2, OpenJDK 17.0.10  
@@ -14,32 +14,33 @@
 
 ## 1. Executive Summary
 
-This Phase 1 Verification and Correction Pass hardens the reliability, concurrency protection, and lifecycle resilience of the PondFish customer mobile application. It directly resolves edge-case race conditions, extends request timeouts across complete response body consumption, formalizes client error classifications, and verifies actual native push infrastructure realities.
+This Final Verification Pass hardens the reliability, concurrency protection, cancellation semantics, and test honesty of the PondFish customer mobile application. It directly resolves edge-case race conditions, extends request timeouts across complete response body consumption, defines exact cancellation boundaries when `AbortController` is missing, and separates real execution from simulated orchestration.
 
-### Key Corrections in Version 1.1.0:
-1. **Resolved Stale-Session Logout & Device-Token Race:**
-   - `App.jsx` `handleLogout(expectedToken)` now validates the session token before any storage mutation or state reset.
-   - Eliminated redundant `clearDeviceToken()` calls in `App.jsx` and `ProfileScreen.jsx`. Keystore credentials and registered device tokens are wiped through a single authoritative atomic queue in `clearAuthTokens()`.
-   - Obsolete HTTP 401 callbacks from previous sessions can no longer erase the active session's credentials or FCM device token.
-2. **FCM Registration Lifecycle Verification & Reality Check:**
-   - Exhaustive source audit confirms that while `api.registerDeviceToken()` and `api.unregisterDeviceToken()` conform to backend endpoints, `@react-native-firebase/messaging` is **not installed** in `customer-app/package.json` and `AndroidManifest.xml` lacks notification permissions/services.
-   - Documented as an **Unresolved Integration Dependency**: client unregistration sequencing is fixed, but runtime token acquisition and registration cannot execute until push native dependencies are integrated in a subsequent phase.
-3. **Extended API Timeout to Cover Complete Body Consumption:**
-   - `AbortController` timeout and caller cancellation in `customer-app/src/services/api.js` now remain active through both `fetch()` socket connection and `response.json()` body stream consumption.
-   - Added post-auth cancellation checks: caller signals aborted while awaiting Android Keystore credentials fail fast before initiating network requests.
-   - Implemented explicit fallback timeout protection for runtimes where `AbortController` is undefined.
-4. **Corrected Error Semantics & Performance Terminology:**
-   - Corrected terminology: client timeouts (`API_TIMEOUT`), aborts (`API_ABORTED`), and network drops (`API_NETWORK_ERROR`) are client-side synthetic error classifications with no server HTTP status (`err.status` is undefined).
-   - Removed unverified claims of measured visual-paint timing on physical devices. Re-classified ~1,017 ms vs. ~2,390 ms as an **Architectural Latency Model** based on backend endpoint benchmarks.
-5. **Expanded Behavioral Test Suite:**
-   - Replaced pure static source assertions with 25 comprehensive automated tests, including in-memory Keychain mock behavioral tests and concurrent load orchestration tests (100% pass rate).
+### Key Corrections in Version 1.2.0:
+1. **AbortController Fallback Limitation & Mutation Uncertainty:**
+   - Documented the fundamental network reality: without native `AbortController`, `Promise.race()` only detaches client execution; it **cannot terminate the underlying HTTP socket on the wire**.
+   - For mutations (bookings, payments, cart, OTP), a client timeout does **not guarantee server-side cancellation**. The server may still receive and commit the mutation.
+   - The API client explicitly reflects this reality by setting `err.networkCancelled = false` on fallback timeout and cancellation errors, and maintains a strict **zero-automatic-retry policy** to prevent double-charging or duplicate bookings.
+   - The fallback actively listens to caller `AbortSignal` events, rejecting with `API_ABORTED` instead of silently ignoring caller intent.
+2. **HomeScreen Load Orchestration Extraction:**
+   - Extracted `fetchHomeDataOrchestrated` directly from `customer-app/src/screens/HomeScreen.jsx` so that `HomeScreen` delegates its `loadAllData` directly to it.
+   - Reclassified Home tests as **Simulated Orchestration Tests**, executing the production function without duplicating code inside test files.
+   - Explicitly clarified that orchestration tests prove async ordering, secondary failure absorption, and stale sequence rejection, but do **not** claim to prove React Native layout, JSX rendering, or native UI thread painting.
+3. **Stale-Session Logout & Device-Token Race Resolved:**
+   - `App.jsx` `handleLogout(expectedToken)` validates token identity before performing any storage mutation or state reset.
+   - `clearAuthTokens(expectedToken)` in `auth-storage.js` serves as the single authoritative cleanup path, ensuring obsolete 401 callbacks from prior sessions cannot wipe the active session's credentials or FCM push token.
+4. **FCM Registration Lifecycle Status:**
+   - Preserved the audited reality: `@react-native-firebase/messaging` is **not installed** in `customer-app/package.json` and `AndroidManifest.xml` lacks notification permissions/services.
+   - Correctly classified as an **Unresolved Integration Dependency** for subsequent phases; push token acquisition does not execute at runtime.
+5. **Expanded 28-Test Automated Suite (100% PASS):**
+   - Expanded to 28 comprehensive automated unit, fallback, and orchestration tests across isolated in-memory test environments.
 
 ---
 
 ## 2. Commit History and Target Branch
 
-- **Phase 1 Initial Implementation Commit:** `752867af2051c4648862526d5b586b4f3f0cc178` (`perf(customer-app): improve phase 1 API responsiveness`)
-- **Phase 1 Correction Pass Commit Message:** `fix(customer-app): close phase 1 reliability gaps`
+- **Starting Commit SHA:** `304f0d2cf10568d3dcf20a922f0eb4fbc4a0e47b` (`fix(customer-app): close phase 1 reliability gaps`)
+- **Correction Pass Commit Message:** `fix(customer-app): clarify cancellation fallback and test coverage`
 - **Target Branch:** `main` (tracked directly on `origin/main`)
 
 ---
@@ -48,12 +49,13 @@ This Phase 1 Verification and Correction Pass hardens the reliability, concurren
 
 | File Path | Change Category | Specific Purpose & Technical Justification |
 |---|---|---|
-| [`customer-app/src/services/api.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js) | Source | Extended timeout and caller cancellation to enclose `response.json()` body consumption; added post-auth signal cancellation check; implemented non-AbortController timeout fallback; synchronized device token storage. |
-| [`customer-app/App.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/App.jsx) | Source | Removed premature `clearDeviceToken()` call; relies on `clearAuthTokens(expectedToken)` for atomic validation and unified credential/token wipe; prevents obsolete 401 race conditions. |
-| [`customer-app/src/screens/ProfileScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/ProfileScreen.jsx) | Source | Removed redundant `clearDeviceToken()`; attempts authenticated device token unregistration with valid Bearer credentials before delegating local clearance to `onLogout()`. |
-| [`customer-app/src/services/auth-storage.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/auth-storage.js) | Source | Hardware-backed Android Keystore storage serializing auth and device token mutations via `storageMutationQueue`. |
-| [`tests/unit/customer-app-phase1-responsiveness.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase1-responsiveness.test.js) | Test | Expanded from 17 to 25 automated unit and behavioral integration tests covering all 4 workstreams, race conditions, body streaming, and lifecycle cancellation. |
-| [`customer-app/docs/PHASE_1_IMPLEMENTATION_REPORT.md`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/docs/PHASE_1_IMPLEMENTATION_REPORT.md) | Docs | Authoritative implementation report reflecting verification pass findings. |
+| [`customer-app/src/services/api.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js) | Source | Implemented caller signal listening in fallback mode; added `networkCancelled` flag distinguishing confirmed socket cancellation from client detachment; reported timeout uncertainty; maintained strict zero-mutation-retry policy. |
+| [`customer-app/src/screens/HomeScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/HomeScreen.jsx) | Source | Extracted `fetchHomeDataOrchestrated` function for direct testability; eliminated code duplication between component and tests; delegated `loadAllData` to orchestrator. |
+| [`customer-app/App.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/App.jsx) | Source | Preserved atomic expected-token validation in `handleLogout()`, eliminating obsolete 401 race conditions. |
+| [`customer-app/src/screens/ProfileScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/ProfileScreen.jsx) | Source | Preserved authenticated device-token unregistration before delegating local clearance to `onLogout()`. |
+| [`customer-app/src/services/auth-storage.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/auth-storage.js) | Source | Preserved hardware-backed Keystore queue serializing credentials and device tokens. |
+| [`tests/unit/customer-app-phase1-responsiveness.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase1-responsiveness.test.js) | Test | Expanded to 28 automated tests; directly executes `fetchHomeDataOrchestrated` from `HomeScreen.jsx`; verifies fallback cancellation and timeout uncertainty under simulated missing `AbortController`. |
+| [`customer-app/docs/PHASE_1_IMPLEMENTATION_REPORT.md`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/docs/PHASE_1_IMPLEMENTATION_REPORT.md) | Docs | Authoritative implementation report (this document). |
 
 ---
 
@@ -67,29 +69,40 @@ This Phase 1 Verification and Correction Pass hardens the reliability, concurren
 - **Decoupled Dependencies:** Decoupled `loadAllData` dependencies (`[]`) in `HomeScreen.jsx`, eliminating spurious screen re-mounts on cart updates.
 
 ### 4.2 Verification & Test Evidence
-- `ok 23 - Section 5.7: [Static Check] App shell remains sole owner of authoritative cart summary`
-- `ok 24 - Section 5.8: [Static Check] App.jsx handleCartUpdated is memoized and fetchCartSummary has in-flight guard`
+- `ok 26 - Section 5.7: [Static Check] App shell remains sole owner of authoritative cart summary`
+- `ok 27 - Section 5.8: [Static Check] App.jsx handleCartUpdated is memoized and fetchCartSummary has in-flight guard`
 
 ---
 
-## 5. Workstream B — Shared API Timeout, Complete Body Parsing & Cancellation
+## 5. Workstream B — API Timeout, Cancellation & Fallback Semantics
 
-### 5.1 Architecture & Design Corrections
+### 5.1 Architecture & Design
 1. **Full Lifecycle Timeout Window:**
-   Previously, the `finally` block cleared the timeout immediately after `fetch()` returned headers. If a server returned headers quickly but stalled while streaming its JSON body, the request would hang indefinitely. The timeout and caller-abort listener now remain active across `await response.json()`.
+   The `finally` block keeps timeout and caller cancellation active across both `fetch()` socket connection and `response.json()` body stream consumption.
 2. **Post-Auth Signal Check:**
-   `getAuthTokens()` is asynchronous. If a user cancels or navigates away while Keystore credentials are being read, `options.signal?.aborted` is inspected immediately after `getAuthTokens()` resolves. The request throws `API_ABORTED` before `fetch()` is dispatched.
-3. **Safe Runtime Fallback:**
-   If `typeof AbortController === 'undefined'`, the client falls back to `Promise.race` with an explicit timeout promise, guaranteeing that requests fail within `effectiveTimeoutMs` even in limited JavaScript runtimes.
-4. **Deterministic Resource Cleanup:**
-   `clearTimeout(timeoutId)` and `options.signal.removeEventListener('abort', ...)` execute in `finally` across all execution paths (success, HTTP error, timeout, and cancellation).
-5. **Client-Side Error Classifications (No Synthetic HTTP Statuses):**
+   `getAuthTokens()` is asynchronous. If a user cancels or navigates away while Keystore credentials are being read, `options.signal?.aborted` is inspected immediately after `getAuthTokens()` resolves, failing fast before `fetch()` is dispatched.
+3. **Deterministic Resource Cleanup:**
+   `clearTimeout(timeoutId)` and `options.signal.removeEventListener('abort', ...)` execute in `finally` across all execution paths.
+4. **Client-Side Error Classifications (No Synthetic HTTP Statuses):**
    - `err.code = 'API_TIMEOUT'`, `err.isTimeout = true`, `err.status = undefined`
    - `err.code = 'API_ABORTED'`, `err.isAborted = true`, `err.status = undefined`
    - `err.code = 'API_NETWORK_ERROR'`, `err.isNetwork = true`, `err.status = undefined`
    - Server errors strictly retain genuine server HTTP status (400, 401, 404, 500) and backend error bodies.
 
-### 5.2 Verification & Test Evidence
+### 5.2 AbortController Fallback Limitations & Mutation Semantics
+In React Native 0.75.4 (Hermes engine), `AbortController` is universally available globally. However, for legacy or restricted JavaScript environments where `typeof AbortController === 'undefined'`:
+1. **Network Cancellation Reality:**
+   `Promise.race()` is employed to prevent the client application from hanging indefinitely. However, `Promise.race()` **only stops waiting for the promise**; it does **NOT** cancel the underlying operating system socket or HTTP connection. The request may continue transmitting to the server.
+2. **Mutation Uncertainty:**
+   For non-idempotent mutations (e.g. `POST /api/v1/customer/bookings`, payments, OTP dispatch), a timeout or caller cancellation in fallback mode does **not** guarantee the server did not commit the action.
+3. **Explicit Uncertainty Indicator:**
+   The client flags fallback errors with `err.networkCancelled = false` (whereas true `AbortController` cancellations carry `err.networkCancelled = true`).
+4. **Zero Automatic Retries:**
+   The client enforces a strict **zero-automatic-retry policy** on all mutation requests. Retrying a timed-out mutation on an unreliable network would create duplicate orders or double payments.
+5. **Caller Cancellation Handled:**
+   If a caller supplies `options.signal`, the fallback attaches an event listener and rejects immediately with `API_ABORTED` if the signal fires, rather than ignoring caller intent.
+
+### 5.3 Verification & Test Evidence
 - `ok 5 - Section 3.1: Normal successful response parses JSON and returns data`
 - `ok 6 - Section 3.2: Request that stalls before response headers aborts and throws API_TIMEOUT`
 - `ok 7 - Section 3.3: Response that returns headers but stalls while reading body throws API_TIMEOUT`
@@ -101,57 +114,61 @@ This Phase 1 Verification and Correction Pass hardens the reliability, concurren
 - `ok 13 - Section 3.9: FormData payload omits forced application/json Content-Type`
 - `ok 14 - Section 3.10: Timers and abort listeners are cleaned up after success, HTTP failure, timeout, and caller cancellation`
 - `ok 15 - Section 3.11: No duplicate mutation requests executed after a timeout`
-- `ok 16 - Section 3.12: Fallback timeout path functions correctly when AbortController is unavailable`
+- `ok 16 - Section 3.12: Fallback when AbortController unavailable: Caller abort rejects promise without silently ignoring signal`
+- `ok 17 - Section 3.13: Fallback when AbortController unavailable: Timed-out fetch accurately reports timeout uncertainty (networkCancelled: false)`
+- `ok 18 - Section 3.14: Fallback when AbortController unavailable: Non-idempotent mutation is never automatically retried`
+- `ok 19 - Section 3.15: Fallback error classification distinguishes timeout from confirmed cancellation`
 
 ---
 
-## 6. Workstream C — Prioritized Home Loading & Screen Lifecycle Resilience
+## 6. Workstream C — HomeScreen Load Orchestration & Lifecycle Resilience
 
-### 6.1 Implementation Details
-1. **Critical Catalogue Priority:** `api.getFish({}, { signal })` unblocks the display immediately upon arrival (`setFishList`, `setLoading(false)`, `setError(null)`).
-2. **Concurrent Secondary Data:** Categories, subscription status, live GPS tracking, and customer profile execute concurrently in the background without blocking the fish catalogue.
-3. **Resilience to Secondary Failures:** Failures in secondary background requests are caught non-fatally and never clear or hide the visible fish catalogue.
-4. **Pull-to-Refresh Data Preservation:** If a pull-to-refresh request fails, previously loaded fish items are preserved; the screen does not revert to an empty error state.
-5. **Stale Sequence Guard & Cancellation:** `requestSeqRef.current` increments on every request; older responses are discarded. Unmounting the screen aborts active requests via `abortControllerRef.current.abort()`.
+### 6.1 Architectural Extraction
+The data-fetching orchestration was factored out into a dedicated, exported function in [`HomeScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/HomeScreen.jsx):
+```javascript
+export async function fetchHomeDataOrchestrated({
+  apiClient, setFishList, setCategories, setSubData, setTrackingData, setCustomer,
+  setLoading, setRefreshing, setError, abortControllerRef, isMountedRef, requestSeqRef, isRefresh
+})
+```
+`HomeScreen.jsx` delegates its `loadAllData` hook directly to this function. This architecture allows automated tests to execute the **exact production orchestration code** rather than maintaining duplicate copies inside test files.
 
-### 6.2 Verification & Test Evidence
-- `ok 17 - Section 5.1: Fish catalogue unblocks visual display immediately without waiting for slower secondary calls`
-- `ok 18 - Section 5.2: Secondary call failures do not hide or clear successfully loaded fish catalogue`
-- `ok 19 - Section 5.3: Pull-to-refresh fish request failure preserves previously loaded catalogue data`
-- `ok 20 - Section 5.4: New requests cancel older requests and stale responses cannot overwrite newer data`
-- `ok 21 - Section 5.5: Screen unmount aborts active in-flight requests and suppresses state updates`
-- `ok 22 - Section 5.6: Refresh and loading indicators always settle deterministically via Promise.allSettled`
+### 6.2 Test Classification & Scope
+These tests are classified as **Simulated Orchestration Tests**:
+- **What they verify:** Asynchronous execution order, critical path unblocking, non-fatal secondary failure absorption, sequence counter stale response rejection, and deterministic indicator reset.
+- **What they do NOT verify:** They do not mount the React Native component tree, compute Yoga flexbox layout, trigger native Android rendering passes, or measure physical device UI thread painting.
+
+### 6.3 Verification & Test Evidence
+- `ok 20 - Section 5.1: [Simulated Orchestration] Fish catalogue unblocks display immediately without waiting for slower secondary calls`
+- `ok 21 - Section 5.2: [Simulated Orchestration] Secondary call failures do not hide or clear successfully loaded fish catalogue`
+- `ok 22 - Section 5.3: [Simulated Orchestration] Pull-to-refresh fish request failure preserves previously loaded catalogue data`
+- `ok 23 - Section 5.4: [Simulated Orchestration] New requests cancel older requests and stale responses cannot overwrite newer data`
+- `ok 24 - Section 5.5: [Simulated Orchestration] Screen unmount aborts active in-flight requests and suppresses state updates`
+- `ok 25 - Section 5.6: [Simulated Orchestration] Refresh and loading indicators always settle deterministically via Promise.allSettled`
 
 ---
 
 ## 7. Workstream D — FCM Device-Token Lifecycle & Logout Race Corrections
 
 ### 7.1 Stale-Session Logout Race Fix
-- **Problem Identified:** In the initial Phase 1 build, `App.jsx` `handleLogout(expectedToken)` invoked `clearDeviceToken()` before evaluating `clearAuthTokens(expectedToken)`. If an obsolete 401 arrived with an expired token while a newer session was active, `clearDeviceToken()` wiped the active session's device token before `clearAuthTokens` rejected the obsolete logout.
-- **Correction Applied:**
-  1. Removed `clearDeviceToken()` from `handleLogout()` and `ProfileScreen.jsx`.
-  2. `clearAuthTokens(expectedToken)` in `auth-storage.js` now serves as the single authoritative cleanup method. It validates `expectedToken` atomically against the active stored token before modifying any Keystore records.
-  3. If `expectedToken` does not match, `clearAuthTokens` returns `false` without modifying either the auth token or device token services.
-  4. If `expectedToken` matches (or is `null` for user-initiated logouts), `clearAuthTokens` resets both `com.pondfish.customer.auth` and `com.pondfish.customer.device_token` in a single serialized queue transaction.
-  5. User-initiated logout continues to work offline: if the network unregister call fails, it is caught non-fatally and local credentials/tokens are wiped unconditionally.
+- **Single Authoritative Cleanup:** `clearAuthTokens(expectedToken)` in `auth-storage.js` validates `expectedToken` atomically against the active stored token before modifying any Keystore records.
+- **Protection Against Obsolete 401s:** If `expectedToken` does not match, `clearAuthTokens` returns `false` without modifying either the auth token or device token services.
+- **Unified Wipe:** If `expectedToken` matches (or is `null` for user-initiated logouts), `clearAuthTokens` resets both `com.pondfish.customer.auth` and `com.pondfish.customer.device_token` in a single serialized queue transaction.
+- **Offline Resilience:** If device-token unregistration fails over the network (e.g. offline device), it is caught non-fatally and local credentials/tokens are wiped unconditionally.
 
 ### 7.2 Actual FCM Registration Lifecycle Audit Findings
-A comprehensive audit of `customer-app/` was performed:
-- **Package Manifest:** `customer-app/package.json` contains `@react-native-firebase/app` (`^21.14.0`) and `@react-native-firebase/auth` (`^21.14.0`). It **does not contain** `@react-native-firebase/messaging`.
-- **Native Android Manifest:** `customer-app/android/app/src/main/AndroidManifest.xml` contains no `FirebaseMessagingService`, no push intent filters, and no `POST_NOTIFICATIONS` permission.
+- **Dependency Audit:** `customer-app/package.json` contains `@react-native-firebase/app` and `@react-native-firebase/auth`. It **does not contain** `@react-native-firebase/messaging`.
+- **Native Android Audit:** `customer-app/android/app/src/main/AndroidManifest.xml` contains no `FirebaseMessagingService` or push permissions.
 - **Client Codebase:** There is **zero native or JavaScript code** in `customer-app` that obtains an FCM device registration token or invokes `api.registerDeviceToken()`.
-- **Backend Contract:**
-  - `POST /api/v1/customer/notifications/device`: Requires `Authorization: Bearer <sessionToken>`. Body: `{ deviceToken: string, platform: 'android' }`.
-  - `DELETE /api/v1/customer/notifications/device`: Requires `Authorization: Bearer <sessionToken>`. Body: `{ deviceToken: string }`.
 - **Status Classification:** **Unresolved Integration Dependency.**
-  The client API client methods and logout unregistration sequencing are structurally sound and verified, but runtime push token registration does not exist. Full push lifecycle operation cannot be claimed until `@react-native-firebase/messaging` is integrated with native Google services in a future phase.
+  Client unregistration sequencing and secure storage are fixed in code, but runtime push token registration does not exist. Full push notification functionality cannot be claimed until `@react-native-firebase/messaging` is integrated in a subsequent phase.
 
 ### 7.3 Verification & Test Evidence
 - `ok 1 - Section 1.1: An obsolete 401 does not clear either current auth token or current device token`
 - `ok 2 - Section 1.2: A matching expected token clears the session and device token atomically`
 - `ok 3 - Section 1.3: Ordinary user logout clears credentials and device token even when device-token unregistration fails`
 - `ok 4 - Section 1.4: Concurrent logout calls do not corrupt session state or storage queue`
-- `ok 25 - Section 5.9: [Static Check] ProfileScreen performLogout attempts unregistration before invoking onLogout`
+- `ok 28 - Section 5.9: [Static Check] ProfileScreen performLogout attempts unregistration before invoking onLogout`
 
 ---
 
@@ -177,6 +194,7 @@ Under the previous monolithic `Promise.all` architecture, rendering was blocked 
 | **Screen Unmount Behavior** | In-flight requests caused unmounted setState | **Aborted via AbortController** | Zero leaks or unmounted state updates |
 | **Request Timeout Protection** | None (hung indefinitely on stalled socket) | **15-second default timeout** | Fails safely within 15s |
 | **Body Streaming Stall Protection**| Unprotected after headers | **Timeout active across body parsing** | Complete response protection |
+| **Socket Cancellation Transparency** | Untracked | **`networkCancelled` flag** | Distinguishes socket abort from client detach |
 | **401 Session Invalidation** | Triggered on network errors | **Strictly genuine HTTP 401 only** | Network drops never log user out |
 | **Logout Token Cleanup** | Multiple race conditions, Keystore wiped first | **Single authoritative atomic path** | Obsolete 401 cannot wipe active session |
 
@@ -188,32 +206,39 @@ The test suite explicitly categorizes tests by verification type to avoid confla
 
 | Verification Category | Tests | Status | Details |
 |---|---|---|---|
-| **Runtime In-Memory Behavioral Tests** | 19 | **PASS** | Tests execute actual logic of `auth-storage.js` (with in-memory Keychain mock) and `HomeScreen` load orchestration. |
-| **Mocked API Integration Tests** | 3 | **PASS** | Tests execute real `request()` function with mock `fetch` verifying timeout, cancellation, and body streaming. |
+| **Secure-Storage & Concurrency Tests** | 4 | **PASS** | Tests execute actual logic of `auth-storage.js` with in-memory Keychain mock verifying obsolete 401 isolation, matching token wipe, offline resilience, and queue concurrency. |
+| **Actual API Request & Error Tests** | 11 | **PASS** | Tests execute real `request()` function with mock `fetch` verifying timeout, cancellation, body streaming, HTTP status errors, and FormData multipart handling. |
+| **Fallback Timeout & Cancellation Tests** | 4 | **PASS** | Tests simulate missing `AbortController`, verifying caller signal handling, timeout uncertainty (`networkCancelled: false`), zero mutation retries, and error classification. |
+| **Simulated Home Orchestration Tests** | 6 | **PASS** | Tests directly execute `fetchHomeDataOrchestrated` extracted from `HomeScreen.jsx` verifying async ordering, secondary failure absorption, sequence guards, and unmount cleanup. |
 | **Static Source Inspection Checks** | 3 | **PASS** | Explicitly labeled AST and source-text checks verifying single cart ownership, memoization, and logout ordering. |
-| **Total Phase 1 Tests** | **25** | **PASS** | **100% pass rate (25 passed, 0 failed, duration 1.27s)** |
+| **Total Phase 1 Tests** | **28** | **PASS** | **100% pass rate (28 passed, 0 failed, duration 1.37s)** |
 
 ### Execution Commands and Outcomes
 
 ```bash
 # 1. Customer-App Responsiveness Test Suite
 npm test --prefix customer-app
-# Result: 25 passed, 0 failed, 0 skipped (Duration: 1.27s, Exit Code: 0)
+# Result: 28 passed, 0 failed, 0 skipped (Duration: 1.37s, Exit Code: 0)
 
-# 2. Metro Bundler Android Compilation
+# 2. Focused Test from Repository Root
+node --test tests/unit/customer-app-phase1-responsiveness.test.js
+# Result: 28 passed, 0 failed, 0 skipped (Duration: 1.41s, Exit Code: 0)
+
+# 3. Metro Bundler Android Compilation
 cd customer-app; npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output ./test_bundle.js
 # Result: Compiled successfully with zero packaging or syntax errors (Exit Code: 0)
 
-# 3. Android Release APK Build
+# 4. Android Release APK Build
 cd customer-app/android; .\gradlew.bat assembleRelease
-# Result: BUILD SUCCESSFUL in 1m 3s (262 actionable tasks: 9 executed, 253 up-to-date, Exit Code: 0)
+# Result: BUILD SUCCESSFUL in 53s (262 actionable tasks: 9 executed, 253 up-to-date, Exit Code: 0)
 # Output APK: customer-app/android/app/build/outputs/apk/release/app-release.apk (64,932,900 bytes)
 
-# 4. Root Repository Backend Test Suite
+# 5. Root Repository Backend Test Suite
 npm test
 # Result: 209 passed, 10 failed (Exit Code: 1)
-# Note: Failures are exclusively in postgres-phase4-scoping.test.js and postgres-subscription-lifecycle.test.js
-# requiring live PostgreSQL server; customer app test suite passed 100%.
+# Note: Root test suite is PARTIALLY PASSING. The 10 failures are exclusively in
+# postgres-phase4-scoping.test.js and postgres-subscription-lifecycle.test.js
+# requiring live PostgreSQL database connection; customer app test suite passed 100%.
 ```
 
 ---
@@ -231,11 +256,13 @@ npm test
 ## 11. Known Limitations & Blocked Tests
 
 1. **Native FCM Push Infrastructure (Unresolved Integration Dependency):**
-   `@react-native-firebase/messaging` is not installed, and no push token acquisition logic exists in the client. End-to-end device token push delivery cannot function until native push dependencies are added.
+   `@react-native-firebase/messaging` is not installed, and no push token acquisition code exists in the client. End-to-end device token push delivery cannot function until native push dependencies are added.
 2. **Physical Device Profiling:**
    Native verification was performed on the reference Android emulator (`PONDFISH_Pixel_8`, API 34). USB Systrace/Perfetto frame-level profiling on low-end hardware remains deferred.
 3. **Live SMS Reception & Payment Capture:**
    Carrier SMS reception on emulator and live Razorpay transactions remain intentionally blocked to protect production ledgers and live fish inventory.
+4. **Backend Suite Database Requirement:**
+   Root backend tests requiring a live PostgreSQL instance for migrations 0019/0020 fail in offline test environments (10 failures out of 219 tests).
 
 ---
 

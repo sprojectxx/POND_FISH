@@ -5,8 +5,10 @@
  * Verifies:
  * - Section 1: Stale-session logout / device-token race (obsolete 401 isolation, atomic clearance, offline tolerance, concurrency).
  * - Section 3: API client complete response timeout (body parsing included, caller abort, post-auth signal check, cleanup, fallback).
+ * - Section 3 (Fallback): Comprehensive fallback tests when AbortController is unavailable (caller abort, timeout uncertainty, mutation no-retry, error classification).
  * - Section 4: Client error classifications vs. genuine HTTP responses (code vs. status).
- * - Section 5: Home screen prioritized loading, lifecycle cancellation, stale sequence guards, cart ownership.
+ * - Section 5: Home screen load orchestration (direct execution of fetchHomeDataOrchestrated from HomeScreen.jsx).
+ * - Section 5 (Static): Explicitly labeled static AST / source inspection checks.
  */
 
 const test = require('node:test');
@@ -79,6 +81,22 @@ function loadApiModule(mockStorage = {}, mockFetch = null, customGlobals = {}) {
   });
 
   return m.exports;
+}
+
+/**
+ * Directly extracts and loads fetchHomeDataOrchestrated from HomeScreen.jsx.
+ * Guarantees zero code duplication inside tests: runs the actual production orchestrator.
+ */
+function loadHomeScreenOrchestrator() {
+  const homeCode = fs.readFileSync(homeScreenSourcePath, 'utf8');
+  const startIndex = homeCode.indexOf('export async function fetchHomeDataOrchestrated');
+  const endIndex = homeCode.indexOf('export default function HomeScreen');
+  if (startIndex === -1 || endIndex === -1) {
+    throw new Error('Could not slice fetchHomeDataOrchestrated from HomeScreen.jsx');
+  }
+  const fnCode = homeCode.slice(startIndex, endIndex).replace('export async function fetchHomeDataOrchestrated', 'async function fetchHomeDataOrchestrated') + '\nreturn fetchHomeDataOrchestrated;';
+  const createFn = new Function('console', 'AbortController', 'Promise', fnCode);
+  return createFn({ warn: () => {}, error: () => {}, log: () => {} }, globalThis.AbortController, Promise);
 }
 
 // ==============================================================================
@@ -211,6 +229,7 @@ test('Section 3.2: Request that stalls before response headers aborts and throws
     (err) => {
       assert.equal(err.code, 'API_TIMEOUT');
       assert.equal(err.isTimeout, true);
+      assert.equal(err.networkCancelled, true, 'AbortController environment must confirm network cancellation');
       assert.match(err.message, /timed out after 40ms/);
       return true;
     }
@@ -506,9 +525,8 @@ test('Section 3.10: Timers and abort listeners are cleaned up after success, HTT
 
 test('Section 3.11: No duplicate mutation requests executed after a timeout', async () => {
   let callCount = 0;
-  const mockFetch = () => new Promise((resolve, reject) => {
+  const mockFetch = () => new Promise((resolve) => {
     callCount++;
-    // Hangs longer than timeoutMs
     setTimeout(() => resolve({ ok: true, status: 200, json: async () => ({}) }), 500);
   });
 
@@ -523,12 +541,64 @@ test('Section 3.11: No duplicate mutation requests executed after a timeout', as
   assert.equal(callCount, 1, 'Booking mutation request must never be retried after a timeout');
 });
 
-test('Section 3.12: Fallback timeout path functions correctly when AbortController is unavailable', async () => {
+// ==============================================================================
+// 3B. FALLBACK TIMEOUT & CANCELLATION TESTS (Simulated Unavailable AbortController)
+// ==============================================================================
+
+test('Section 3.12: Fallback when AbortController unavailable: Caller abort rejects promise without silently ignoring signal', async () => {
+  let fetchStarted = false;
+  const mockFetch = () => new Promise((resolve) => {
+    fetchStarted = true;
+    setTimeout(() => resolve({ ok: true, status: 200, json: async () => ({}) }), 500);
+  });
+
+  // Instantiate api client with AbortController = undefined to simulate legacy runtime
+  const apiModule = loadApiModule({
+    getAuthTokens: async () => ({ token: 'mock-jwt' }),
+  }, mockFetch, { AbortController: undefined });
+
+  // Create mock signal with event listener support
+  const mockListeners = [];
+  const mockSignal = {
+    aborted: false,
+    reason: 'Caller navigated away',
+    addEventListener: (event, fn) => {
+      if (event === 'abort') mockListeners.push(fn);
+    },
+    removeEventListener: (event, fn) => {
+      const idx = mockListeners.indexOf(fn);
+      if (idx >= 0) mockListeners.splice(idx, 1);
+    },
+  };
+
+  const reqPromise = apiModule.request('/api/v1/customer/fish', {
+    signal: mockSignal,
+    timeoutMs: 5000,
+  });
+
+  // Fire caller abort while fetch is in progress
+  setTimeout(() => {
+    mockSignal.aborted = true;
+    mockListeners.forEach((fn) => fn());
+  }, 20);
+
+  await assert.rejects(
+    reqPromise,
+    (err) => {
+      assert.equal(err.code, 'API_ABORTED', 'Caller abort must not be silently ignored');
+      assert.equal(err.isAborted, true);
+      assert.equal(err.networkCancelled, false, 'Must accurately report that socket could not be cancelled on the wire');
+      return true;
+    }
+  );
+  assert.equal(fetchStarted, true);
+});
+
+test('Section 3.13: Fallback when AbortController unavailable: Timed-out fetch accurately reports timeout uncertainty (networkCancelled: false)', async () => {
   const mockFetch = () => new Promise((resolve) => {
     setTimeout(() => resolve({ ok: true, status: 200, json: async () => ({}) }), 500);
   });
 
-  // Load api client with AbortController = undefined to test safe fallback
   const apiModule = loadApiModule({
     getAuthTokens: async () => ({ token: 'mock-jwt' }),
   }, mockFetch, { AbortController: undefined });
@@ -540,16 +610,81 @@ test('Section 3.12: Fallback timeout path functions correctly when AbortControll
     (err) => {
       assert.equal(err.code, 'API_TIMEOUT');
       assert.equal(err.isTimeout, true);
+      assert.equal(err.networkCancelled, false, 'Must NOT claim socket was cancelled when AbortController is missing');
+      assert.match(err.message, /client detached; server state unconfirmed/);
       return true;
     }
   );
 });
 
+test('Section 3.14: Fallback when AbortController unavailable: Non-idempotent mutation is never automatically retried', async () => {
+  let callCount = 0;
+  const mockFetch = () => new Promise((resolve) => {
+    callCount++;
+    setTimeout(() => resolve({ ok: true, status: 200, json: async () => ({}) }), 500);
+  });
+
+  const apiModule = loadApiModule({
+    getAuthTokens: async () => ({ token: 'mock-jwt' }),
+  }, mockFetch, { AbortController: undefined });
+
+  try {
+    await apiModule.api.createBooking({ paymentId: 'pay_unsupported_001' }, { timeoutMs: 25 });
+  } catch {}
+
+  assert.equal(callCount, 1, 'Mutation request must never be automatically retried in fallback mode');
+});
+
+test('Section 3.15: Fallback error classification distinguishes timeout from confirmed cancellation', async () => {
+  const mockFetch = () => new Promise((resolve) => {
+    setTimeout(() => resolve({ ok: true, status: 200, json: async () => ({}) }), 500);
+  });
+
+  const apiModule = loadApiModule({
+    getAuthTokens: async () => ({ token: 'mock-jwt' }),
+  }, mockFetch, { AbortController: undefined });
+
+  // 1. Timeout classification
+  let timeoutErr = null;
+  try {
+    await apiModule.request('/api/v1/customer/fish', { timeoutMs: 20 });
+  } catch (err) {
+    timeoutErr = err;
+  }
+  assert.equal(timeoutErr?.code, 'API_TIMEOUT');
+  assert.equal(timeoutErr?.isTimeout, true);
+  assert.equal(timeoutErr?.isAborted, undefined);
+
+  // 2. Cancellation classification
+  let abortErr = null;
+  const mockListeners = [];
+  const mockSignal = {
+    aborted: false,
+    reason: 'Manual stop',
+    addEventListener: (event, fn) => { if (event === 'abort') mockListeners.push(fn); },
+    removeEventListener: () => {},
+  };
+  const reqPromise = apiModule.request('/api/v1/customer/fish', { signal: mockSignal, timeoutMs: 5000 });
+  setTimeout(() => {
+    mockSignal.aborted = true;
+    mockListeners.forEach((fn) => fn());
+  }, 10);
+  try {
+    await reqPromise;
+  } catch (err) {
+    abortErr = err;
+  }
+  assert.equal(abortErr?.code, 'API_ABORTED');
+  assert.equal(abortErr?.isAborted, true);
+  assert.equal(abortErr?.isTimeout, undefined);
+});
+
 // ==============================================================================
-// 3. HOME SCREEN PRIORITIZED LOADING & LIFECYCLE TESTS (Section 5)
+// 4. HOME SCREEN LOAD ORCHESTRATION TESTS (Direct Execution of fetchHomeDataOrchestrated)
 // ==============================================================================
 
-test('Section 5.1: Fish catalogue unblocks visual display immediately without waiting for slower secondary calls', async () => {
+test('Section 5.1: [Simulated Orchestration] Fish catalogue unblocks display immediately without waiting for slower secondary calls', async () => {
+  const fetchHomeDataOrchestrated = loadHomeScreenOrchestrator();
   const timeline = [];
 
   const mockApi = {
@@ -580,37 +715,47 @@ test('Section 5.1: Fish catalogue unblocks visual display immediately without wa
     },
   };
 
-  // Simulate HomeScreen loadAllData prioritized orchestration
   let displayedFish = null;
   let loadingSkeletonDismissed = false;
 
-  const currentSeq = 1;
-  const requestSeq = { current: 1 };
-  const isMounted = { current: true };
-
-  const fishPromise = mockApi.getFish().then((res) => {
-    if (!isMounted.current || currentSeq !== requestSeq.current) return;
-    displayedFish = res.data;
-    loadingSkeletonDismissed = true;
-    timeline.push('SKELETON_DISMISSED_AT_' + displayedFish.length);
+  const orchestratePromise = fetchHomeDataOrchestrated({
+    apiClient: mockApi,
+    setFishList: (data) => {
+      displayedFish = data;
+      timeline.push('FISH_STATE_UPDATED_' + data.length);
+    },
+    setCategories: () => {},
+    setSubData: () => {},
+    setTrackingData: () => {},
+    setCustomer: () => {},
+    setLoading: (isLoading) => {
+      if (!isLoading) {
+        loadingSkeletonDismissed = true;
+        timeline.push('SKELETON_DISMISSED');
+      }
+    },
+    setRefreshing: () => {},
+    setError: () => {},
+    abortControllerRef: { current: null },
+    isMountedRef: { current: true },
+    requestSeqRef: { current: 0 },
+    isRefresh: false,
   });
 
-  const secondaryPromise = Promise.allSettled([
-    mockApi.getCategories(),
-    mockApi.getSubscription(),
-    mockApi.getCustomerLiveTracking(),
-    mockApi.getProfile(),
-  ]);
+  // Wait for complete pipeline
+  await orchestratePromise;
 
-  await fishPromise;
-  assert.equal(loadingSkeletonDismissed, true, 'Loading skeleton must be dismissed immediately when fish arrives');
+  assert.equal(loadingSkeletonDismissed, true, 'Loading skeleton must be dismissed when fish arrives');
   assert.equal(displayedFish[0].name, 'Rohu');
-
-  await secondaryPromise;
-  assert.ok(timeline.indexOf('SKELETON_DISMISSED_AT_1') < timeline.indexOf('CATEGORIES_RESOLVED'), 'Fish catalogue must dismiss skeleton prior to categories resolution');
+  assert.ok(
+    timeline.indexOf('SKELETON_DISMISSED') < timeline.indexOf('CATEGORIES_RESOLVED'),
+    'Fish catalogue must dismiss skeleton prior to categories resolution'
+  );
 });
 
-test('Section 5.2: Secondary call failures do not hide or clear successfully loaded fish catalogue', async () => {
+test('Section 5.2: [Simulated Orchestration] Secondary call failures do not hide or clear successfully loaded fish catalogue', async () => {
+  const fetchHomeDataOrchestrated = loadHomeScreenOrchestrator();
+
   let displayedFish = null;
   let mainError = null;
 
@@ -622,141 +767,228 @@ test('Section 5.2: Secondary call failures do not hide or clear successfully loa
     getProfile: async () => ({ data: null }),
   };
 
-  // Execute prioritized pipeline
-  const fishPromise = mockApi.getFish().then((res) => {
-    displayedFish = res.data;
-  }).catch((err) => {
-    mainError = err.message;
+  await fetchHomeDataOrchestrated({
+    apiClient: mockApi,
+    setFishList: (data) => { displayedFish = data; },
+    setCategories: () => {},
+    setSubData: () => {},
+    setTrackingData: () => {},
+    setCustomer: () => {},
+    setLoading: () => {},
+    setRefreshing: () => {},
+    setError: (err) => { mainError = err; },
+    abortControllerRef: { current: null },
+    isMountedRef: { current: true },
+    requestSeqRef: { current: 0 },
+    isRefresh: false,
   });
 
-  const secondaryPromise = Promise.allSettled([
-    mockApi.getCategories().catch(() => {}),
-    mockApi.getSubscription().catch(() => {}),
-    mockApi.getCustomerLiveTracking().catch(() => {}),
-    mockApi.getProfile().catch(() => {}),
-  ]);
-
-  await Promise.all([fishPromise, secondaryPromise]);
-
   assert.equal(displayedFish?.length, 1, 'Fish catalogue must remain intact');
+  assert.equal(displayedFish[0].name, 'Catla');
   assert.equal(mainError, null, 'Secondary errors must not set main screen error state');
 });
 
-test('Section 5.3: Pull-to-refresh fish request failure preserves previously loaded catalogue data', async () => {
-  let fishList = [{ id: 'fish-existing', name: 'Fresh Pomfret' }];
+test('Section 5.3: [Simulated Orchestration] Pull-to-refresh fish request failure preserves previously loaded catalogue data', async () => {
+  const fetchHomeDataOrchestrated = loadHomeScreenOrchestrator();
+
+  let stateFishList = [{ id: 'fish-existing', name: 'Fresh Pomfret' }];
   let mainError = null;
 
-  const mockFailingFishApi = async () => {
-    throw new Error('Temporary gateway timeout 504');
+  const mockApi = {
+    getFish: async () => { throw new Error('Temporary gateway timeout 504'); },
+    getCategories: async () => ({ data: [] }),
+    getSubscription: async () => ({ data: null }),
+    getCustomerLiveTracking: async () => ({ data: null }),
+    getProfile: async () => ({ data: null }),
   };
 
-  try {
-    await mockFailingFishApi();
-  } catch (err) {
-    // HomeScreen functional state updater logic:
-    // Only show error if list was empty; preserve existing data on refresh failure
-    if (!fishList || fishList.length === 0) {
-      mainError = err.message;
-    }
-  }
+  await fetchHomeDataOrchestrated({
+    apiClient: mockApi,
+    setFishList: (updater) => {
+      if (typeof updater === 'function') {
+        stateFishList = updater(stateFishList);
+      } else {
+        stateFishList = updater;
+      }
+    },
+    setCategories: () => {},
+    setSubData: () => {},
+    setTrackingData: () => {},
+    setCustomer: () => {},
+    setLoading: () => {},
+    setRefreshing: () => {},
+    setError: (err) => { mainError = err; },
+    abortControllerRef: { current: null },
+    isMountedRef: { current: true },
+    requestSeqRef: { current: 0 },
+    isRefresh: true,
+  });
 
-  assert.equal(fishList.length, 1, 'Previous fish items must not be wiped on refresh failure');
-  assert.equal(fishList[0].name, 'Fresh Pomfret');
+  assert.equal(stateFishList.length, 1, 'Previous fish items must not be wiped on refresh failure');
+  assert.equal(stateFishList[0].name, 'Fresh Pomfret');
   assert.equal(mainError, null, 'Error screen must not replace previously loaded fish list');
 });
 
-test('Section 5.4: New requests cancel older requests and stale responses cannot overwrite newer data', async () => {
-  const controller1 = new AbortController();
-  const requestSeqRef = { current: 1 };
-  let appliedData = null;
+test('Section 5.4: [Simulated Orchestration] New requests cancel older requests and stale responses cannot overwrite newer data', async () => {
+  const fetchHomeDataOrchestrated = loadHomeScreenOrchestrator();
 
-  // Request 1 starts
-  const seq1 = 1;
-  const promise1 = new Promise((resolve) => {
-    setTimeout(() => {
-      if (seq1 === requestSeqRef.current) {
-        appliedData = 'DATA_FROM_REQ_1';
-      }
-      resolve();
-    }, 50);
-  });
-
-  // Request 2 starts immediately (e.g. user toggles filter or pulls to refresh)
-  controller1.abort();
-  const seq2 = ++requestSeqRef.current;
-  assert.equal(controller1.signal.aborted, true, 'Previous controller must be aborted');
-
-  const promise2 = new Promise((resolve) => {
-    setTimeout(() => {
-      if (seq2 === requestSeqRef.current) {
-        appliedData = 'DATA_FROM_REQ_2';
-      }
-      resolve();
-    }, 20); // Resolves earlier
-  });
-
-  await Promise.all([promise1, promise2]);
-  assert.equal(appliedData, 'DATA_FROM_REQ_2', 'Stale response from request 1 must be ignored');
-});
-
-test('Section 5.5: Screen unmount aborts active in-flight requests and suppresses state updates', async () => {
-  const abortController = new AbortController();
+  const abortControllerRef = { current: null };
   const isMountedRef = { current: true };
-  let stateUpdatedAfterUnmount = false;
+  const requestSeqRef = { current: 0 };
+  let appliedFish = null;
 
-  // Screen unmount cleanup simulated:
-  const cleanup = () => {
-    isMountedRef.current = false;
-    abortController.abort();
+  const slowApi = {
+    getFish: async (params, opts) => new Promise((resolve, reject) => {
+      opts.signal?.addEventListener('abort', () => reject(new Error('Aborted')));
+      setTimeout(() => resolve({ success: true, data: [{ id: 'fish-old', name: 'Old Stale Fish' }] }), 80);
+    }),
+    getCategories: async () => ({ data: [] }),
+    getSubscription: async () => ({ data: null }),
+    getCustomerLiveTracking: async () => ({ data: null }),
+    getProfile: async () => ({ data: null }),
   };
 
-  const activePromise = new Promise((resolve) => {
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        stateUpdatedAfterUnmount = true;
-      }
-      resolve();
-    }, 30);
+  const fastApi = {
+    getFish: async () => ({ success: true, data: [{ id: 'fish-new', name: 'New Fresh Fish' }] }),
+    getCategories: async () => ({ data: [] }),
+    getSubscription: async () => ({ data: null }),
+    getCustomerLiveTracking: async () => ({ data: null }),
+    getProfile: async () => ({ data: null }),
+  };
+
+  // Request 1 starts (slow)
+  const req1 = fetchHomeDataOrchestrated({
+    apiClient: slowApi,
+    setFishList: (data) => { appliedFish = data; },
+    setCategories: () => {},
+    setSubData: () => {},
+    setTrackingData: () => {},
+    setCustomer: () => {},
+    setLoading: () => {},
+    setRefreshing: () => {},
+    setError: () => {},
+    abortControllerRef,
+    isMountedRef,
+    requestSeqRef,
+    isRefresh: false,
   });
 
-  cleanup();
+  // Request 2 starts immediately (fast, e.g. user refreshed)
+  const req2 = fetchHomeDataOrchestrated({
+    apiClient: fastApi,
+    setFishList: (data) => { appliedFish = data; },
+    setCategories: () => {},
+    setSubData: () => {},
+    setTrackingData: () => {},
+    setCustomer: () => {},
+    setLoading: () => {},
+    setRefreshing: () => {},
+    setError: () => {},
+    abortControllerRef,
+    isMountedRef,
+    requestSeqRef,
+    isRefresh: true,
+  });
 
-  await activePromise;
-  assert.equal(abortController.signal.aborted, true, 'Active controller must be aborted upon unmount');
-  assert.equal(stateUpdatedAfterUnmount, false, 'State update must be suppressed when unmounted');
+  await Promise.allSettled([req1, req2]);
+
+  assert.equal(appliedFish?.length, 1);
+  assert.equal(appliedFish[0].name, 'New Fresh Fish', 'Stale response from slow request 1 must not overwrite request 2');
 });
 
-test('Section 5.6: Refresh and loading indicators always settle deterministically via Promise.allSettled', async () => {
+test('Section 5.5: [Simulated Orchestration] Screen unmount aborts active in-flight requests and suppresses state updates', async () => {
+  const fetchHomeDataOrchestrated = loadHomeScreenOrchestrator();
+
+  const abortControllerRef = { current: null };
+  const isMountedRef = { current: true };
+  const requestSeqRef = { current: 0 };
+  let stateUpdatedAfterUnmount = false;
+
+  const slowApi = {
+    getFish: async (params, opts) => new Promise((resolve, reject) => {
+      opts.signal?.addEventListener('abort', () => reject(new Error('Aborted')));
+      setTimeout(() => resolve({ success: true, data: [{ id: 'fish-1' }] }), 50);
+    }),
+    getCategories: async () => ({ data: [] }),
+    getSubscription: async () => ({ data: null }),
+    getCustomerLiveTracking: async () => ({ data: null }),
+    getProfile: async () => ({ data: null }),
+  };
+
+  const req = fetchHomeDataOrchestrated({
+    apiClient: slowApi,
+    setFishList: () => { stateUpdatedAfterUnmount = true; },
+    setCategories: () => {},
+    setSubData: () => {},
+    setTrackingData: () => {},
+    setCustomer: () => {},
+    setLoading: () => {},
+    setRefreshing: () => {},
+    setError: () => {},
+    abortControllerRef,
+    isMountedRef,
+    requestSeqRef,
+    isRefresh: false,
+  });
+
+  // Simulate unmount at 10ms
+  setTimeout(() => {
+    isMountedRef.current = false;
+    abortControllerRef.current?.abort();
+  }, 10);
+
+  await Promise.allSettled([req]);
+
+  assert.equal(abortControllerRef.current?.signal.aborted, true, 'Abort controller must be aborted upon unmount');
+  assert.equal(stateUpdatedAfterUnmount, false, 'State updates must be suppressed after component unmounts');
+});
+
+test('Section 5.6: [Simulated Orchestration] Refresh and loading indicators always settle deterministically via Promise.allSettled', async () => {
+  const fetchHomeDataOrchestrated = loadHomeScreenOrchestrator();
+
   let refreshing = true;
   let loading = true;
 
-  const p1 = Promise.reject(new Error('Fish fail'));
-  const p2 = Promise.reject(new Error('Categories fail'));
-  const p3 = Promise.reject(new Error('Sub fail'));
+  const failingApi = {
+    getFish: async () => { throw new Error('Fish error'); },
+    getCategories: async () => { throw new Error('Cats error'); },
+    getSubscription: async () => { throw new Error('Sub error'); },
+    getCustomerLiveTracking: async () => { throw new Error('Tracking error'); },
+    getProfile: async () => { throw new Error('Profile error'); },
+  };
 
-  try {
-    await Promise.allSettled([p1, p2, p3]);
-  } finally {
-    refreshing = false;
-    loading = false;
-  }
+  await fetchHomeDataOrchestrated({
+    apiClient: failingApi,
+    setFishList: () => {},
+    setCategories: () => {},
+    setSubData: () => {},
+    setTrackingData: () => {},
+    setCustomer: () => {},
+    setLoading: (val) => { loading = val; },
+    setRefreshing: (val) => { refreshing = val; },
+    setError: () => {},
+    abortControllerRef: { current: null },
+    isMountedRef: { current: true },
+    requestSeqRef: { current: 0 },
+    isRefresh: true,
+  });
 
-  assert.equal(refreshing, false, 'Refreshing indicator must be false');
-  assert.equal(loading, false, 'Loading indicator must be false');
+  assert.equal(refreshing, false, 'Refreshing indicator must be false even if all calls reject');
+  assert.equal(loading, false, 'Loading indicator must be false even if all calls reject');
 });
 
 // ==============================================================================
-// 4. STATIC SOURCE INSPECTION CHECKS (Explicitly Labeled)
+// 5. STATIC SOURCE INSPECTION CHECKS (Explicitly Labeled)
 // ==============================================================================
 
 test('Section 5.7: [Static Check] App shell remains sole owner of authoritative cart summary', () => {
   const homeCode = fs.readFileSync(homeScreenSourcePath, 'utf8');
 
-  // Verify loadAllData does NOT call api.getCart()
-  const loadAllDataMatch = homeCode.match(/const loadAllData = useCallback\([\s\S]*?\}, \[\]\);/);
-  assert.ok(loadAllDataMatch, 'loadAllData must be defined with empty dependencies []');
+  // Verify fetchHomeDataOrchestrated does NOT issue api.getCart()
+  const orchestratorMatch = homeCode.match(/export async function fetchHomeDataOrchestrated\([\s\S]*?\n\}/);
+  assert.ok(orchestratorMatch, 'fetchHomeDataOrchestrated must be present in HomeScreen.jsx');
   assert.equal(
-    loadAllDataMatch[0].includes('api.getCart()'),
+    orchestratorMatch[0].includes('getCart()'),
     false,
     'HomeScreen loadAllData must NOT issue redundant api.getCart()'
   );

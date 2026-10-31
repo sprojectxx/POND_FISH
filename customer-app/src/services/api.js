@@ -107,8 +107,12 @@ async function request(endpoint, options = {}) {
         } catch (_) {}
       }, effectiveTimeoutMs);
     }
-  } else if (effectiveTimeoutMs > 0) {
-    console.warn('[API CLIENT] AbortController unavailable in runtime; falling back to promise-level timeout protection');
+  } else if (effectiveTimeoutMs > 0 || options.signal) {
+    console.warn(
+      '[API CLIENT] AbortController is unavailable in current runtime. ' +
+      'Network socket cancellation is not supported; timeouts and caller cancellations ' +
+      'will reject client-side promises but in-flight HTTP requests cannot be cancelled on the wire.'
+    );
   }
 
   // Strip internal timeout/signal options before dispatching to native fetch
@@ -130,17 +134,38 @@ async function request(endpoint, options = {}) {
   let json;
 
   try {
-    if (!controller && effectiveTimeoutMs > 0) {
+    if (!controller) {
       // Safe fallback for runtimes without AbortController
       let fallbackTimer = null;
-      const timeoutPromise = new Promise((_, reject) => {
-        fallbackTimer = setTimeout(() => {
-          didTimeout = true;
-          const timeoutErr = new Error(`Request to ${endpoint} timed out after ${effectiveTimeoutMs}ms`);
-          timeoutErr.code = 'API_TIMEOUT';
-          timeoutErr.isTimeout = true;
-          reject(timeoutErr);
-        }, effectiveTimeoutMs);
+      let fallbackAbortListener = null;
+
+      const cancellationPromise = new Promise((_, reject) => {
+        if (effectiveTimeoutMs > 0) {
+          fallbackTimer = setTimeout(() => {
+            didTimeout = true;
+            const timeoutErr = new Error(
+              `Request to ${endpoint} timed out after ${effectiveTimeoutMs}ms (client detached; server state unconfirmed)`
+            );
+            timeoutErr.code = 'API_TIMEOUT';
+            timeoutErr.isTimeout = true;
+            timeoutErr.networkCancelled = false;
+            reject(timeoutErr);
+          }, effectiveTimeoutMs);
+        }
+
+        if (options.signal) {
+          fallbackAbortListener = () => {
+            const abortErr = new Error(`Request to ${endpoint} was cancelled by caller (socket not cancelled)`);
+            abortErr.code = 'API_ABORTED';
+            abortErr.isAborted = true;
+            abortErr.networkCancelled = false;
+            abortErr.reason = options.signal.reason || 'Operation cancelled by caller';
+            reject(abortErr);
+          };
+          if (typeof options.signal.addEventListener === 'function') {
+            options.signal.addEventListener('abort', fallbackAbortListener);
+          }
+        }
       });
 
       const fetchAndParse = (async () => {
@@ -150,11 +175,16 @@ async function request(endpoint, options = {}) {
       })();
 
       try {
-        const result = await Promise.race([fetchAndParse, timeoutPromise]);
+        const result = (effectiveTimeoutMs > 0 || options.signal)
+          ? await Promise.race([fetchAndParse, cancellationPromise])
+          : await fetchAndParse;
         response = result.resp;
         json = result.parsed;
       } finally {
         if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (fallbackAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
+          options.signal.removeEventListener('abort', fallbackAbortListener);
+        }
       }
     } else {
       response = await fetch(url, fetchOptions);
@@ -171,17 +201,23 @@ async function request(endpoint, options = {}) {
     }
   } catch (err) {
     if (didTimeout) {
-      const timeoutErr = new Error(`Request to ${endpoint} timed out after ${effectiveTimeoutMs}ms`);
+      const isUnconfirmed = !controller;
+      const timeoutMsg = isUnconfirmed
+        ? `Request to ${endpoint} timed out after ${effectiveTimeoutMs}ms (client detached; server state unconfirmed)`
+        : `Request to ${endpoint} timed out after ${effectiveTimeoutMs}ms`;
+      const timeoutErr = new Error(timeoutMsg);
       timeoutErr.code = 'API_TIMEOUT';
       timeoutErr.isTimeout = true;
+      timeoutErr.networkCancelled = Boolean(controller);
       throw timeoutErr;
     }
 
-    if (options.signal?.aborted || err.name === 'AbortError') {
+    if (options.signal?.aborted || err.name === 'AbortError' || err.code === 'API_ABORTED') {
       const abortErr = new Error(`Request to ${endpoint} was aborted`);
       abortErr.code = 'API_ABORTED';
       abortErr.isAborted = true;
-      abortErr.reason = options.signal?.reason || err.message;
+      abortErr.networkCancelled = Boolean(controller);
+      abortErr.reason = options.signal?.reason || err.reason || err.message;
       throw abortErr;
     }
 
