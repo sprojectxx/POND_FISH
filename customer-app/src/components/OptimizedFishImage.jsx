@@ -11,12 +11,14 @@ export { isValidImageUri };
  * 1. Validates remote URI presence before triggering native image decode.
  * 2. Catches remote network errors and 404s via onError to present a local fallback placeholder.
  * 3. Does not modify or rewrite image URLs (no speculative CDN query parameters).
- * 4. Memoized to avoid unnecessary image reloading on parent component re-renders.
+ * 4. Enables client-side image downsampling via resizeMethod="resize" on Android.
+ * 5. Memoized to avoid unnecessary image reloading on parent component re-renders.
  */
 function OptimizedFishImage({
   uri,
   style,
   resizeMode = 'cover',
+  resizeMethod = 'resize',
   fallbackText = '🐟',
   fallbackStyle,
   testID,
@@ -46,6 +48,7 @@ function OptimizedFishImage({
       source={{ uri }}
       style={style}
       resizeMode={resizeMode}
+      resizeMethod={resizeMethod}
       onError={() => setHasError(true)}
       testID={testID || 'optimized-image'}
     />
