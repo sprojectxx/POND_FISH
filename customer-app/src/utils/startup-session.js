@@ -53,8 +53,10 @@ async function orchestrateStartupSession({
     }
 
     // 2. Validate session with PondFish backend
+    // Pass skipUnauthorizedHandler: true so startup orchestrator has single ownership
+    // of 401 session clearance, preventing duplicate handling with global unauthorized callback.
     try {
-      const response = await apiClient.getProfile(stored.token);
+      const response = await apiClient.getProfile(stored.token, { skipUnauthorizedHandler: true });
       const customer = response?.data;
 
       // Check mount state after async API call

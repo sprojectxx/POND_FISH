@@ -246,9 +246,11 @@ async function request(endpoint, options = {}) {
     err.details = json?.error?.details || [];
 
     // Trigger unauthorized session expiration only for authenticated requests that return HTTP 401
-    // Explicitly exclude initial unauthenticated auth routes (send-otp and verify-otp)
+    // Explicitly exclude initial unauthenticated auth routes (send-otp and verify-otp),
+    // and requests explicitly configured to handle 401 directly (e.g. startup session probe)
     const isAuthEndpoint = !endpoint.includes('/auth/send-otp') && !endpoint.includes('/auth/verify-otp');
-    if (response.status === 401 && isAuthEndpoint) {
+    const shouldNotifyUnauthorized = isAuthEndpoint && !options.skipUnauthorizedHandler;
+    if (response.status === 401 && shouldNotifyUnauthorized) {
       const now = Date.now();
       const isDuplicate = requestToken === lastRejectedToken && (now - lastRejectedTime < 1500);
 
