@@ -4,7 +4,7 @@
  * Native fetch client connecting React Native to the Next.js backend.
  */
 
-import { getAuthTokens, saveDeviceToken, clearDeviceToken } from './auth-storage';
+import { getAuthTokens, saveDeviceToken } from './auth-storage';
 
 // Production API URL for PondFish ecosystem. In development (__DEV__), fallback to localhost loopback for ADB reverse.
 const API_BASE_URL = __DEV__
@@ -71,6 +71,15 @@ async function request(endpoint, options = {}) {
     requestToken = match ? match[1] : headers.Authorization;
   }
 
+  // Post-auth check: if caller signal was aborted while awaiting keystore credentials
+  if (options.signal?.aborted) {
+    const abortErr = new Error(`Request to ${endpoint} was aborted`);
+    abortErr.code = 'API_ABORTED';
+    abortErr.isAborted = true;
+    abortErr.reason = options.signal.reason || 'Operation aborted by caller';
+    throw abortErr;
+  }
+
   // Setup AbortController combining internal timeout with caller signal
   const hasAbortController = typeof AbortController !== 'undefined';
   const controller = hasAbortController ? new AbortController() : null;
@@ -98,6 +107,8 @@ async function request(endpoint, options = {}) {
         } catch (_) {}
       }, effectiveTimeoutMs);
     }
+  } else if (effectiveTimeoutMs > 0) {
+    console.warn('[API CLIENT] AbortController unavailable in runtime; falling back to promise-level timeout protection');
   }
 
   // Strip internal timeout/signal options before dispatching to native fetch
@@ -116,9 +127,49 @@ async function request(endpoint, options = {}) {
   };
 
   let response;
+  let json;
+
   try {
-    response = await fetch(url, fetchOptions);
-  } catch (fetchErr) {
+    if (!controller && effectiveTimeoutMs > 0) {
+      // Safe fallback for runtimes without AbortController
+      let fallbackTimer = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        fallbackTimer = setTimeout(() => {
+          didTimeout = true;
+          const timeoutErr = new Error(`Request to ${endpoint} timed out after ${effectiveTimeoutMs}ms`);
+          timeoutErr.code = 'API_TIMEOUT';
+          timeoutErr.isTimeout = true;
+          reject(timeoutErr);
+        }, effectiveTimeoutMs);
+      });
+
+      const fetchAndParse = (async () => {
+        const resp = await fetch(url, fetchOptions);
+        const parsed = await resp.json().catch(() => ({}));
+        return { resp, parsed };
+      })();
+
+      try {
+        const result = await Promise.race([fetchAndParse, timeoutPromise]);
+        response = result.resp;
+        json = result.parsed;
+      } finally {
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+      }
+    } else {
+      response = await fetch(url, fetchOptions);
+
+      // Keep timeout and caller abort active while reading response body stream!
+      try {
+        json = await response.json();
+      } catch (parseErr) {
+        if (didTimeout || options.signal?.aborted || parseErr.name === 'AbortError') {
+          throw parseErr;
+        }
+        json = {};
+      }
+    }
+  } catch (err) {
     if (didTimeout) {
       const timeoutErr = new Error(`Request to ${endpoint} timed out after ${effectiveTimeoutMs}ms`);
       timeoutErr.code = 'API_TIMEOUT';
@@ -126,20 +177,21 @@ async function request(endpoint, options = {}) {
       throw timeoutErr;
     }
 
-    if (options.signal?.aborted || fetchErr.name === 'AbortError') {
+    if (options.signal?.aborted || err.name === 'AbortError') {
       const abortErr = new Error(`Request to ${endpoint} was aborted`);
       abortErr.code = 'API_ABORTED';
       abortErr.isAborted = true;
-      abortErr.reason = options.signal?.reason || fetchErr.message;
+      abortErr.reason = options.signal?.reason || err.message;
       throw abortErr;
     }
 
-    const netErr = new Error(fetchErr.message || 'Network request failed');
+    const netErr = new Error(err.message || 'Network request failed');
     netErr.code = 'API_NETWORK_ERROR';
     netErr.isNetwork = true;
-    netErr.cause = fetchErr;
+    netErr.cause = err;
     throw netErr;
   } finally {
+    // Both timers and abort listeners are cleaned up only AFTER body parsing completes or fails
     if (timeoutId) {
       clearTimeout(timeoutId);
       timeoutId = null;
@@ -149,8 +201,6 @@ async function request(endpoint, options = {}) {
       callerAbortListener = null;
     }
   }
-
-  const json = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     const errorMsg = json?.error?.message || `Request failed with status ${response.status}`;

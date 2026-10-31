@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { colors } from './src/theme/colors';
 import { api, setUnauthorizedHandler } from './src/services/api';
-import { getAuthTokens, clearAuthTokens, clearDeviceToken } from './src/services/auth-storage';
+import { getAuthTokens, clearAuthTokens } from './src/services/auth-storage';
 
 import SplashScreen from './src/screens/SplashScreen';
 import PhoneAuthScreen from './src/screens/PhoneAuthScreen';
@@ -100,7 +100,6 @@ export default function App() {
     let didClear = false;
 
     try {
-      await clearDeviceToken().catch(() => {});
       didClear = await clearAuthTokens(expectedToken);
       if (!didClear && expectedToken) {
         console.warn('[LOGOUT] Session token changed before clearing; aborting obsolete logout');

@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
-import { clearAuthTokens, getDeviceToken, clearDeviceToken } from '../services/auth-storage';
+import { clearAuthTokens, getDeviceToken } from '../services/auth-storage';
 
 export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true);
@@ -188,10 +188,7 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
         console.warn('[LOGOUT] Non-fatal error during device token unregistration');
       }
 
-      // 2. Clear local device token
-      await clearDeviceToken().catch(() => {});
-
-      // 3. Delegate local session clearance and navigation to centralized App logout handler
+      // 2. Delegate local session and device-token clearance to centralized authoritative App logout handler
       if (typeof onLogout === 'function') {
         await onLogout();
       } else {
