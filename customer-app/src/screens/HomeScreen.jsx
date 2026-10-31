@@ -5,7 +5,7 @@
  * live inventory availability, freshness indicators, subscription quotas, and live delivery tracking.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -58,50 +58,130 @@ export default function HomeScreen({
 
   const customerName = customer?.name || initialCustomer?.name || 'Customer';
 
-  // Comprehensive data retrieval from authoritative backend endpoints
-  const loadAllData = useCallback(async () => {
-    try {
-      setError(null);
-      const [catsRes, fishRes, subRes, trackingRes, cartRes, profileRes] = await Promise.all([
-        api.getCategories().catch(() => ({ data: [] })),
-        api.getFish(),
-        api.getSubscription().catch(() => ({ data: null })),
-        api.getCustomerLiveTracking().catch(() => ({ data: { active: false } })),
-        api.getCart().catch(() => ({ data: null })),
-        api.getProfile().catch(() => ({ data: null })),
-      ]);
+  const abortControllerRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
 
-      setCategories(catsRes.data || []);
-      setFishList(fishRes.data || []);
-      setSubData(subRes.data || null);
-      setTrackingData(trackingRes.data || null);
-
-      if (profileRes.data) {
-        setCustomer(profileRes.data);
+  // Lifecycle cleanup: abort in-flight requests on screen unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
+    };
+  }, []);
 
-      if (cartRes.data?.summary) {
-        setCartSummary(cartRes.data.summary);
-        if (onCartUpdated) {
-          onCartUpdated(cartRes.data);
-        }
-      }
-    } catch (err) {
-      console.error('[HOME LOAD ERROR]', err.message);
-      setError(err.message || 'Unable to load today’s fish catalogue.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  // Prioritized data retrieval:
+  // 1. Critical initial content (Fish catalogue) unblocks visual display immediately upon arrival.
+  // 2. Secondary content (Categories, Subscription, Tracking, Profile) loads concurrently in background.
+  // 3. Cart summary is owned authoritatively by App shell props (redundant fetch removed).
+  const loadAllData = useCallback(async (isRefresh = false) => {
+    // Cancel any previous in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
-  }, [onCartUpdated]);
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    abortControllerRef.current = controller;
+
+    const currentSeq = ++requestSeqRef.current;
+
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+      setError(null);
+    }
+
+    const signal = controller?.signal;
+
+    // Priority 1: Critical Fish Catalogue
+    const fishPromise = api.getFish({}, { signal })
+      .then((res) => {
+        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+        setFishList(res.data || []);
+        setError(null);
+        setLoading(false); // Unblock catalogue paint immediately
+      })
+      .catch((err) => {
+        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+        if (err.code === 'API_ABORTED') return;
+        console.error('[HOME FISH LOAD ERROR]', err.message);
+        // Preserve existing fish list on refresh failure; only show error state if catalogue is empty
+        setFishList((prev) => {
+          if (!prev || prev.length === 0) {
+            setError(err.message || 'Unable to load today’s fish catalogue.');
+          }
+          return prev;
+        });
+        setLoading(false);
+      });
+
+    // Secondary Content (Executes concurrently in background without blocking fish catalogue)
+    const catsPromise = api.getCategories({ signal })
+      .then((res) => {
+        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+        setCategories(res.data || []);
+      })
+      .catch((err) => {
+        if (err.code !== 'API_ABORTED') {
+          console.warn('[HOME CATEGORIES NON-FATAL]', err.message);
+        }
+      });
+
+    const subPromise = api.getSubscription({ signal })
+      .then((res) => {
+        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+        setSubData(res.data || null);
+      })
+      .catch((err) => {
+        if (err.code !== 'API_ABORTED') {
+          console.warn('[HOME SUBSCRIPTION NON-FATAL]', err.message);
+        }
+      });
+
+    const trackingPromise = api.getCustomerLiveTracking({ signal })
+      .then((res) => {
+        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+        setTrackingData(res.data || null);
+      })
+      .catch((err) => {
+        if (err.code !== 'API_ABORTED') {
+          console.warn('[HOME TRACKING NON-FATAL]', err.message);
+        }
+      });
+
+    const profilePromise = api.getProfile(null, { signal })
+      .then((res) => {
+        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+        if (res.data) {
+          setCustomer(res.data);
+        }
+      })
+      .catch((err) => {
+        if (err.code !== 'API_ABORTED') {
+          console.warn('[HOME PROFILE NON-FATAL]', err.message);
+        }
+      });
+
+    // Await all independent requests to settle before terminating refresh indicator
+    try {
+      await Promise.allSettled([fishPromise, catsPromise, subPromise, trackingPromise, profilePromise]);
+    } finally {
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
 
   const handleRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadAllData();
+    loadAllData(true);
   }, [loadAllData]);
 
   function toggleFavorite(id) {

@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "start": "react-native start",
-    "android": "react-native run-android"
+    "android": "react-native run-android",
+    "test": "node --test ../tests/unit/customer-app-phase1-responsiveness.test.js"
   },
   "dependencies": {
     "@react-native-firebase/app": "^21.14.0",

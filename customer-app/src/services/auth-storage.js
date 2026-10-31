@@ -7,6 +7,9 @@
 import * as Keychain from 'react-native-keychain';
 
 const AUTH_SERVICE_KEY = 'com.pondfish.customer.auth';
+const DEVICE_TOKEN_SERVICE_KEY = 'com.pondfish.customer.device_token';
+
+let cachedDeviceToken = null;
 
 // Internal direct reader without queue dependency to avoid circular deadlocks
 async function readCredentialsDirect() {
@@ -81,6 +84,81 @@ export async function clearAuthTokens(expectedToken = null) {
     await Keychain.resetGenericPassword({
       service: AUTH_SERVICE_KEY,
     });
+    try {
+      cachedDeviceToken = null;
+      await Keychain.resetGenericPassword({
+        service: DEVICE_TOKEN_SERVICE_KEY,
+      });
+    } catch (_) {}
     return true;
+  });
+}
+
+/**
+ * Persist FCM device registration token securely to Android Keystore.
+ * @param {string} deviceToken - Unique FCM registration token
+ * @returns {Promise<boolean>}
+ */
+export async function saveDeviceToken(deviceToken) {
+  if (!deviceToken || typeof deviceToken !== 'string' || !deviceToken.trim()) {
+    return false;
+  }
+  const trimmed = deviceToken.trim();
+  cachedDeviceToken = trimmed;
+  return enqueueStorageMutation(async () => {
+    try {
+      await Keychain.setGenericPassword('deviceToken', trimmed, {
+        service: DEVICE_TOKEN_SERVICE_KEY,
+        securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
+        storage: Keychain.STORAGE_TYPE.KEYSTORE,
+      });
+      return true;
+    } catch (err) {
+      console.warn('[AUTH STORAGE] Could not persist device token to Keystore', err);
+      return false;
+    }
+  });
+}
+
+/**
+ * Retrieve securely stored FCM device registration token.
+ * @returns {Promise<string|null>}
+ */
+export async function getDeviceToken() {
+  if (cachedDeviceToken) {
+    return cachedDeviceToken;
+  }
+  return storageMutationQueue.then(async () => {
+    try {
+      const creds = await Keychain.getGenericPassword({
+        service: DEVICE_TOKEN_SERVICE_KEY,
+      });
+      if (creds && creds.password) {
+        cachedDeviceToken = creds.password;
+        return creds.password;
+      }
+    } catch (err) {
+      console.warn('[AUTH STORAGE] Could not read device token from Keystore', err);
+    }
+    return null;
+  });
+}
+
+/**
+ * Erase stored FCM device registration token from Android Keystore.
+ * @returns {Promise<boolean>}
+ */
+export async function clearDeviceToken() {
+  cachedDeviceToken = null;
+  return enqueueStorageMutation(async () => {
+    try {
+      await Keychain.resetGenericPassword({
+        service: DEVICE_TOKEN_SERVICE_KEY,
+      });
+      return true;
+    } catch (err) {
+      console.warn('[AUTH STORAGE] Could not reset device token in Keystore', err);
+      return false;
+    }
   });
 }

@@ -4,12 +4,15 @@
  * Native fetch client connecting React Native to the Next.js backend.
  */
 
-import { getAuthTokens } from './auth-storage';
+import { getAuthTokens, saveDeviceToken, clearDeviceToken } from './auth-storage';
 
 // Production API URL for PondFish ecosystem. In development (__DEV__), fallback to localhost loopback for ADB reverse.
 const API_BASE_URL = __DEV__
   ? (process.env.API_BASE_URL || 'http://127.0.0.1:3000')
   : 'https://pondfish.in';
+
+// Documented default timeout for standard mobile API requests (15 seconds)
+export const DEFAULT_TIMEOUT_MS = 15000;
 
 // Global handler for authenticated session expiration (HTTP 401)
 let onUnauthorizedCallback = null;
@@ -21,7 +24,8 @@ export function setUnauthorizedHandler(callback) {
 }
 
 /**
- * Standard API request wrapper with bearer token attachment
+ * Standard API request wrapper with bearer token attachment,
+ * centralized AbortController timeout, and caller cancellation support.
  */
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -30,6 +34,25 @@ async function request(endpoint, options = {}) {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   };
+
+  // Resolve effective request timeout in milliseconds
+  let effectiveTimeoutMs = DEFAULT_TIMEOUT_MS;
+  if (options.timeoutMs === 0 || options.timeout === 0 || options.timeoutMs === null || options.timeout === null || options.timeoutMs === false) {
+    effectiveTimeoutMs = 0;
+  } else if (typeof options.timeoutMs === 'number' && options.timeoutMs > 0) {
+    effectiveTimeoutMs = options.timeoutMs;
+  } else if (typeof options.timeout === 'number' && options.timeout > 0) {
+    effectiveTimeoutMs = options.timeout;
+  }
+
+  // Pre-flight check: if caller provided an already aborted signal, abort immediately
+  if (options.signal?.aborted) {
+    const abortErr = new Error(`Request to ${endpoint} was aborted`);
+    abortErr.code = 'API_ABORTED';
+    abortErr.isAborted = true;
+    abortErr.reason = options.signal.reason || 'Operation aborted by caller';
+    throw abortErr;
+  }
 
   // Attach secure Android Keystore token if not already provided
   let requestToken = null;
@@ -48,10 +71,84 @@ async function request(endpoint, options = {}) {
     requestToken = match ? match[1] : headers.Authorization;
   }
 
-  const response = await fetch(url, {
-    ...options,
+  // Setup AbortController combining internal timeout with caller signal
+  const hasAbortController = typeof AbortController !== 'undefined';
+  const controller = hasAbortController ? new AbortController() : null;
+  let timeoutId = null;
+  let didTimeout = false;
+  let callerAbortListener = null;
+
+  if (controller) {
+    if (options.signal) {
+      callerAbortListener = () => {
+        try {
+          controller.abort(options.signal.reason);
+        } catch (_) {}
+      };
+      if (typeof options.signal.addEventListener === 'function') {
+        options.signal.addEventListener('abort', callerAbortListener);
+      }
+    }
+
+    if (effectiveTimeoutMs > 0) {
+      timeoutId = setTimeout(() => {
+        didTimeout = true;
+        try {
+          controller.abort();
+        } catch (_) {}
+      }, effectiveTimeoutMs);
+    }
+  }
+
+  // Strip internal timeout/signal options before dispatching to native fetch
+  const {
+    timeoutMs: _unusedTimeoutMs,
+    timeout: _unusedTimeout,
+    signal: _unusedCallerSignal,
+    headers: _unusedCustomHeaders,
+    ...restFetchOptions
+  } = options;
+
+  const fetchOptions = {
+    ...restFetchOptions,
     headers,
-  });
+    ...(controller ? { signal: controller.signal } : {}),
+  };
+
+  let response;
+  try {
+    response = await fetch(url, fetchOptions);
+  } catch (fetchErr) {
+    if (didTimeout) {
+      const timeoutErr = new Error(`Request to ${endpoint} timed out after ${effectiveTimeoutMs}ms`);
+      timeoutErr.code = 'API_TIMEOUT';
+      timeoutErr.isTimeout = true;
+      throw timeoutErr;
+    }
+
+    if (options.signal?.aborted || fetchErr.name === 'AbortError') {
+      const abortErr = new Error(`Request to ${endpoint} was aborted`);
+      abortErr.code = 'API_ABORTED';
+      abortErr.isAborted = true;
+      abortErr.reason = options.signal?.reason || fetchErr.message;
+      throw abortErr;
+    }
+
+    const netErr = new Error(fetchErr.message || 'Network request failed');
+    netErr.code = 'API_NETWORK_ERROR';
+    netErr.isNetwork = true;
+    netErr.cause = fetchErr;
+    throw netErr;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    if (callerAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
+      options.signal.removeEventListener('abort', callerAbortListener);
+      callerAbortListener = null;
+    }
+  }
 
   const json = await response.json().catch(() => ({}));
 
@@ -96,8 +193,9 @@ export const api = {
    * Request OTP dispatch to mobile number
    * POST /api/v1/customer/auth/send-otp
    */
-  async sendOtp(mobileNumber) {
+  async sendOtp(mobileNumber, options = {}) {
     return request('/api/v1/customer/auth/send-otp', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ mobileNumber }),
     });
@@ -107,8 +205,9 @@ export const api = {
    * Verify Firebase identity token and establish customer session
    * POST /api/v1/customer/auth/verify-otp
    */
-  async verifyOtp({ mobileNumber, idToken }) {
+  async verifyOtp({ mobileNumber, idToken }, options = {}) {
     return request('/api/v1/customer/auth/verify-otp', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ mobileNumber, idToken }),
     });
@@ -118,9 +217,13 @@ export const api = {
    * Fetch authenticated customer profile
    * GET /api/v1/customer/profile
    */
-  async getProfile(token = null) {
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  async getProfile(token = null, options = {}) {
+    const headers = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    };
     return request('/api/v1/customer/profile', {
+      ...options,
       method: 'GET',
       headers,
     });
@@ -130,9 +233,13 @@ export const api = {
    * Update customer profile
    * PUT /api/v1/customer/profile
    */
-  async updateProfile({ name, age, area }, token = null) {
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  async updateProfile({ name, age, area }, token = null, options = {}) {
+    const headers = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    };
     return request('/api/v1/customer/profile', {
+      ...options,
       method: 'PUT',
       headers,
       body: JSON.stringify({ name, age, area }),
@@ -143,8 +250,9 @@ export const api = {
    * Fetch active fish categories
    * GET /api/v1/customer/categories
    */
-  async getCategories() {
+  async getCategories(options = {}) {
     return request('/api/v1/customer/categories', {
+      ...options,
       method: 'GET',
     });
   },
@@ -153,8 +261,9 @@ export const api = {
    * Fetch fish catalogue with optional filters
    * GET /api/v1/customer/fish
    * @param {object} filters - { category_id, search, online_bookable, availability, discount }
+   * @param {object} [options={}]
    */
-  async getFish(filters = {}) {
+  async getFish(filters = {}, options = {}) {
     const params = new URLSearchParams();
     if (filters.category_id) params.set('category_id', filters.category_id);
     if (filters.search && filters.search.trim()) params.set('search', filters.search.trim());
@@ -165,6 +274,7 @@ export const api = {
     const qs = params.toString();
     const endpoint = `/api/v1/customer/fish${qs ? `?${qs}` : ''}`;
     return request(endpoint, {
+      ...options,
       method: 'GET',
     });
   },
@@ -173,8 +283,9 @@ export const api = {
    * Fetch single fish details by ID
    * GET /api/v1/customer/fish/{id}
    */
-  async getFishDetails(id) {
+  async getFishDetails(id, options = {}) {
     return request(`/api/v1/customer/fish/${encodeURIComponent(id)}`, {
+      ...options,
       method: 'GET',
     });
   },
@@ -183,8 +294,9 @@ export const api = {
    * Fetch customer cart
    * GET /api/v1/customer/cart
    */
-  async getCart() {
+  async getCart(options = {}) {
     return request('/api/v1/customer/cart', {
+      ...options,
       method: 'GET',
     });
   },
@@ -193,8 +305,9 @@ export const api = {
    * Add fish to customer cart
    * POST /api/v1/customer/cart/items
    */
-  async addToCart({ fishId, quantity = 1 }) {
+  async addToCart({ fishId, quantity = 1 }, options = {}) {
     return request('/api/v1/customer/cart/items', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ fish_id: fishId, quantity }),
     });
@@ -204,8 +317,9 @@ export const api = {
    * Update quantity of a fish item in cart
    * PATCH /api/v1/customer/cart/items/{id}
    */
-  async updateCartQuantity({ fishId, quantity }) {
+  async updateCartQuantity({ fishId, quantity }, options = {}) {
     return request(`/api/v1/customer/cart/items/${encodeURIComponent(fishId)}`, {
+      ...options,
       method: 'PATCH',
       body: JSON.stringify({ quantity }),
     });
@@ -215,8 +329,9 @@ export const api = {
    * Remove fish item from cart
    * DELETE /api/v1/customer/cart/items/{id}
    */
-  async removeFromCart(fishId) {
+  async removeFromCart(fishId, options = {}) {
     return request(`/api/v1/customer/cart/items/${encodeURIComponent(fishId)}`, {
+      ...options,
       method: 'DELETE',
     });
   },
@@ -225,8 +340,9 @@ export const api = {
    * Clear all items from cart
    * DELETE /api/v1/customer/cart
    */
-  async clearCart() {
+  async clearCart(options = {}) {
     return request('/api/v1/customer/cart', {
+      ...options,
       method: 'DELETE',
     });
   },
@@ -235,8 +351,9 @@ export const api = {
    * Authoritative checkout preview
    * POST /api/v1/customer/bookings/preview
    */
-  async getCheckoutPreview() {
+  async getCheckoutPreview(options = {}) {
     return request('/api/v1/customer/bookings/preview', {
+      ...options,
       method: 'POST',
     });
   },
@@ -245,9 +362,11 @@ export const api = {
    * Create online booking with atomic inventory reservation
    * POST /api/v1/customer/bookings
    * @param {object} [paymentVerification]
+   * @param {object} [options={}]
    */
-  async createBooking(paymentVerification = null) {
+  async createBooking(paymentVerification = null, options = {}) {
     return request('/api/v1/customer/bookings', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ paymentVerification }),
     });
@@ -257,8 +376,9 @@ export const api = {
    * List customer bookings history
    * GET /api/v1/customer/bookings
    */
-  async getBookings({ limit = 50, offset = 0 } = {}) {
+  async getBookings({ limit = 50, offset = 0 } = {}, options = {}) {
     return request(`/api/v1/customer/bookings?limit=${limit}&offset=${offset}`, {
+      ...options,
       method: 'GET',
     });
   },
@@ -267,8 +387,9 @@ export const api = {
    * Get single booking details with QR ticket
    * GET /api/v1/customer/bookings/{id}
    */
-  async getBookingDetails(bookingId) {
+  async getBookingDetails(bookingId, options = {}) {
     return request(`/api/v1/customer/bookings/${encodeURIComponent(bookingId)}`, {
+      ...options,
       method: 'GET',
     });
   },
@@ -277,8 +398,9 @@ export const api = {
    * Cancel an active booking and release reserved stock
    * POST /api/v1/customer/bookings/{id}/cancel
    */
-  async cancelBooking(bookingId) {
+  async cancelBooking(bookingId, options = {}) {
     return request(`/api/v1/customer/bookings/${encodeURIComponent(bookingId)}/cancel`, {
+      ...options,
       method: 'POST',
     });
   },
@@ -287,8 +409,9 @@ export const api = {
    * Trigger authoritative booking expiry processing
    * POST /api/v1/customer/bookings/expire
    */
-  async processBookingExpiry(bookingId = null) {
+  async processBookingExpiry(bookingId = null, options = {}) {
     return request('/api/v1/customer/bookings/expire', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ bookingId }),
     });
@@ -298,8 +421,9 @@ export const api = {
    * Create Razorpay order intent for checkout
    * POST /api/v1/payments/razorpay/orders
    */
-  async createRazorpayOrder(payload = {}) {
+  async createRazorpayOrder(payload = {}, options = {}) {
     return request('/api/v1/payments/razorpay/orders', {
+      ...options,
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -309,8 +433,9 @@ export const api = {
    * Fetch authenticated customer's active subscription status
    * GET /api/v1/customer/subscription
    */
-  async getSubscription() {
+  async getSubscription(options = {}) {
     return request('/api/v1/customer/subscription', {
+      ...options,
       method: 'GET',
     });
   },
@@ -319,8 +444,9 @@ export const api = {
    * Fetch available active subscription plans
    * GET /api/v1/customer/subscription/plans
    */
-  async getSubscriptionPlans() {
+  async getSubscriptionPlans(options = {}) {
     return request('/api/v1/customer/subscription/plans', {
+      ...options,
       method: 'GET',
     });
   },
@@ -330,8 +456,9 @@ export const api = {
    * POST /api/v1/customer/subscription/purchase
    * @param {string} planId
    */
-  async purchaseSubscription(planId) {
+  async purchaseSubscription(planId, options = {}) {
     return request('/api/v1/customer/subscription/purchase', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ planId }),
     });
@@ -342,8 +469,9 @@ export const api = {
    * POST /api/v1/customer/subscription/verify
    * @param {object} params
    */
-  async verifySubscriptionPayment({ planId, razorpayOrderId, razorpayPaymentId, razorpaySignature }) {
+  async verifySubscriptionPayment({ planId, razorpayOrderId, razorpayPaymentId, razorpaySignature }, options = {}) {
     return request('/api/v1/customer/subscription/verify', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({
         planId,
@@ -359,8 +487,9 @@ export const api = {
    * GET /api/v1/customer/subscription/ledger
    * @param {object} [params]
    */
-  async getSubscriptionLedger({ limit = 50, offset = 0 } = {}) {
+  async getSubscriptionLedger({ limit = 50, offset = 0 } = {}, options = {}) {
     return request(`/api/v1/customer/subscription/ledger?limit=${limit}&offset=${offset}`, {
+      ...options,
       method: 'GET',
     });
   },
@@ -370,12 +499,13 @@ export const api = {
    * GET /api/v1/customer/notifications
    * @param {object} [params]
    */
-  async getNotifications({ limit = 50, offset = 0, type = null } = {}) {
+  async getNotifications({ limit = 50, offset = 0, type = null } = {}, options = {}) {
     const query = new URLSearchParams({ limit, offset });
     if (type && type.toUpperCase() !== 'ALL') {
       query.set('type', type.toUpperCase());
     }
     return request(`/api/v1/customer/notifications?${query.toString()}`, {
+      ...options,
       method: 'GET',
     });
   },
@@ -385,8 +515,9 @@ export const api = {
    * PATCH /api/v1/customer/notifications/[id]/read
    * @param {string} notificationId
    */
-  async markNotificationRead(notificationId) {
+  async markNotificationRead(notificationId, options = {}) {
     return request(`/api/v1/customer/notifications/${notificationId}/read`, {
+      ...options,
       method: 'PATCH',
     });
   },
@@ -395,8 +526,9 @@ export const api = {
    * Mark all unread customer notifications as read
    * POST /api/v1/customer/notifications/mark-all-read
    */
-  async markAllNotificationsRead() {
+  async markAllNotificationsRead(options = {}) {
     return request('/api/v1/customer/notifications/mark-all-read', {
+      ...options,
       method: 'POST',
     });
   },
@@ -406,45 +538,61 @@ export const api = {
    * POST /api/v1/customer/notifications/device
    * @param {string} deviceToken
    * @param {string} [platform='android']
+   * @param {object} [options={}]
    */
-  async registerDeviceToken(deviceToken, platform = 'android') {
-    return request('/api/v1/customer/notifications/device', {
+  async registerDeviceToken(deviceToken, platform = 'android', options = {}) {
+    const res = await request('/api/v1/customer/notifications/device', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ deviceToken, platform }),
     });
+    if (res?.success) {
+      await saveDeviceToken(deviceToken).catch(() => {});
+    }
+    return res;
   },
 
   /**
    * Unregister customer FCM device token on logout
    * DELETE /api/v1/customer/notifications/device
    * @param {string} deviceToken
+   * @param {object} [options={}]
    */
-  async unregisterDeviceToken(deviceToken) {
-    return request('/api/v1/customer/notifications/device', {
+  async unregisterDeviceToken(deviceToken, options = {}) {
+    const res = await request('/api/v1/customer/notifications/device', {
+      ...options,
       method: 'DELETE',
       body: JSON.stringify({ deviceToken }),
     });
+    await clearDeviceToken().catch(() => {});
+    return res;
   },
 
   /**
    * Scan physical store bill via camera/image upload
    * POST /api/v1/customer/bills/scan
    * @param {object} params - { imageBase64, imageUrl, formData }
+   * @param {object} [options={}]
    */
-  async scanBill({ imageBase64, imageUrl, formData, dryRun = false } = {}) {
+  async scanBill({ imageBase64, imageUrl, formData, dryRun = false } = {}, options = {}) {
     const query = dryRun ? '?dry_run=true' : '';
-    const headers = dryRun ? { 'x-scan-dry-run': 'true' } : {};
+    const headers = {
+      ...(dryRun ? { 'x-scan-dry-run': 'true' } : {}),
+      ...(options.headers || {}),
+    };
     if (formData) {
       if (dryRun) {
         formData.append('dry_run', 'true');
       }
       return request(`/api/v1/customer/bills/scan${query}`, {
+        ...options,
         method: 'POST',
         headers,
         body: formData,
       });
     }
     return request(`/api/v1/customer/bills/scan${query}`, {
+      ...options,
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -459,9 +607,11 @@ export const api = {
    * Retrieve extracted bill details by scan ID
    * GET /api/v1/customer/bills/scans/{id}
    * @param {string} scanId
+   * @param {object} [options={}]
    */
-  async getBillScan(scanId) {
+  async getBillScan(scanId, options = {}) {
     return request(`/api/v1/customer/bills/scans/${scanId}`, {
+      ...options,
       method: 'GET',
     });
   },
@@ -471,9 +621,11 @@ export const api = {
    * POST /api/v1/customer/bills/scans/{id}/bill-number
    * @param {string} scanId
    * @param {string} billNumber
+   * @param {object} [options={}]
    */
-  async updateBillNumber(scanId, billNumber) {
+  async updateBillNumber(scanId, billNumber, options = {}) {
     return request(`/api/v1/customer/bills/scans/${scanId}/bill-number`, {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ bill_number: billNumber }),
     });
@@ -484,9 +636,11 @@ export const api = {
    * POST /api/v1/customer/bills/scans/{id}/preview
    * @param {string} scanId
    * @param {Array<object>} [items]
+   * @param {object} [options={}]
    */
-  async previewPhysicalTransaction(scanId, items = []) {
+  async previewPhysicalTransaction(scanId, items = [], options = {}) {
     return request(`/api/v1/customer/bills/scans/${scanId}/preview`, {
+      ...options,
       method: 'POST',
       body: JSON.stringify({ items }),
     });
@@ -496,9 +650,11 @@ export const api = {
    * Confirm bill before payment
    * POST /api/v1/customer/bills/scans/{id}/confirm
    * @param {string} scanId
+   * @param {object} [options={}]
    */
-  async confirmBillScan(scanId) {
+  async confirmBillScan(scanId, options = {}) {
     return request(`/api/v1/customer/bills/scans/${scanId}/confirm`, {
+      ...options,
       method: 'POST',
     });
   },
@@ -507,6 +663,7 @@ export const api = {
    * Commit physical store purchase transaction
    * POST /api/v1/customer/transactions/commit
    * @param {object} params
+   * @param {object} [options={}]
    */
   async commitPhysicalTransaction({
     scanId,
@@ -516,8 +673,9 @@ export const api = {
     razorpayOrderId = null,
     razorpaySignature = null,
     items = [],
-  }) {
+  }, options = {}) {
     return request('/api/v1/customer/transactions/commit', {
+      ...options,
       method: 'POST',
       body: JSON.stringify({
         scan_id: scanId || billId,
@@ -535,9 +693,11 @@ export const api = {
    * Retrieve customer physical purchase and booking transactions
    * GET /api/v1/customer/transactions
    * @param {object} [params]
+   * @param {object} [options={}]
    */
-  async getCustomerTransactions({ limit = 50, offset = 0 } = {}) {
+  async getCustomerTransactions({ limit = 50, offset = 0 } = {}, options = {}) {
     return request(`/api/v1/customer/transactions?limit=${limit}&offset=${offset}`, {
+      ...options,
       method: 'GET',
     });
   },
@@ -546,9 +706,11 @@ export const api = {
    * Retrieve a specific transaction receipt by ID
    * GET /api/v1/customer/transactions/{id}
    * @param {string} transactionId
+   * @param {object} [options={}]
    */
-  async getTransactionDetails(transactionId) {
+  async getTransactionDetails(transactionId, options = {}) {
     return request(`/api/v1/customer/transactions/${encodeURIComponent(transactionId)}`, {
+      ...options,
       method: 'GET',
     });
   },
@@ -556,9 +718,11 @@ export const api = {
   /**
    * Retrieve active live GPS delivery tracking for customer
    * GET /api/v1/customer/gps/live
+   * @param {object} [options={}]
    */
-  async getCustomerLiveTracking() {
+  async getCustomerLiveTracking(options = {}) {
     return request('/api/v1/customer/gps/live', {
+      ...options,
       method: 'GET',
     });
   },
@@ -567,9 +731,11 @@ export const api = {
    * Retrieve a specific customer-published GPS journey by ID
    * GET /api/v1/customer/gps/journeys/{id}
    * @param {string} journeyId
+   * @param {object} [options={}]
    */
-  async getCustomerJourneyById(journeyId) {
+  async getCustomerJourneyById(journeyId, options = {}) {
     return request(`/api/v1/customer/gps/journeys/${journeyId}`, {
+      ...options,
       method: 'GET',
     });
   },

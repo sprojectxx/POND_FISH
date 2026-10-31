@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
-import { clearAuthTokens } from '../services/auth-storage';
+import { clearAuthTokens, getDeviceToken, clearDeviceToken } from '../services/auth-storage';
 
 export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true);
@@ -175,22 +175,30 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
 
   async function performLogout() {
     try {
-      // 1. Clear credentials from Android Keystore
-      await clearAuthTokens();
-
-      // 2. Clear push device token if supported implementation available
+      // 1. Attempt to unregister FCM device registration token while still authenticated with valid session token
       try {
-        if (typeof api.unregisterDeviceToken === 'function') {
-          // Unregister any active token silently
-          await api.unregisterDeviceToken('').catch(() => {});
+        const deviceToken = await getDeviceToken();
+        if (deviceToken && typeof deviceToken === 'string' && deviceToken.trim()) {
+          if (typeof api.unregisterDeviceToken === 'function') {
+            await api.unregisterDeviceToken(deviceToken.trim());
+          }
         }
-      } catch (_) {}
+      } catch (tokenErr) {
+        // Non-fatal: network or server error during push unregistration must never block user logout
+        console.warn('[LOGOUT] Non-fatal error during device token unregistration');
+      }
 
-      // 3. Inform parent shell to reset state and navigate to PHONE_AUTH
+      // 2. Clear local device token
+      await clearDeviceToken().catch(() => {});
+
+      // 3. Delegate local session clearance and navigation to centralized App logout handler
       if (typeof onLogout === 'function') {
-        onLogout();
-      } else if (typeof onNavigate === 'function') {
-        onNavigate('PHONE_AUTH');
+        await onLogout();
+      } else {
+        await clearAuthTokens();
+        if (typeof onNavigate === 'function') {
+          onNavigate('PHONE_AUTH');
+        }
       }
     } catch (err) {
       console.error('[LOGOUT ERROR]', err);

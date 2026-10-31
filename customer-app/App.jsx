@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { colors } from './src/theme/colors';
 import { api, setUnauthorizedHandler } from './src/services/api';
-import { getAuthTokens, clearAuthTokens } from './src/services/auth-storage';
+import { getAuthTokens, clearAuthTokens, clearDeviceToken } from './src/services/auth-storage';
 
 import SplashScreen from './src/screens/SplashScreen';
 import PhoneAuthScreen from './src/screens/PhoneAuthScreen';
@@ -70,7 +70,11 @@ export default function App() {
   });
   const cartCount = cartSummary?.totalItems || 0;
 
+  const isFetchingCartRef = useRef(false);
+
   const fetchCartSummary = useCallback(async () => {
+    if (isFetchingCartRef.current) return;
+    isFetchingCartRef.current = true;
     try {
       const res = await api.getCart();
       if (res.data?.summary) {
@@ -78,6 +82,8 @@ export default function App() {
       }
     } catch {
       // Unauthenticated or network error; keep current cart summary
+    } finally {
+      isFetchingCartRef.current = false;
     }
   }, []);
 
@@ -94,6 +100,7 @@ export default function App() {
     let didClear = false;
 
     try {
+      await clearDeviceToken().catch(() => {});
       didClear = await clearAuthTokens(expectedToken);
       if (!didClear && expectedToken) {
         console.warn('[LOGOUT] Session token changed before clearing; aborting obsolete logout');
@@ -231,7 +238,7 @@ export default function App() {
     return () => backHandler.remove();
   }, [currentScreen, isProfileComplete]);
 
-  function handleCartUpdated(cartData) {
+  const handleCartUpdated = useCallback((cartData) => {
     if (cartData?.summary) {
       setCartSummary(cartData.summary);
     } else if (Array.isArray(cartData?.items)) {
@@ -240,7 +247,7 @@ export default function App() {
         totalItems: cartData.items.length,
       }));
     }
-  }
+  }, []);
 
   // Hide bottom navigation during initial auth, splash, mandatory profile completion, and checkout/details flows
   const showBottomNav = AUTHENTICATED_SCREENS.includes(currentScreen) &&
