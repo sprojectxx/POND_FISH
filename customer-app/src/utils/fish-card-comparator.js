@@ -33,3 +33,4 @@ function areFishCardPropsEqual(prevProps, nextProps) {
 module.exports = {
   areFishCardPropsEqual,
 };
+

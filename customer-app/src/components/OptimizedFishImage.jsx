@@ -1,15 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
+import { isValidImageUri } from '../utils/image-validator';
 
-/**
- * Validates whether a remote image URI is non-empty string.
- *
- * @param {string|null|undefined} uri
- * @returns {boolean}
- */
-export function isValidImageUri(uri) {
-  return Boolean(uri && typeof uri === 'string' && uri.trim().length > 0);
-}
+export { isValidImageUri };
 
 /**
  * OptimizedFishImage

@@ -22,6 +22,9 @@ const {
 const {
   areFishCardPropsEqual,
 } = require('../../customer-app/src/utils/fish-card-comparator');
+const {
+  isValidImageUri,
+} = require('../../customer-app/src/utils/image-validator');
 
 // File paths for static source checks
 const homeScreenPath = path.resolve(__dirname, '../../customer-app/src/screens/HomeScreen.jsx');
@@ -328,13 +331,11 @@ describe('Customer App Phase 2 Verification Suite', () => {
   });
 
   // =========================================================================
-  // SUITE 4: [Unit Tests & Static Checks] OptimizedFishImage URI & Safety
+  // SUITE 4: [Production Unit Tests & Static Checks] OptimizedFishImage URI & Safety
   // =========================================================================
-  describe('Suite 4: [Unit Tests & Static Checks] OptimizedFishImage URI & Safety', () => {
-    // Pure URI validation unit test logic mirroring production
-    function isValidImageUri(uri) {
-      return Boolean(uri && typeof uri === 'string' && uri.trim().length > 0);
-    }
+  describe('Suite 4: [Production Unit Tests & Static Checks] OptimizedFishImage URI & Safety', () => {
+    // Note: Native Android image rendering and network-error behaviour cannot be executed in headless Node
+    // and must be validated via physical device/emulator inspection. Production helper isValidImageUri is tested below.
 
     test('4.1: [Unit Test] isValidImageUri correctly rejects empty, whitespace, null, and non-string inputs', () => {
       assert.strictEqual(isValidImageUri(null), false);

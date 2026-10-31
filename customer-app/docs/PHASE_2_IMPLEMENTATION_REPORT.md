@@ -22,7 +22,7 @@ In the baseline implementation (`HomeScreen.jsx`), the catalogue rendered inside
 2. **Pure Production Filter Helper ([`catalogue-filters.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/utils/catalogue-filters.js))**: Extracted client-side filtering and category styling into a pure production helper used by `HomeScreen.jsx` and directly tested by the automated test suite.
 3. **Standalone Memoized Card ([`FishCard.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/components/FishCard.jsx))**: Extracted the catalogue card into an isolated component using `React.memo` and the production comparator [`areFishCardPropsEqual`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/utils/fish-card-comparator.js).
 4. **Header Subcomponent Isolation**: Decomposed the large header into memoized widgets (`DashboardBanners`, `FlashSaleCarousel`, `PreviouslyBoughtCarousel`, `CatalogueHeaderControls`). State changes from favorites or add-to-cart no longer recreate unrelated dashboard widgets or filter chips.
-5. **Safe Remote Image Loading ([`OptimizedFishImage.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/components/OptimizedFishImage.jsx))**: Added validation of image URIs before decoding, error handling (`onError`) with local fallback (`🐟`), and removed the unused `isLoading` state.
+5. **Safe Remote Image Loading ([`OptimizedFishImage.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/components/OptimizedFishImage.jsx) & [`image-validator.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/utils/image-validator.js))**: Added validation of image URIs before decoding via pure production helper `isValidImageUri()`, error handling (`onError`) with local fallback (`🐟`), and removed the unused `isLoading` state. The test suite imports the exact production URI validator directly, eliminating test-local helper duplication.
 6. **Strict Evidence & Claims Separation**: Distinguishes verified implementation facts, automated unit test results, static checks, manual checklists, and unmeasured device performance assumptions.
 
 ---
@@ -65,8 +65,9 @@ Extracted `FishCard` into `customer-app/src/components/FishCard.jsx` using `Reac
   - Item data fields: `id`, `name`, `imageUrl`, `unitPrice`, `physicalAvailable`, `onlineBookable`, `categoryName`, `ratingCount`, `pricing.effectivePrice`, `pricing.hasDiscount`.
 - Tested directly via automated unit tests for every individual field and callback reference without regex or source-string execution.
 
-### Workstream D: Safe Remote Image Loading (`OptimizedFishImage.jsx`)
-- Validates URI presence with `isValidImageUri()` before triggering native image decode.
+### Workstream D: Safe Remote Image Loading (`OptimizedFishImage.jsx` & `image-validator.js`)
+- Validates URI presence with `isValidImageUri()` (extracted into CommonJS production utility `customer-app/src/utils/image-validator.js`) before triggering native image decode.
+- Consumed by both `OptimizedFishImage.jsx` and `tests/unit/customer-app-phase2-virtualization.test.js` to ensure the exact production validator is tested without test-local duplication.
 - Handles remote 404s and network errors with `onError` to display the fallback container with emoji `🐟`.
 - Resets error state if `uri` prop changes via `useEffect([uri])`.
 - **Removed Unused State**: Eliminated the unused `isLoading` state, preventing two unnecessary state updates/re-renders per image load.
@@ -125,7 +126,8 @@ The Phase 2 suite accurately categorizes its 30 tests into distinct suites:
   - Tests `areFishCardPropsEqual` directly for identical reference, shallow clones, `isFav` mutation, `isAdding` mutation, callback reference identity, null items, and individual mutations to every item field.
   - Tests `getCategoryBadgeStyle` color taxonomy.
 - **Suite 4: [Production Unit Tests & Static Checks] OptimizedFishImage URI & Safety (5 tests)**
-  - Tests `isValidImageUri` unit logic for empty, whitespace, null, and non-string rejection.
+  - Tests `isValidImageUri` imported directly from production helper `customer-app/src/utils/image-validator.js` (eliminating test-local duplicates) for null, undefined, empty string, whitespace, non-string types, and valid URLs.
+  - Note: Pure unit tests verify string validation logic only; native image rendering and network-error fallbacks are verified via manual physical-device checklist and static source checks.
   - Static source checks verifying zero speculative CDN query parameters, removal of unused `isLoading` state, and default fallback reset behavior.
 
 ### 3. Root Ecosystem Test Suite
@@ -133,12 +135,25 @@ Command:
 ```bash
 npm test
 ```
-Summary:
+TAP Summary Output:
+```
+1..52
+# tests 252
+# suites 7
+# pass 252
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
 - **Total Test Suites**: 52 files evaluated (7 top-level reporting suites).
 - **Total Tests Passed**: **252 passed**, **0 failed**.
-- **Documented Skips / Caveats**:
-  - `tests/integration/postgres-checkout-lifecycle.test.js`: Skipped dedicated local PostgreSQL instance (localhost:5433) tests when the dedicated test port is not active. Isolated synthetic unit tests covered all checkout and recovery behaviors.
-  - FCM device token registration lifecycle in `customer-app/App.jsx` remains mocked/unresolved for headless non-Firebase environments, as identified in Phase 1 audit.
+- **Reconciled Skips & Environmental Disclosures**:
+  - **Node TAP Counter vs Runtime Skip Log**: While the top-level Node TAP summary reports `# skipped 0`, the integration file `tests/integration/postgres-checkout-lifecycle.test.js` emits an informational diagnostic log:
+    `# [SKIP] Dedicated local PostgreSQL test instance (localhost:5433) is not running.`
+    `# Isolated synthetic unit test suites cover all checkout and recovery behaviors.`
+  - **Database Integration Limitation**: Full live database integration for checkout against PostgreSQL on port 5433 was skipped due to the offline local test instance. Full checkout integration is not assumed or claimed to be proven solely by synthetic unit tests.
+  - **FCM Device Token Lifecycle**: Background FCM token push registration in `customer-app/App.jsx` remains mocked/unresolved in headless non-Firebase environments, as identified in Phase 1 audit.
 
 ### 4. Metro Production JavaScript Bundle
 Command:
@@ -154,7 +169,7 @@ Command:
 cd customer-app/android
 .\gradlew.bat assembleRelease
 ```
-Result: **Exit Code 0** (`BUILD SUCCESSFUL in 54s`, 262 actionable tasks).
+Result: **Exit Code 0** (`BUILD SUCCESSFUL in 40s`, 262 actionable tasks: 9 executed, 253 up-to-date).
 
 ---
 
@@ -178,10 +193,11 @@ Because headless Node test environments cannot mount native Android view hierarc
 
 ## 6. Summary of Changed Files
 
+- `customer-app/src/utils/image-validator.js`: Extracted pure production image URI validator (`isValidImageUri`), imported by both component and test suite.
 - `customer-app/src/utils/catalogue-filters.js`: Extracted pure production catalogue filtering and category styling helpers.
 - `customer-app/src/utils/fish-card-comparator.js`: Extracted pure production shallow-equality comparator for `FishCard`.
 - `customer-app/src/components/FishCard.jsx`: Updated to consume and re-export `getCategoryBadgeStyle` and `areFishCardPropsEqual`.
-- `customer-app/src/components/OptimizedFishImage.jsx`: Removed unused `isLoading` state; exported URI validation helper; updated docstrings.
+- `customer-app/src/components/OptimizedFishImage.jsx`: Removed unused `isLoading` state; imports and re-exports URI validation helper; updated docstrings.
 - `customer-app/src/screens/HomeScreen.jsx`: Integrated `filterFishCatalogue`; decomposed list header into 4 memoized subcomponents (`DashboardBanners`, `FlashSaleCarousel`, `PreviouslyBoughtCarousel`, `CatalogueHeaderControls`).
-- `tests/unit/customer-app-phase2-virtualization.test.js`: Restructured into 4 clearly labeled suites (30 tests) testing real production helpers and comparator directly.
-- `customer-app/docs/PHASE_2_IMPLEMENTATION_REPORT.md`: Comprehensive audit corrections, evidence, and manual checklist.
+- `tests/unit/customer-app-phase2-virtualization.test.js`: Restructured into 4 clearly labeled suites (30 tests) testing real production helpers (`filterFishCatalogue`, `areFishCardPropsEqual`, `isValidImageUri`) directly.
+- `customer-app/docs/PHASE_2_IMPLEMENTATION_REPORT.md`: Comprehensive audit corrections, reconciled test evidence, and manual physical-device checklist.
