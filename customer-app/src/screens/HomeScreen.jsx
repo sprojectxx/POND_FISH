@@ -18,6 +18,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  FlatList,
+  Platform,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
@@ -25,6 +27,8 @@ import FreshnessBadge from '../components/FreshnessBadge';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyStateView from '../components/EmptyStateView';
 import ErrorStateView from '../components/ErrorStateView';
+import FishCard, { getCategoryBadgeStyle } from '../components/FishCard';
+import OptimizedFishImage from '../components/OptimizedFishImage';
 
 /**
  * Prioritized data retrieval orchestrator for HomeScreen.
@@ -221,12 +225,12 @@ export default function HomeScreen({
     loadAllData(true);
   }, [loadAllData]);
 
-  function toggleFavorite(id) {
+  const toggleFavorite = useCallback((id) => {
     setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
+  }, []);
 
   // Authoritative Add-To-Cart flow with validation and real UUIDs
-  async function handleAddToCart(item) {
+  const handleAddToCart = useCallback(async (item) => {
     if (!item.onlineBookable) {
       Alert.alert(
         'In-Store Counter Only',
@@ -263,7 +267,15 @@ export default function HomeScreen({
     } finally {
       setAddingFishId(null);
     }
-  }
+  }, [onCartUpdated]);
+
+  const handleNavigateDetails = useCallback((item) => {
+    if (onNavigate) {
+      onNavigate('FISH_DETAILS', { fishId: item.id, fish: item });
+    }
+  }, [onNavigate]);
+
+  const keyExtractor = useCallback((item) => String(item.id || item._id || item.name), []);
 
   // Discounted items filter for genuine Catch Offers
   const discountedFish = useMemo(() => {
@@ -304,15 +316,7 @@ export default function HomeScreen({
     });
   }, [fishList, selectedCategoryId, availabilityFilter, searchQuery]);
 
-  function getCategoryBadgeStyle(categoryName = '') {
-    const cat = (categoryName || '').toLowerCase();
-    if (cat.includes('marine')) return { backgroundColor: '#0284C7' };
-    if (cat.includes('shell') || cat.includes('prawn')) return { backgroundColor: '#D97706' };
-    if (cat.includes('pond') || cat.includes('live')) return { backgroundColor: '#059669' };
-    return { backgroundColor: '#0A1C33' };
-  }
-
-  function renderCategoryPills() {
+  const renderCategoryPills = useCallback(() => {
     return (
       <ScrollView
         horizontal
@@ -359,9 +363,9 @@ export default function HomeScreen({
         })}
       </ScrollView>
     );
-  }
+  }, [categories, selectedCategoryId]);
 
-  function renderAvailabilityFilters() {
+  const renderAvailabilityFilters = useCallback(() => {
     const filters = [
       { key: 'ALL', label: 'All Catch' },
       { key: 'BOOKABLE', label: '⚡ Online Bookable' },
@@ -393,9 +397,9 @@ export default function HomeScreen({
         })}
       </View>
     );
-  }
+  }, [availabilityFilter]);
 
-  function renderEmptyState() {
+  const renderEmptyState = useCallback(() => {
     if (searchQuery.trim()) {
       return (
         <EmptyStateView
@@ -453,131 +457,24 @@ export default function HomeScreen({
         onAction={loadAllData}
       />
     );
-  }
+  }, [searchQuery, selectedCategoryId, availabilityFilter, loadAllData]);
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A192F" />
+  const renderFishItem = useCallback(({ item }) => {
+    return (
+      <FishCard
+        item={item}
+        isFav={Boolean(favorites[item.id])}
+        isAdding={addingFishId === item.id}
+        onToggleFav={toggleFavorite}
+        onAddToCart={handleAddToCart}
+        onPress={handleNavigateDetails}
+      />
+    );
+  }, [favorites, addingFishId, toggleFavorite, handleAddToCart, handleNavigateDetails]);
 
-      {/* 1. TOP HEADER (Marine Navy) */}
-      <View style={styles.topHeader}>
-        <View style={styles.headerRowTop}>
-          <View style={styles.headerLeftGroup}>
-            <Image
-              source={require('../assets/logo.png')}
-              style={styles.headerLogoBadge}
-              resizeMode="contain"
-            />
-            <View style={{ flex: 1 }}>
-              <View style={styles.greetingTitleRow}>
-                <Text style={styles.greetingText}>Good morning, {customerName}</Text>
-                <View style={styles.verifiedBadge}>
-                  <Text style={styles.verifiedCheck}>✓</Text>
-                </View>
-              </View>
-              <Text style={styles.greetingSubtitle}>
-                Fresh lake catches directly from harbor supply
-              </Text>
-            </View>
-          </View>
-
-          {/* Right Header: Wallet / Subscription & Avatar */}
-          <View style={styles.headerRightGroup}>
-            <TouchableOpacity
-              style={styles.walletPill}
-              onPress={() => onNavigate('SUBSCRIPTION')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.walletIconCircle}>
-                <Text style={{ fontSize: 11, color: '#10B981' }}>💳</Text>
-              </View>
-              <Text style={styles.walletAmountText}>
-                {subData?.hasSubscription && subData.subscription
-                  ? `₹${subData.subscription.creditBalance ?? 0}`
-                  : 'Club'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.userAvatarBtn}
-              onPress={() => onNavigate('PROFILE')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.avatarInitials}>
-                {customerName.charAt(0).toUpperCase()}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Functional Search Bar & Live Cart Button */}
-        <View style={styles.searchCartRow}>
-          <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder='Search "fresh pomfret, rohu, prawns"...'
-              placeholderTextColor="#94A3B8"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-              autoCorrect={false}
-            />
-            {Boolean(searchQuery) ? (
-              <TouchableOpacity
-                style={styles.clearSearchBtn}
-                onPress={() => setSearchQuery('')}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.clearSearchText}>✕</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.micIcon}>🎙</Text>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={styles.cartButtonGreen}
-            onPress={() => onNavigate('CART')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.cartIconBox}>
-              <Text style={{ fontSize: 16 }}>🛍</Text>
-            </View>
-            <View style={styles.cartPriceBox}>
-              <Text style={styles.cartPriceText}>
-                {cartSummary?.totalAmount > 0
-                  ? `₹${cartSummary.totalAmount}`
-                  : cartCount > 0
-                  ? `${cartCount} items`
-                  : '₹0'}
-              </Text>
-              <Text style={styles.cartItemCountText}>
-                {cartCount > 0 ? `${cartCount} item${cartCount === 1 ? '' : 's'}` : 'Cart'}
-              </Text>
-            </View>
-            {cartCount > 0 && (
-              <View style={styles.cartRedBadge}>
-                <Text style={styles.cartRedBadgeText}>{cartCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* 2. SCROLLABLE DASHBOARD & CATALOGUE */}
-      <ScrollView
-        contentContainerStyle={styles.scrollBody}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#0284C7"
-            colors={['#0284C7']}
-          />
-        }
-      >
+  const renderListHeader = useMemo(() => {
+    return (
+      <View>
         {/* Genuine Subscription Banner */}
         {subData?.hasSubscription && subData.subscription ? (
           <TouchableOpacity
@@ -786,13 +683,12 @@ export default function HomeScreen({
                       style={styles.flashImageBox}
                       activeOpacity={0.85}
                     >
-                      {item.imageUrl ? (
-                        <Image source={{ uri: item.imageUrl }} style={styles.flashImage} resizeMode="cover" />
-                      ) : (
-                        <View style={styles.imageFallbackSmall}>
-                          <Text style={{ fontSize: 24 }}>🐟</Text>
-                        </View>
-                      )}
+                      <OptimizedFishImage
+                        uri={item.imageUrl}
+                        style={styles.flashImage}
+                        resizeMode="cover"
+                        testID={`flash-image-${item.id}`}
+                      />
                     </TouchableOpacity>
 
                     <View style={styles.weightAddRow}>
@@ -868,13 +764,12 @@ export default function HomeScreen({
                     onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
                     style={styles.prevImageBox}
                   >
-                    {item.imageUrl ? (
-                      <Image source={{ uri: item.imageUrl }} style={styles.prevImage} resizeMode="cover" />
-                    ) : (
-                      <View style={styles.imageFallbackSmall}>
-                        <Text style={{ fontSize: 24 }}>🐟</Text>
-                      </View>
-                    )}
+                    <OptimizedFishImage
+                      uri={item.imageUrl}
+                      style={styles.prevImage}
+                      resizeMode="cover"
+                      testID={`prev-image-${item.id}`}
+                    />
                   </TouchableOpacity>
                   <View style={styles.carouselDotsRow}>
                     <View style={[styles.cDot, styles.cDotActive]} />
@@ -934,135 +829,191 @@ export default function HomeScreen({
 
         {/* Availability Filter Chips */}
         {renderAvailabilityFilters()}
+      </View>
+    );
+  }, [
+    subData,
+    trackingData,
+    discountedFish,
+    fishList,
+    favorites,
+    addingFishId,
+    toggleFavorite,
+    handleAddToCart,
+    onNavigate,
+    renderCategoryPills,
+    renderAvailabilityFilters,
+  ]);
 
-        {/* Catalogue Content States */}
-        {loading ? (
-          <LoadingSkeleton count={3} />
-        ) : error ? (
-          <ErrorStateView
-            title="Unable to load today's fish."
-            message={error}
-            onRetry={loadAllData}
-          />
-        ) : filteredFishes.length === 0 ? (
-          renderEmptyState()
-        ) : (
-          <View style={styles.catalogueGrid}>
-            {filteredFishes.map((item) => {
-              const isAvailable = Boolean(item.physicalAvailable);
-              const effectivePrice = item.pricing ? item.pricing.effectivePrice : item.unitPrice;
-              const hasDiscount = Boolean(item.pricing && item.pricing.hasDiscount);
-              const isAdding = addingFishId === item.id;
-              const isFav = Boolean(favorites[item.id]);
+  const renderEmptyComponent = useMemo(() => {
+    if (loading) {
+      return <LoadingSkeleton count={3} />;
+    }
+    if (error) {
+      return (
+        <ErrorStateView
+          title="Unable to load today's fish."
+          message={error}
+          onRetry={loadAllData}
+        />
+      );
+    }
+    return renderEmptyState();
+  }, [loading, error, loadAllData, renderEmptyState]);
 
-              return (
-                <View key={item.id} style={styles.gridFishCard}>
-                  {/* Card Header: Category & Heart */}
-                  <View style={styles.gridCardHeader}>
-                    <View style={[styles.gridCatBadge, getCategoryBadgeStyle(item.categoryName)]}>
-                      <Text style={styles.gridCatBadgeText}>{item.categoryName || 'Freshwater'}</Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => toggleFavorite(item.id)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={[styles.heartIcon, isFav && styles.heartActive]}>
-                        {isFav ? '♥' : '♡'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+  const renderFooter = useMemo(() => {
+    if (loading || error || filteredFishes.length === 0) {
+      return <View style={styles.footerSpacing} />;
+    }
+    return (
+      <View style={styles.footerContainer}>
+        <TouchableOpacity
+          style={styles.showMoreBtn}
+          onPress={() => setSelectedCategoryId(null)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.showMoreBtnText}>Show More Fishes in Marketplace →</Text>
+        </TouchableOpacity>
+        <View style={styles.footerSpacing} />
+      </View>
+    );
+  }, [loading, error, filteredFishes.length]);
 
-                  {/* Product Image */}
-                  <TouchableOpacity
-                    onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
-                    style={styles.gridImageBox}
-                    activeOpacity={0.88}
-                  >
-                    {item.imageUrl ? (
-                      <Image
-                        source={{ uri: item.imageUrl }}
-                        style={styles.gridFishImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.imageFallbackSmall}>
-                        <Text style={{ fontSize: 24 }}>🐟</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A192F" />
 
-                  {/* Carousel Dots */}
-                  <View style={styles.carouselDotsRow}>
-                    <View style={[styles.cDot, styles.cDotActive]} />
-                    <View style={styles.cDot} />
-                    <View style={styles.cDot} />
-                  </View>
-
-                  {/* Weight & ADD Button Row */}
-                  <View style={styles.gridMetaRow}>
-                    <Text style={styles.gridWeightText}>500 g</Text>
-                    <TouchableOpacity
-                      style={styles.gridAddBtn}
-                      onPress={() => handleAddToCart(item)}
-                      disabled={isAdding || !isAvailable}
-                      activeOpacity={0.8}
-                    >
-                      {isAdding ? (
-                        <ActivityIndicator size="small" color="#16A34A" />
-                      ) : (
-                        <Text style={styles.gridAddBtnText}>+ ADD</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Pricing Row */}
-                  <View style={styles.gridPricingRow}>
-                    <Text style={styles.gridPriceVal}>₹{effectivePrice}</Text>
-                    {hasDiscount && (
-                      <Text style={styles.gridCrossedPrice}>₹{item.unitPrice}</Text>
-                    )}
-                  </View>
-
-                  {/* Fish Title */}
-                  <TouchableOpacity
-                    onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
-                  >
-                    <Text style={styles.gridFishName} numberOfLines={2}>
-                      {item.name}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Rating */}
-                  <View style={styles.gridRatingRow}>
-                    <Text style={styles.gridRatingStar}>★ 4.8</Text>
-                    <Text style={styles.gridRatingCount}>({item.ratingCount || '1,420'})</Text>
-                  </View>
-
-                  {/* Delivery & Stock status */}
-                  <View style={styles.gridDeliveryRow}>
-                    <Text style={styles.gridDeliveryText}>⚡ 8 mins • </Text>
-                    <Text style={isAvailable ? styles.inStockText : styles.lowStockText}>
-                      {isAvailable ? 'In stock' : 'Out of stock'}
-                    </Text>
-                  </View>
-
-                  {/* Category Footer Link */}
-                  <Text style={styles.gridCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
+      {/* 1. TOP HEADER (Marine Navy) */}
+      <View style={styles.topHeader}>
+        <View style={styles.headerRowTop}>
+          <View style={styles.headerLeftGroup}>
+            <Image
+              source={require('../assets/logo.png')}
+              style={styles.headerLogoBadge}
+              resizeMode="contain"
+            />
+            <View style={{ flex: 1 }}>
+              <View style={styles.greetingTitleRow}>
+                <Text style={styles.greetingText}>Good morning, {customerName}</Text>
+                <View style={styles.verifiedBadge}>
+                  <Text style={styles.verifiedCheck}>✓</Text>
                 </View>
-              );
-            })}
+              </View>
+              <Text style={styles.greetingSubtitle}>
+                Fresh lake catches directly from harbor supply
+              </Text>
+            </View>
+          </View>
 
-            {/* Show More Fishes CTA */}
+          {/* Right Header: Wallet / Subscription & Avatar */}
+          <View style={styles.headerRightGroup}>
             <TouchableOpacity
-              style={styles.showMoreBtn}
-              onPress={() => setSelectedCategoryId(null)}
-              activeOpacity={0.85}
+              style={styles.walletPill}
+              onPress={() => onNavigate('SUBSCRIPTION')}
+              activeOpacity={0.8}
             >
-              <Text style={styles.showMoreBtnText}>Show More Fishes in Marketplace →</Text>
+              <View style={styles.walletIconCircle}>
+                <Text style={{ fontSize: 11, color: '#10B981' }}>💳</Text>
+              </View>
+              <Text style={styles.walletAmountText}>
+                {subData?.hasSubscription && subData.subscription
+                  ? `₹${subData.subscription.creditBalance ?? 0}`
+                  : 'Club'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.userAvatarBtn}
+              onPress={() => onNavigate('PROFILE')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.avatarInitials}>
+                {customerName.charAt(0).toUpperCase()}
+              </Text>
             </TouchableOpacity>
           </View>
-        )}
-      </ScrollView>
+        </View>
+
+        {/* Functional Search Bar & Live Cart Button */}
+        <View style={styles.searchCartRow}>
+          <View style={styles.searchBar}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder='Search "fresh pomfret, rohu, prawns"...'
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {Boolean(searchQuery) ? (
+              <TouchableOpacity
+                style={styles.clearSearchBtn}
+                onPress={() => setSearchQuery('')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.clearSearchText}>✕</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.micIcon}>🎙</Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={styles.cartButtonGreen}
+            onPress={() => onNavigate('CART')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cartIconBox}>
+              <Text style={{ fontSize: 16 }}>🛍</Text>
+            </View>
+            <View style={styles.cartPriceBox}>
+              <Text style={styles.cartPriceText}>
+                {cartSummary?.totalAmount > 0
+                  ? `₹${cartSummary.totalAmount}`
+                  : cartCount > 0
+                  ? `${cartCount} items`
+                  : '₹0'}
+              </Text>
+              <Text style={styles.cartItemCountText}>
+                {cartCount > 0 ? `${cartCount} item${cartCount === 1 ? '' : 's'}` : 'Cart'}
+              </Text>
+            </View>
+            {cartCount > 0 && (
+              <View style={styles.cartRedBadge}>
+                <Text style={styles.cartRedBadgeText}>{cartCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* 2. VIRTUALIZED DASHBOARD & CATALOGUE */}
+      <FlatList
+        data={loading || error ? [] : filteredFishes}
+        keyExtractor={keyExtractor}
+        numColumns={2}
+        columnWrapperStyle={filteredFishes.length > 0 ? styles.gridRow : undefined}
+        contentContainerStyle={styles.scrollBody}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#0284C7"
+            colors={['#0284C7']}
+          />
+        }
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderEmptyComponent}
+        ListFooterComponent={renderFooter}
+        renderItem={renderFishItem}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
+      />
     </View>
   );
 }
@@ -1735,6 +1686,16 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#FFFFFF',
     fontWeight: '800',
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+  },
+  footerContainer: {
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  footerSpacing: {
+    height: 30,
   },
   catalogueGrid: {
     flexDirection: 'row',
