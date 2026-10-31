@@ -62,6 +62,13 @@
  *   - 5.28: Header case-insensitivity: different casing produces equivalent deduplication keys
  *   - 5.29: Semantic fetch options: differing credentials, cache, or mode produce distinct keys
  *   - 5.30: Unsupported or unrepresented options safely bypass deduplication
+ *   - 5.31: Case-insensitive Authorization header normalization: uppercase and lowercase coalesce cleanly
+ *   - 5.32: Two differently-cased Authorization headers with conflicting values reject with API_INVALID_HEADERS
+ *   - 5.33: Multiple identically-valued differently-cased Authorization headers normalize safely to single header
+ *   - 5.34: Requests using different explicit Authorization tokens do NOT coalesce
+ *   - 5.35: Custom lowercase Authorization header does not coalesce with Keystore stored token
+ *   - 5.36: Unsafe or unrepresentable custom Authorization safely bypasses deduplication
+ *   - 5.37: Existing getProfile explicit token behavior and 401 callback ownership preserved
  * Suite 6: [Production Integration & Static Checks] Cart & Home Data Ownership and Invariants
  *   - 6.1: Navigating to CART does not trigger fetchCartSummary from App shell
  *   - 6.2: App shell handleCartUpdated updates cartSummary and item count from mutations
@@ -73,6 +80,7 @@
  *   - 6.8: [Static Source Check] api.js implements in-flight deduplication registry and exports management methods
  *   - 6.9: [Static Source Check] api.js implements option-aware buildDeduplicationKey
  *   - 6.10: [Static Source Check] api.js implements identity-safe deletion and collision-safe keys
+ *   - 6.11: [Static Source Check] api.js implements case-insensitive Authorization header normalization
  */
 
 const { test, describe } = require('node:test');
@@ -138,7 +146,7 @@ function loadProductionApiModule(mockStorage = {}, mockFetch = null, customAbort
   code = code.replace(/export\s+function\s+setUnauthorizedHandler/g, 'exports.setUnauthorizedHandler = function setUnauthorizedHandler');
   code = code.replace(/export\s+const\s+api\s*=\s*\{/g, 'const api = {');
 
-  code += '\nexports.api = api;\nexports.request = request;\nexports.buildDeduplicationKey = buildDeduplicationKey;\nexports.inFlightGetRequests = inFlightGetRequests;\nexports.evaluateDeduplicatable = evaluateDeduplicatable;';
+  code += '\nexports.api = api;\nexports.request = request;\nexports.buildDeduplicationKey = buildDeduplicationKey;\nexports.inFlightGetRequests = inFlightGetRequests;\nexports.evaluateDeduplicatable = evaluateDeduplicatable;\nexports.extractAndNormalizeAuthorization = extractAndNormalizeAuthorization;';
 
   const m = { exports: {} };
   const fn = new Function('exports', 'require', 'mockAuthStorage', 'fetch', '__DEV__', 'process', 'FormData', 'AbortController', 'console', code);
@@ -441,6 +449,7 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
 
     test('2.3: The rejected token is passed to the one responsible clearAuthTokens operation', async () => {
       let receivedToken = null;
+
       const rejectedToken = 'exact-rejected-token-999';
 
       await orchestrateStartupSession({
@@ -1418,18 +1427,26 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.ok(keyB.includes('skip401=0'));
       assert.ok(keyB.includes('to=15000'));
 
-      // Header sorting and exclusion of auth/content-type
+      // Header sorting, case-insensitive normalization of Authorization, and exclusion of default Content-Type
       const keyH1 = buildDeduplicationKey({
         url: 'https://pondfish.in/api/v1/customer/fish',
         headers: { 'Z-Index': 'top', 'A-Index': 'bottom', Authorization: 'Bearer abc', 'Content-Type': 'application/json' },
       });
       const keyH2 = buildDeduplicationKey({
         url: 'https://pondfish.in/api/v1/customer/fish',
-        headers: { 'a-index': 'bottom', 'z-index': 'top' },
+        headers: { 'a-index': 'bottom', 'z-index': 'top', authorization: 'Bearer abc' },
       });
 
-      assert.equal(keyH1, keyH2, 'Headers must sort case-insensitively and ignore Authorization / Content-Type');
+      assert.equal(keyH1, keyH2, 'Headers must sort case-insensitively and normalize uppercase/lowercase Authorization');
       assert.ok(keyH1.includes('h=[["a-index","bottom"],["z-index","top"]]'));
+      assert.ok(keyH1.includes('AUTH:abc'));
+
+      // Key without Authorization header represents anonymous request and must NOT collide with authenticated request
+      const keyAnon = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/fish',
+        headers: { 'a-index': 'bottom', 'z-index': 'top' },
+      });
+      assert.notEqual(keyH1, keyAnon, 'Authenticated request with Bearer abc must not collide with anonymous request');
     });
 
     test('5.24: Stale entry race: old request aborting all subscribers does not delete replacement entry on settle', async () => {
@@ -1763,6 +1780,250 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.equal(r1.data, 'direct');
       assert.equal(r2.data, 'direct');
     });
+
+    test('5.31: Case-insensitive Authorization header normalization: uppercase and lowercase coalesce cleanly', async () => {
+      let fetchCount = 0;
+      let sentHeaders = null;
+      const mockFetch = async (url, opts) => {
+        fetchCount++;
+        sentHeaders = opts.headers;
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { status: 'ok' } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'stored-unused' }) },
+        mockFetch
+      );
+
+      // Concurrent requests: one with uppercase Authorization, one with lowercase authorization
+      const p1 = request('/customer/cart', { headers: { 'Authorization': 'Bearer explicit-tok-123' } });
+      const p2 = request('/customer/cart', { headers: { 'authorization': 'Bearer explicit-tok-123' } });
+
+      const [res1, res2] = await Promise.all([p1, p2]);
+
+      assert.equal(fetchCount, 1, 'Requests with identical tokens in differently cased Authorization headers must coalesce');
+      assert.deepEqual(res1.data, { status: 'ok' });
+      assert.deepEqual(res2.data, { status: 'ok' });
+
+      // Verify that exactly one canonical Authorization header was sent on the wire
+      const authKeys = Object.keys(sentHeaders).filter((k) => k.toLowerCase() === 'authorization');
+      assert.equal(authKeys.length, 1, 'Exactly one Authorization header must be sent');
+      assert.equal(sentHeaders.Authorization, 'Bearer explicit-tok-123');
+    });
+
+    test('5.32: Two differently-cased Authorization headers with conflicting values reject with API_INVALID_HEADERS', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        return { ok: true, status: 200, json: async () => ({}) };
+      };
+
+      const { request, buildDeduplicationKey } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'stored-unused' }) },
+        mockFetch
+      );
+
+      // Conflicting values
+      const promise = request('/customer/cart', {
+        headers: {
+          'Authorization': 'Bearer token-A',
+          'authorization': 'Bearer token-B',
+        },
+      });
+
+      await assert.rejects(promise, (err) => {
+        assert.equal(err.code, 'API_INVALID_HEADERS');
+        assert.ok(err.message.includes('conflicting Authorization'));
+        return true;
+      });
+
+      assert.equal(fetchCount, 0, 'No fetch must be dispatched when conflicting Authorization headers are supplied');
+
+      // buildDeduplicationKey returns null for conflicting Authorization headers
+      const key = buildDeduplicationKey({
+        url: 'https://pondfish.in/api/v1/customer/cart',
+        headers: {
+          'Authorization': 'Bearer token-A',
+          'authorization': 'Bearer token-B',
+        },
+      });
+      assert.equal(key, null, 'buildDeduplicationKey must return null for conflicting Authorization headers');
+    });
+
+    test('5.33: Multiple identically-valued differently-cased Authorization headers normalize safely to single header', async () => {
+      let sentHeaders = null;
+      const mockFetch = async (url, opts) => {
+        sentHeaders = opts.headers;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { user: 'verified' } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'stored-unused' }) },
+        mockFetch
+      );
+
+      const res = await request('/customer/profile', {
+        headers: {
+          'Authorization': 'Bearer identical-token',
+          'authorization': 'Bearer identical-token',
+          'AUTHORIZATION': 'Bearer identical-token',
+        },
+      });
+
+      assert.deepEqual(res.data, { user: 'verified' });
+      const authKeys = Object.keys(sentHeaders).filter((k) => k.toLowerCase() === 'authorization');
+      assert.equal(authKeys.length, 1, 'Only one canonical Authorization header must be sent');
+      assert.equal(sentHeaders.Authorization, 'Bearer identical-token');
+    });
+
+    test('5.34: Requests using different explicit Authorization tokens do NOT coalesce', async () => {
+      let fetchCount = 0;
+      const fetchedTokens = [];
+      const mockFetch = async (url, opts) => {
+        fetchCount++;
+        fetchedTokens.push(opts.headers.Authorization);
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { tokenUsed: opts.headers.Authorization } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'stored-unused' }) },
+        mockFetch
+      );
+
+      const [res1, res2] = await Promise.all([
+        request('/customer/cart', { headers: { 'Authorization': 'Bearer token-alpha' } }),
+        request('/customer/cart', { headers: { 'authorization': 'Bearer token-beta' } }),
+      ]);
+
+      assert.equal(fetchCount, 2, 'Different tokens must make 2 distinct network fetches');
+      assert.equal(res1.data.tokenUsed, 'Bearer token-alpha');
+      assert.equal(res2.data.tokenUsed, 'Bearer token-beta');
+    });
+
+    test('5.35: Custom lowercase Authorization header does not coalesce with Keystore stored token', async () => {
+      let fetchCount = 0;
+      const tokensSent = [];
+      const mockFetch = async (url, opts) => {
+        fetchCount++;
+        tokensSent.push(opts.headers.Authorization);
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { auth: opts.headers.Authorization } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'keystore-token-active' }) },
+        mockFetch
+      );
+
+      // Caller 1 provides explicit lowercase authorization
+      const p1 = request('/customer/cart', { headers: { 'authorization': 'Bearer custom-lowercase-token' } });
+      // Caller 2 provides no headers, using Keystore token
+      const p2 = request('/customer/cart');
+
+      const [res1, res2] = await Promise.all([p1, p2]);
+
+      assert.equal(fetchCount, 2, 'Explicit lowercase authorization must not coalesce with stored Keystore token');
+      assert.equal(res1.data.auth, 'Bearer custom-lowercase-token');
+      assert.equal(res2.data.auth, 'Bearer keystore-token-active');
+    });
+
+    test('5.36: Unsafe or unrepresentable custom Authorization safely bypasses deduplication', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: 'unrepresentable' }),
+        };
+      };
+
+      const { request, inFlightGetRequests, buildDeduplicationKey } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'stored' }) },
+        mockFetch
+      );
+
+      // Non-string Authorization header
+      const p1 = request('/customer/fish', { headers: { authorization: { invalid: true } } });
+      const p2 = request('/customer/fish', { headers: { authorization: { invalid: true } } });
+
+      assert.equal(inFlightGetRequests.size, 0, 'Unrepresentable authorization must not register in in-flight Map');
+
+      const [r1, r2] = await Promise.all([p1, p2]);
+      assert.equal(fetchCount, 2, 'Unrepresentable authorization must bypass deduplication and execute directly');
+      assert.equal(r1.data, 'unrepresentable');
+      assert.equal(r2.data, 'unrepresentable');
+
+      // buildDeduplicationKey returns null for unrepresentable Authorization
+      assert.equal(buildDeduplicationKey({ url: '/fish', headers: { authorization: 123 } }), null);
+      assert.equal(buildDeduplicationKey({ url: '/fish', headers: { authorization: '   ' } }), null);
+    });
+
+    test('5.37: Existing getProfile explicit token behavior and 401 callback ownership preserved', async () => {
+      let keystoreCallCount = 0;
+      let unauthorizedNotifiedToken = null;
+
+      const mockStorage = {
+        getAuthTokens: async () => {
+          keystoreCallCount++;
+          return { token: 'stored-keystore-token' };
+        },
+      };
+
+      const mockFetch = async (url, opts) => {
+        if (opts.headers.Authorization === 'Bearer explicit-profile-token') {
+          const err = new Error('Unauthorized');
+          err.status = 401;
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({ success: false, error: { code: 'UNAUTHORIZED', message: 'Token rejected' } }),
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { name: 'Customer' } }),
+        };
+      };
+
+      const { api: productionApi, setUnauthorizedHandler } = loadProductionApiModule(mockStorage, mockFetch);
+      setUnauthorizedHandler((tok) => {
+        unauthorizedNotifiedToken = tok;
+      });
+
+      // Explicit token call: should NOT read Keystore
+      await assert.rejects(
+        productionApi.getProfile('explicit-profile-token'),
+        (err) => err.status === 401
+      );
+      assert.equal(keystoreCallCount, 0, 'Explicit token getProfile must NOT invoke getAuthTokens');
+      assert.equal(unauthorizedNotifiedToken, 'explicit-profile-token', 'Rejected explicit token must be reported to 401 callback');
+
+      // Call without explicit token: should read Keystore
+      const res = await productionApi.getProfile(null);
+      assert.equal(keystoreCallCount, 1, 'getProfile(null) must retrieve credentials from Keystore');
+      assert.deepEqual(res.data, { name: 'Customer' });
+    });
   });
 
   // =========================================================================
@@ -1986,6 +2247,17 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.ok(
         apiCode.includes('evaluateDeduplicatable'),
         'api.js must define evaluateDeduplicatable'
+      );
+    });
+
+    test('6.11: [Static Source Check] api.js implements case-insensitive Authorization header normalization', () => {
+      assert.ok(
+        apiCode.includes('extractAndNormalizeAuthorization'),
+        'api.js must declare extractAndNormalizeAuthorization helper'
+      );
+      assert.ok(
+        apiCode.includes('API_INVALID_HEADERS'),
+        'api.js must reject conflicting authorization headers with API_INVALID_HEADERS'
       );
     });
   });

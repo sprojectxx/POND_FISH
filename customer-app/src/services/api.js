@@ -93,6 +93,69 @@ function extractSemanticFetchOptions(options) {
 }
 
 /**
+ * Detects, validates, and normalizes Authorization headers case-insensitively.
+ * Ensures only a single canonical 'Authorization' header remains on headers.
+ * If multiple differently cased Authorization headers have conflicting values, throws API_INVALID_HEADERS.
+ * Returns { hasAuth: boolean, token: string | null, rawValue: string | null, isSafe: boolean, isExplicitEmpty?: boolean }
+ */
+function extractAndNormalizeAuthorization(headers) {
+  if (!headers || typeof headers !== 'object') {
+    return { hasAuth: false, token: null, rawValue: null, isSafe: true };
+  }
+
+  const authKeys = Object.keys(headers).filter(
+    (k) => k.toLowerCase() === 'authorization'
+  );
+
+  if (authKeys.length === 0) {
+    return { hasAuth: false, token: null, rawValue: null, isSafe: true };
+  }
+
+  const firstKey = authKeys[0];
+  const firstValue = headers[firstKey];
+
+  // If multiple differently-cased Authorization properties exist, compare their stringified values
+  for (let i = 1; i < authKeys.length; i++) {
+    const k = authKeys[i];
+    const val = headers[k];
+    if (String(firstValue).trim() !== String(val).trim()) {
+      const err = new Error('Ambiguous conflicting Authorization headers supplied');
+      err.code = 'API_INVALID_HEADERS';
+      throw err;
+    }
+  }
+
+  // Remove all casing variants from the headers object
+  for (const k of authKeys) {
+    delete headers[k];
+  }
+
+  // Handle explicit null or undefined (explicit unauthenticated request)
+  if (firstValue === null || firstValue === undefined) {
+    return { hasAuth: true, token: null, rawValue: null, isSafe: true, isExplicitEmpty: true };
+  }
+
+  // Validate value type: non-string Authorization cannot be safely represented or handled
+  if (typeof firstValue !== 'string') {
+    return { hasAuth: true, token: null, rawValue: firstValue, isSafe: false };
+  }
+
+  const trimmed = firstValue.trim();
+  if (trimmed.length === 0) {
+    return { hasAuth: true, token: null, rawValue: '', isSafe: false };
+  }
+
+  // Extract token from Bearer scheme or treat raw non-empty string as token
+  const match = trimmed.match(/^Bearer\s+(.+)$/i);
+  const token = match ? match[1].trim() : trimmed;
+
+  // Set single canonical Authorization header
+  headers.Authorization = trimmed;
+
+  return { hasAuth: true, token, rawValue: trimmed, isSafe: true };
+}
+
+/**
  * Builds an option-aware, collision-safe deduplication identity key for in-flight GET requests.
  * Uses a deterministically sorted array of [name, value] tuples serialized via JSON.stringify
  * to prevent delimiter collisions. Incorporates URL, authenticated token identity,
@@ -108,12 +171,30 @@ function buildDeduplicationKey({
   semanticOptions = null,
   fetchOptions = null,
 }) {
+  let effectiveToken = requestToken !== undefined && requestToken !== null ? String(requestToken).trim() : null;
+
+  // If requestToken was not explicitly passed, inspect headers case-insensitively
+  if (!effectiveToken && headers && typeof headers === 'object') {
+    try {
+      const authInfo = extractAndNormalizeAuthorization({ ...headers });
+      if (!authInfo.isSafe) {
+        return null;
+      }
+      if (authInfo.hasAuth && authInfo.token) {
+        effectiveToken = authInfo.token;
+      }
+    } catch (_) {
+      // Conflicting or ambiguous Authorization headers - cannot represent safely
+      return null;
+    }
+  }
+
   const normalizedHeaders = [];
   if (headers && typeof headers === 'object') {
     const keys = Object.keys(headers).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     for (const k of keys) {
       const lower = k.toLowerCase();
-      // Exclude Authorization (captured by requestToken) and default Content-Type
+      // Exclude Authorization (captured by authIdentity) and default Content-Type
       if (lower !== 'authorization' && lower !== 'content-type') {
         normalizedHeaders.push([lower, String(headers[k])]);
       }
@@ -125,10 +206,14 @@ function buildDeduplicationKey({
     semanticList = extractSemanticFetchOptions(fetchOptions);
   }
 
+  const authIdentity = effectiveToken
+    ? (effectiveToken.startsWith('AUTH:') ? effectiveToken : `AUTH:${effectiveToken}`)
+    : 'ANON';
+
   const parts = [
     'GET',
     url,
-    requestToken || 'ANON',
+    authIdentity,
     `skip401=${skipUnauthorizedHandler ? '1' : '0'}`,
     `to=${effectiveTimeoutMs}`,
   ];
@@ -399,6 +484,14 @@ function request(endpoint, options = {}) {
     return Promise.reject(abortErr);
   }
 
+  // Pre-flight check: validate and normalize Authorization headers case-insensitively
+  let authInfo;
+  try {
+    authInfo = extractAndNormalizeAuthorization(headers);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+
   // Resolve effective request timeout in milliseconds
   let effectiveTimeoutMs = DEFAULT_TIMEOUT_MS;
   if (options.timeoutMs === 0 || options.timeout === 0 || options.timeoutMs === null || options.timeout === null || options.timeoutMs === false) {
@@ -410,9 +503,18 @@ function request(endpoint, options = {}) {
   }
 
   const runWithAuth = async () => {
-    // Attach secure Android Keystore token if not already provided
     let requestToken = null;
-    if (!headers.Authorization) {
+    let isAuthSafe = authInfo.isSafe;
+
+    if (authInfo.hasAuth) {
+      if (authInfo.isSafe && authInfo.token) {
+        requestToken = authInfo.token;
+      } else if (!authInfo.isSafe) {
+        isAuthSafe = false;
+      }
+      // If authInfo.isExplicitEmpty, requestToken stays null and Keystore is not read
+    } else {
+      // No caller Authorization supplied: retrieve credentials from secure Keystore
       try {
         const tokens = await getAuthTokens();
         if (tokens && tokens.token) {
@@ -422,9 +524,6 @@ function request(endpoint, options = {}) {
       } catch (e) {
         console.warn('[API CLIENT] Could not read keystore credentials', e);
       }
-    } else if (typeof headers.Authorization === 'string') {
-      const match = headers.Authorization.match(/^Bearer\s+(.*)$/i);
-      requestToken = match ? match[1] : headers.Authorization;
     }
 
     // Post-auth check: if caller signal was aborted while awaiting keystore credentials
@@ -437,15 +536,15 @@ function request(endpoint, options = {}) {
     }
 
     // In-flight GET deduplication evaluation
-    // Deduplicate strictly for GET requests with valid, supported options when bypassDedup is not requested
-    const isDeduplicatable = evaluateDeduplicatable(isGet, options);
+    // Deduplicate strictly for GET requests with valid, supported options and safe authorization
+    const isDeduplicatable = isAuthSafe && evaluateDeduplicatable(isGet, options);
     const dedupKey = isDeduplicatable
       ? buildDeduplicationKey({
           url,
           requestToken,
           skipUnauthorizedHandler: Boolean(options.skipUnauthorizedHandler),
           effectiveTimeoutMs,
-          headers: options.headers,
+          headers,
           fetchOptions: options,
         })
       : null;
@@ -609,6 +708,7 @@ export const api = {
   clearInFlightRequests,
   getInFlightRequestCount,
   buildDeduplicationKey,
+  extractAndNormalizeAuthorization,
   setUnauthorizedHandler: (cb) => setUnauthorizedHandler(cb),
 
   /**
