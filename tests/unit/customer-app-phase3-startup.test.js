@@ -7,17 +7,25 @@
  *   - 1.1: Valid authenticated session with complete profile transitions to HOME with customer & token
  *   - 1.2: Valid authenticated session with incomplete profile transitions to PROFILE_COMPLETION
  *   - 1.3: No stored credentials transitions to PHONE_AUTH without backend API call
- *   - 1.4: Expired or invalid credentials (HTTP 401) clears Keystore tokens and transitions to PHONE_AUTH
- *   - 1.5: Session validation failure (network/server error) preserves credentials and exposes retry
- *   - 1.6: Slow session validation completes safely without premature resolution
- *   - 1.7: Repeated startup trigger protection prevents concurrent duplicate checks
- *   - 1.8: Component unmount while storage or network work is pending prevents navigation and state updates
- * Suite 2: [Production Unit Tests] App Navigation Safeguards & State Transitions
+ *   - 1.4: HTTP 401 calls clearAuthTokens with the exact rejected stored.token
+ *   - 1.5: HTTP 401: clearAuthTokens returning true permits safe transition to PHONE_AUTH
+ *   - 1.6: HTTP 401 Race Protection: clearAuthTokens returning false aborts transition to PHONE_AUTH
+ *   - 1.7: HTTP 401 Storage Error: thrown storage-clear exception does not navigate to PHONE_AUTH
+ *   - 1.8: HTTP 401 Unmount Safety: component unmount while token-clear is pending prevents navigation
+ *   - 1.9: Session validation failure (network/server error) preserves credentials and exposes retry
+ *   - 1.10: Slow session validation completes safely without premature resolution
+ *   - 1.11: Repeated startup trigger protection prevents concurrent duplicate checks
+ *   - 1.12: Component unmount while storage read or API call is pending prevents state/navigation
+ * Suite 2: [Production Unit Tests] Navigation Guard & Onboarding Gate (resolveNavigationDecision)
  *   - 2.1: Navigation guard blocks unauthenticated navigation to authenticated screens
  *   - 2.2: Onboarding gate redirects incomplete profiles to PROFILE_COMPLETION
+ *   - 2.3: Explicit auth transition with completed profile resolves to HOME
+ *   - 2.4: MARKETPLACE alias route resolves to HOME
  * Suite 3: [Static Source Checks] Production Code Structure Invariants
  *   - 3.1: SplashScreen.jsx does not contain artificial setTimeout delays
  *   - 3.2: SplashScreen.jsx imports and utilizes orchestrateStartupSession
+ *   - 3.3: startup-session.js exports orchestrateStartupSession
+ *   - 3.4: App.jsx imports and delegates to resolveNavigationDecision
  */
 
 const { test, describe } = require('node:test');
@@ -25,18 +33,25 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// Direct import of pure production startup orchestrator
+// Direct imports of pure production helpers
 const {
   orchestrateStartupSession,
 } = require('../../customer-app/src/utils/startup-session');
+const {
+  resolveNavigationDecision,
+  AUTHENTICATED_SCREENS,
+} = require('../../customer-app/src/utils/navigation-guard');
 
 // Paths for static code inspection
 const splashScreenPath = path.resolve(__dirname, '../../customer-app/src/screens/SplashScreen.jsx');
 const startupSessionPath = path.resolve(__dirname, '../../customer-app/src/utils/startup-session.js');
+const navigationGuardPath = path.resolve(__dirname, '../../customer-app/src/utils/navigation-guard.js');
+const appSourcePath = path.resolve(__dirname, '../../customer-app/App.jsx');
 
 describe('Customer App Phase 3B.2 Verification Suite', () => {
   const splashCode = fs.readFileSync(splashScreenPath, 'utf8');
   const startupCode = fs.readFileSync(startupSessionPath, 'utf8');
+  const appCode = fs.readFileSync(appSourcePath, 'utf8');
 
   // =========================================================================
   // SUITE 1: [Production Unit Tests] Startup Session Orchestrator
@@ -123,16 +138,41 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
       assert.equal(result.destination, 'PHONE_AUTH');
     });
 
-    test('1.4: Expired or invalid credentials (HTTP 401) clears Keystore tokens and transitions to PHONE_AUTH', async () => {
+    test('1.4: HTTP 401 calls clearAuthTokens with the exact rejected stored.token', async () => {
+      let expectedTokenPassed = null;
+      const rejectedToken = 'expired-jwt-token-789';
+
+      await orchestrateStartupSession({
+        getAuthTokens: async () => ({ token: rejectedToken }),
+        clearAuthTokens: async (token) => {
+          expectedTokenPassed = token;
+          return true;
+        },
+        apiClient: {
+          getProfile: async () => {
+            const err = new Error('Unauthorized');
+            err.status = 401;
+            throw err;
+          },
+        },
+        onNavigate: () => {},
+        setError: () => {},
+        isCheckingRef: { current: false },
+        isMountedRef: { current: true },
+      });
+
+      assert.equal(expectedTokenPassed, rejectedToken, 'clearAuthTokens must be invoked with the exact rejected stored.token');
+    });
+
+    test('1.5: HTTP 401: clearAuthTokens returning true permits safe transition to PHONE_AUTH', async () => {
       let navigatedTo = null;
-      let didClearTokens = false;
-      const mockToken = 'expired-token';
+      const rejectedToken = 'valid-expired-token';
 
       const result = await orchestrateStartupSession({
-        getAuthTokens: async () => ({ token: mockToken }),
-        clearAuthTokens: async () => {
-          didClearTokens = true;
-          return true;
+        getAuthTokens: async () => ({ token: rejectedToken }),
+        clearAuthTokens: async (token) => {
+          assert.equal(token, rejectedToken);
+          return true; // Token safely cleared
         },
         apiClient: {
           getProfile: async () => {
@@ -147,13 +187,105 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
         isMountedRef: { current: true },
       });
 
-      assert.equal(didClearTokens, true, 'clearAuthTokens must be invoked on 401');
       assert.equal(navigatedTo, 'PHONE_AUTH');
       assert.equal(result.destination, 'PHONE_AUTH');
       assert.equal(result.cleared, true);
     });
 
-    test('1.5: Session validation failure (network/server error) preserves credentials and exposes retry', async () => {
+    test('1.6: HTTP 401 Race Protection: clearAuthTokens returning false aborts transition to PHONE_AUTH', async () => {
+      let navigatedTo = null;
+      let errorMsg = null;
+      const isCheckingRef = { current: false };
+      const staleToken = 'stale-token-during-login-race';
+
+      const result = await orchestrateStartupSession({
+        getAuthTokens: async () => ({ token: staleToken }),
+        clearAuthTokens: async () => {
+          // Emulate auth-storage detecting stored token changed before clear
+          return false;
+        },
+        apiClient: {
+          getProfile: async () => {
+            const err = new Error('Unauthorized');
+            err.status = 401;
+            throw err;
+          },
+        },
+        onNavigate: (screen) => { navigatedTo = screen; },
+        setError: (msg) => { errorMsg = msg; },
+        isCheckingRef,
+        isMountedRef: { current: true },
+      });
+
+      assert.equal(navigatedTo, null, 'Must NOT navigate to PHONE_AUTH when token clear is rejected');
+      assert.equal(result.cleared, false);
+      assert.equal(result.aborted, true);
+      assert.ok(errorMsg && errorMsg.includes('session has changed'));
+      assert.equal(isCheckingRef.current, false, 'isCheckingRef must be reset to allow retry');
+    });
+
+    test('1.7: HTTP 401 Storage Error: thrown storage-clear exception does not navigate to PHONE_AUTH', async () => {
+      let navigatedTo = null;
+      let errorMsg = null;
+      const isCheckingRef = { current: false };
+
+      const result = await orchestrateStartupSession({
+        getAuthTokens: async () => ({ token: 'token-with-keystore-glitch' }),
+        clearAuthTokens: async () => {
+          throw new Error('Keystore access failed');
+        },
+        apiClient: {
+          getProfile: async () => {
+            const err = new Error('Unauthorized');
+            err.status = 401;
+            throw err;
+          },
+        },
+        onNavigate: (screen) => { navigatedTo = screen; },
+        setError: (msg) => { errorMsg = msg; },
+        isCheckingRef,
+        isMountedRef: { current: true },
+      });
+
+      assert.equal(navigatedTo, null, 'Must NOT navigate to PHONE_AUTH when storage clear throws');
+      assert.ok(errorMsg && errorMsg.includes('Unable to reset session'));
+      assert.ok(result.storageError);
+      assert.equal(isCheckingRef.current, false, 'isCheckingRef must be reset for recoverable retry');
+    });
+
+    test('1.8: HTTP 401 Unmount Safety: component unmount while token-clear is pending prevents navigation', async () => {
+      let navigatedTo = null;
+      let errorMsg = null;
+      const isMountedRef = { current: true };
+
+      const promise = orchestrateStartupSession({
+        getAuthTokens: async () => ({ token: 'token-unmount-race' }),
+        clearAuthTokens: async () => {
+          await new Promise((r) => setTimeout(r, 30));
+          // Component unmounts during asynchronous clearAuthTokens execution
+          isMountedRef.current = false;
+          return true;
+        },
+        apiClient: {
+          getProfile: async () => {
+            const err = new Error('Unauthorized');
+            err.status = 401;
+            throw err;
+          },
+        },
+        onNavigate: (screen) => { navigatedTo = screen; },
+        setError: (msg) => { errorMsg = msg; },
+        isCheckingRef: { current: false },
+        isMountedRef,
+      });
+
+      const res = await promise;
+      assert.equal(res, null, 'Must return null when unmounted');
+      assert.equal(navigatedTo, null, 'onNavigate must NOT be invoked after unmount');
+      assert.equal(errorMsg, null, 'setError must NOT be invoked after unmount');
+    });
+
+    test('1.9: Session validation failure (network/server error) preserves credentials and exposes retry', async () => {
       let didClearTokens = false;
       let errorMsg = null;
       let navigatedTo = null;
@@ -182,7 +314,7 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
       assert.equal(result.isNetwork, true);
     });
 
-    test('1.6: Slow session validation completes safely without premature resolution', async () => {
+    test('1.10: Slow session validation completes safely without premature resolution', async () => {
       let navigatedTo = null;
       let settled = false;
 
@@ -215,7 +347,7 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
       assert.equal(navigatedTo, 'HOME');
     });
 
-    test('1.7: Repeated startup trigger protection prevents concurrent duplicate checks', async () => {
+    test('1.11: Repeated startup trigger protection prevents concurrent duplicate checks', async () => {
       let getAuthTokensCallCount = 0;
       const isCheckingRef = { current: false };
 
@@ -235,9 +367,7 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
         isMountedRef: { current: true },
       };
 
-      // Fire first check
       const call1 = orchestrateStartupSession(params);
-      // Fire second check while first is in-flight
       const call2 = orchestrateStartupSession(params);
 
       const [res1, res2] = await Promise.all([call1, call2]);
@@ -247,7 +377,7 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
       assert.equal(res1.destination, 'HOME');
     });
 
-    test('1.8: Component unmount while storage or network work is pending prevents navigation and state updates', async () => {
+    test('1.12: Component unmount while storage read is pending prevents navigation and state updates', async () => {
       let navigatedTo = null;
       let errorSet = null;
       const isMountedRef = { current: true };
@@ -255,7 +385,6 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
       const promise = orchestrateStartupSession({
         getAuthTokens: async () => {
           await new Promise((r) => setTimeout(r, 30));
-          // Component unmounts during Keystore read
           isMountedRef.current = false;
           return { token: 'unmounted-token' };
         },
@@ -279,82 +408,51 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
   });
 
   // =========================================================================
-  // SUITE 2: [Production Unit Tests] App Navigation Safeguards & State Transitions
+  // SUITE 2: [Production Unit Tests] Navigation Guard & Onboarding Gate
   // =========================================================================
-  describe('Suite 2: [Production Unit Tests] App Navigation Safeguards & State Transitions', () => {
+  describe('Suite 2: [Production Unit Tests] Navigation Guard & Onboarding Gate', () => {
     test('2.1: Navigation guard blocks unauthenticated navigation to authenticated screens', () => {
-      // Replicate handleNavigate logic from App.jsx lines 162-173
-      const AUTHENTICATED_SCREENS = ['HOME', 'CART', 'PROFILE', 'PROFILE_COMPLETION'];
-      let currentScreen = 'SPLASH';
-      let isAuthenticated = false;
-
-      function simulateNavigate(targetScreen, params = {}) {
-        const resolvedScreen = targetScreen === 'MARKETPLACE' ? 'HOME' : targetScreen;
-        const isTargetAuthenticated = AUTHENTICATED_SCREENS.includes(resolvedScreen);
-        const isExplicitAuthTransition = Boolean(params?.token || params?.customer);
-
-        if (isTargetAuthenticated && !isAuthenticated && !isExplicitAuthTransition) {
-          return { blocked: true, currentScreen };
-        }
-        if (isExplicitAuthTransition) {
-          isAuthenticated = true;
-        }
-        currentScreen = resolvedScreen;
-        return { blocked: false, currentScreen };
-      }
-
-      // Stale/unauthenticated attempt to go to HOME
-      const blockedAttempt = simulateNavigate('HOME');
-      assert.equal(blockedAttempt.blocked, true);
-      assert.equal(blockedAttempt.currentScreen, 'SPLASH');
-
-      // Valid explicit auth transition from SplashScreen
-      const validAttempt = simulateNavigate('HOME', { token: 'tok', customer: { isProfileComplete: true } });
-      assert.equal(validAttempt.blocked, false);
-      assert.equal(validAttempt.currentScreen, 'HOME');
+      const decision = resolveNavigationDecision(
+        { currentScreen: 'SPLASH', isAuthenticated: false, isProfileComplete: false },
+        'HOME'
+      );
+      assert.equal(decision.blocked, true, 'Unauthenticated attempt to HOME must be blocked');
+      assert.equal(decision.nextScreen, 'SPLASH');
     });
 
     test('2.2: Onboarding gate redirects incomplete profiles to PROFILE_COMPLETION', () => {
-      // Replicate handleNavigate onboarding gate logic from App.jsx lines 181-190
-      const AUTHENTICATED_SCREENS = ['HOME', 'PROFILE_COMPLETION'];
-      let currentScreen = 'SPLASH';
-      let isProfileComplete = false;
+      const decision = resolveNavigationDecision(
+        { currentScreen: 'SPLASH', isAuthenticated: false, isProfileComplete: false },
+        'HOME',
+        { token: 'valid-tok', customer: { id: 'c1', isProfileComplete: false } }
+      );
+      assert.equal(decision.blocked, false);
+      assert.equal(decision.redirected, true, 'Must redirect to PROFILE_COMPLETION');
+      assert.equal(decision.nextScreen, 'PROFILE_COMPLETION');
+      assert.equal(decision.nextIsAuthenticated, true);
+      assert.equal(decision.nextIsProfileComplete, false);
+    });
 
-      function simulateOnboardingNavigate(targetScreen, params = {}) {
-        const resolvedScreen = targetScreen;
-        const isTargetAuthenticated = AUTHENTICATED_SCREENS.includes(resolvedScreen);
+    test('2.3: Explicit auth transition with completed profile resolves to HOME', () => {
+      const decision = resolveNavigationDecision(
+        { currentScreen: 'SPLASH', isAuthenticated: false, isProfileComplete: false },
+        'HOME',
+        { token: 'valid-tok', customer: { id: 'c2', isProfileComplete: true } }
+      );
+      assert.equal(decision.blocked, false);
+      assert.equal(decision.redirected, false);
+      assert.equal(decision.nextScreen, 'HOME');
+      assert.equal(decision.nextIsAuthenticated, true);
+      assert.equal(decision.nextIsProfileComplete, true);
+    });
 
-        let nextProfileComplete = isProfileComplete;
-        if (params?.customer && typeof params.customer.isProfileComplete === 'boolean') {
-          nextProfileComplete = params.customer.isProfileComplete;
-          isProfileComplete = nextProfileComplete;
-        }
-
-        const isProtectedScreen = isTargetAuthenticated && resolvedScreen !== 'PROFILE_COMPLETION';
-        if (isProtectedScreen && !nextProfileComplete) {
-          currentScreen = 'PROFILE_COMPLETION';
-          return { redirected: true, currentScreen: 'PROFILE_COMPLETION' };
-        }
-
-        currentScreen = resolvedScreen;
-        return { redirected: false, currentScreen: resolvedScreen };
-      }
-
-      // Customer with incomplete profile attempting HOME
-      const incompleteResult = simulateOnboardingNavigate('HOME', {
-        token: 'tok',
-        customer: { id: 'c1', isProfileComplete: false },
-      });
-      assert.equal(incompleteResult.redirected, true);
-      assert.equal(incompleteResult.currentScreen, 'PROFILE_COMPLETION');
-
-      // Customer with complete profile entering HOME
-      const completeResult = simulateOnboardingNavigate('HOME', {
-        token: 'tok',
-        customer: { id: 'c2', isProfileComplete: true },
-      });
-      assert.equal(completeResult.redirected, false);
-      assert.equal(completeResult.currentScreen, 'HOME');
+    test('2.4: MARKETPLACE alias route resolves to HOME', () => {
+      const decision = resolveNavigationDecision(
+        { currentScreen: 'HOME', isAuthenticated: true, isProfileComplete: true },
+        'MARKETPLACE'
+      );
+      assert.equal(decision.blocked, false);
+      assert.equal(decision.nextScreen, 'HOME', 'MARKETPLACE must resolve to HOME');
     });
   });
 
@@ -381,7 +479,7 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
       );
     });
 
-    test('3.3: [Static Source Check] startup-session.js correctly exports orchestrateStartupSession', () => {
+    test('3.3: [Static Source Check] startup-session.js exports orchestrateStartupSession', () => {
       assert.ok(
         startupCode.includes('orchestrateStartupSession'),
         'startup-session.js must define orchestrateStartupSession'
@@ -391,6 +489,16 @@ describe('Customer App Phase 3B.2 Verification Suite', () => {
         'startup-session.js must export orchestrateStartupSession via module.exports'
       );
     });
+
+    test('3.4: [Static Source Check] App.jsx imports and delegates to resolveNavigationDecision', () => {
+      assert.ok(
+        appCode.includes("from './src/utils/navigation-guard'"),
+        'App.jsx must import resolveNavigationDecision from navigation-guard'
+      );
+      assert.ok(
+        appCode.includes('resolveNavigationDecision('),
+        'App.jsx must delegate to resolveNavigationDecision'
+      );
+    });
   });
 });
-

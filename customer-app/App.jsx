@@ -36,24 +36,7 @@ import BillReviewScreen from './src/screens/BillReviewScreen';
 import TransactionResultScreen from './src/screens/TransactionResultScreen';
 import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
 import LiveTrackingScreen from './src/screens/LiveTrackingScreen';
-
-const AUTHENTICATED_SCREENS = [
-  'HOME',
-  'FISH_DETAILS',
-  'CART',
-  'CHECKOUT',
-  'BOOKING_CONFIRMATION',
-  'BOOKING_HISTORY',
-  'SUBSCRIPTION',
-  'NOTIFICATIONS',
-  'SCAN_BILL',
-  'BILL_REVIEW',
-  'TRANSACTION_RESULT',
-  'TRANSACTION_HISTORY',
-  'LIVE_TRACKING',
-  'PROFILE',
-  'PROFILE_COMPLETION',
-];
+import { AUTHENTICATED_SCREENS, resolveNavigationDecision } from './src/utils/navigation-guard';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
@@ -160,41 +143,39 @@ export default function App() {
   }, [handleUnauthorized]);
 
   function handleNavigate(targetScreen, params = {}) {
-    const resolvedScreen = targetScreen === 'MARKETPLACE' ? 'HOME' : targetScreen;
+    const decision = resolveNavigationDecision(
+      { currentScreen, isAuthenticated, isProfileComplete },
+      targetScreen,
+      params
+    );
 
-    const isTargetAuthenticated = AUTHENTICATED_SCREENS.includes(resolvedScreen);
-    const isExplicitAuthTransition = Boolean(params?.token || params?.customer);
-
-    // Stale requests cannot navigate the customer back into authenticated screens after logout
-    if (isTargetAuthenticated && !isAuthenticated && !isExplicitAuthTransition) {
-      console.warn(`[NAVIGATION GUARD] Blocked unauthenticated navigation to ${resolvedScreen}`);
+    if (decision.blocked) {
+      console.warn(`[NAVIGATION GUARD] Blocked unauthenticated navigation to ${targetScreen}`);
       return;
     }
 
-    // Authoritative profile-completion state tracking from genuine backend customer payload
-    let nextProfileComplete = isProfileComplete;
-    if (params?.customer && typeof params.customer.isProfileComplete === 'boolean') {
-      nextProfileComplete = params.customer.isProfileComplete;
-      setIsProfileComplete(nextProfileComplete);
+    if (decision.nextIsProfileComplete !== isProfileComplete) {
+      setIsProfileComplete(decision.nextIsProfileComplete);
     }
 
-    // Centralized onboarding gate:
-    // Any screen in AUTHENTICATED_SCREENS except PROFILE_COMPLETION requires isProfileComplete === true
-    const isProtectedScreen = isTargetAuthenticated && resolvedScreen !== 'PROFILE_COMPLETION';
-    if (isProtectedScreen && !nextProfileComplete) {
-      console.warn(`[ONBOARDING GATE] Blocked uncompleted profile navigation to ${resolvedScreen}`);
+    if (decision.redirected) {
+      console.warn(`[ONBOARDING GATE] Blocked uncompleted profile navigation to ${targetScreen}`);
+      if (decision.nextIsAuthenticated && !isAuthenticated) {
+        setIsAuthenticated(true);
+      }
+      setScreenParams((prev) => ({ ...prev, ...params }));
       if (currentScreen !== 'PROFILE_COMPLETION') {
         setCurrentScreen('PROFILE_COMPLETION');
       }
       return;
     }
 
-    if (isExplicitAuthTransition) {
+    if (decision.nextIsAuthenticated && !isAuthenticated) {
       setIsAuthenticated(true);
     }
 
     setScreenParams((prev) => ({ ...prev, ...params }));
-    setCurrentScreen(resolvedScreen);
+    setCurrentScreen(decision.nextScreen);
   }
 
   // Intercept Android hardware back press to avoid escaping authenticated boundary or returning after logout

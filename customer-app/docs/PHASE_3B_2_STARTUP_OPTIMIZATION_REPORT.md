@@ -6,41 +6,47 @@
 **Application Directory:** `customer-app/`  
 **Target Branch:** `main`  
 **Approved Baseline Commit (Phase 3B.1 Qualified):** `e443f3f9c427c0fc3315158cbd837f13ed5a8ebc`  
-**Optimization Scope:** Phase 3B.2 — Splash Screen & Startup Session Loading Optimization  
+**Initial Optimization Commit:** `9cd16b72ce5d72d311af68093e8bb0e9231b45f8`  
+**Correction Scope:** Phase 3B.2 — Startup 401 Token Identity Race Protection & Production Navigation Guard Verification  
 
 ---
 
 ## 1. Executive Summary
 
-This report documents the implementation, validation, and empirical measurement of Phase 3B.2. The primary objective was to optimize the customer mobile application startup sequence by analyzing and eliminating an artificial 600 ms delay in `customer-app/src/screens/SplashScreen.jsx`, initiating hardware-backed credential restoration and session validation immediately upon component mount, and ensuring the application transitions to the appropriate target screen (`HOME`, `PROFILE_COMPLETION`, or `PHONE_AUTH`) without unnecessary delay while strictly preserving all authentication and navigation safeguards.
+This report documents the implementation, race-condition remediation, validation, and empirical measurement of Phase 3B.2. The primary objective was to optimize the customer mobile application startup sequence by analyzing and eliminating an artificial 600 ms delay in `customer-app/src/screens/SplashScreen.jsx`, initiating hardware-backed credential restoration and session validation immediately upon component mount, and ensuring the application transitions to the appropriate target screen (`HOME`, `PROFILE_COMPLETION`, or `PHONE_AUTH`) without unnecessary delay while strictly preserving all authentication and navigation safeguards.
 
 ### Key Outcomes
-1. **Elimination of Artificial Wait**:
+1. **Source-Confirmed Elimination of Artificial Wait**:
    - The artificial 600 ms `setTimeout` delay in `SplashScreen.jsx` was completely removed.
-   - Session validation is now initiated immediately upon component mount via `orchestrateStartupSession`.
-2. **Direct Testability via Pure Production Orchestrator**:
-   - Startup session validation logic was extracted into `customer-app/src/utils/startup-session.js`.
-   - The pure orchestrator is tested directly across 13 new unit and static check tests covering valid sessions, incomplete profiles, missing credentials, HTTP 401 token clearing, network failures, concurrency locks, unmount safety, and App shell navigation guards.
-3. **Preservation of Security & Architecture**:
-   - Hardware-backed Android Keystore credential persistence (`react-native-keychain`) is preserved intact.
-   - Token validation via `api.getProfile()` continues to be mandatory before any authenticated screen can be rendered.
-   - HTTP 401 token clearing, network retry states, and App shell onboarding gates are completely maintained.
-4. **Physical Device Verification (`realme RMX3853`)**:
-   - Standalone release APK (`assembleRelease`, Hermes bytecode, `minifyEnabled false`) was compiled and installed on physical Android 16 hardware.
+   - Session restoration now starts immediately after the splash effect runs via `orchestrateStartupSession`.
+2. **Stale 401 Token Identity Race Protection**:
+   - In accordance with the independent audit findings, `customer-app/src/utils/startup-session.js` now enforces token identity verification when handling HTTP 401 session expiration.
+   - `clearAuthTokens(stored.token)` is called with the exact rejected token.
+   - Only when `clearAuthTokens` returns `true` (verifying the rejected token matched the stored token) does the application transition to `PHONE_AUTH`.
+   - If `clearAuthTokens` returns `false` (indicating a concurrent login or session change altered the stored token), clearance is aborted, `PHONE_AUTH` transition is suppressed, and a recoverable error state is presented.
+   - Storage-clear exceptions are explicitly caught without silently navigating away, preserving stored credentials and presenting retry options.
+   - Component mounted state (`isMountedRef`) is verified after every asynchronous boundary, including after token clearance.
+3. **Pure Production Navigation Guard Helper**:
+   - Route resolution, authentication gatekeeping, and onboarding verification were extracted from `customer-app/App.jsx` into `customer-app/src/utils/navigation-guard.js`.
+   - `App.jsx` now delegates directly to `resolveNavigationDecision`, eliminating test-only duplication and enabling direct unit testing of production navigation logic.
+4. **Physical Device Measurement Interpretation (`realme RMX3853`)**:
+   - Native Activity launch timings captured via Android `am start-activity -W` measure native OS activity creation and surface attachment, not the React Native session decision or first catalogue paint.
    - Native cold launch median: **204.0 ms** (range: 180 – 286 ms) vs baseline **226.0 ms** (range: 211 – 235 ms).
    - Native warm launch median: **47.0 ms** (range: 45 – 49 ms) vs baseline **49.0 ms** (range: 46 – 54 ms).
-   - Session restoration initiation shifted from `[Splash Mount + 600 ms]` down to `[Splash Mount + 0 ms]`, eliminating 600 ms of idle wait before initiating Keystore reads and backend network requests.
+   - These slight variations reflect normal system CPU governor and thermal states rather than the removal of the JavaScript timer.
+   - The 600 ms optimization operates strictly inside the React Native runtime lifecycle and network pipeline, shifting session restoration start from `[Splash Mount + 600 ms]` down to `[Splash Mount + 0 ms]`.
+   - Transitions to `HOME` and time to first usable catalogue are **stitched analytical estimates**, combining native launch with independently measured Node.js network latencies; they are not claimed as directly measured device trace milestones.
 5. **Test & Build Verification**:
-   - Customer-app test suite: **71/71 tests passing** (100% pass rate; 0 failures; duration: 1,409.66 ms).
-   - Root project test suite: **265/265 tests passing** (100% pass rate; 0 failures; duration: 8,264.28 ms).
+   - Customer-app test suite: **78/78 tests passing** (100% pass rate; 0 failures; duration: 1,428.72 ms).
+   - Root project test suite: **272/272 tests passing** across 11 suites (100% pass rate; 0 failures; duration: 27,875.12 ms).
    - Metro Android production bundle: **0 errors** (Exit code 0).
-   - Android release compilation: **BUILD SUCCESSFUL in 1m 31s** (Exit code 0).
+   - Android release compilation: **BUILD SUCCESSFUL in 1m 16s** (Exit code 0).
 
 ---
 
 ## 2. Source-Code Audit: Production Startup Sequence
 
-Prior to implementing any code changes, the entire production startup sequence was traced across `customer-app/App.jsx`, `customer-app/src/screens/SplashScreen.jsx`, `customer-app/src/services/auth-storage.js`, and `customer-app/src/services/api.js`.
+Prior to implementing changes, the entire production startup sequence was traced across `customer-app/App.jsx`, `customer-app/src/screens/SplashScreen.jsx`, `customer-app/src/services/auth-storage.js`, and `customer-app/src/services/api.js`.
 
 ### 2.1 Trace of Startup Sequence
 
@@ -48,20 +54,20 @@ Prior to implementing any code changes, the entire production startup sequence w
 | :--- | :--- | :--- | :---: | :--- |
 | **1. Native Process Start** | Process fork & Activity creation | Android OS / `MainActivity.kt` | [Directly measured] | Android OS creates the application process and attaches window surface (~180-280 ms cold launch). |
 | **2. React Native Init** | Hermes engine & bundle execution | `index.js` / Hermes engine | [Source-confirmed] | Hermes bytecode engine executes precompiled bundle and registers `App` component. |
-| **3. Initial Screen Mount** | `App.jsx` evaluates initial state | `App.jsx` (lines 58-63) | [Source-confirmed] | `App` initializes with `currentScreen = 'SPLASH'`, `isAuthenticated = false`, `isProfileComplete = false`. Renders `<SplashScreen onNavigate={handleNavigate} />`. |
+| **3. Initial Screen Mount** | `App.jsx` evaluates initial state | `App.jsx` | [Source-confirmed] | `App` initializes with `currentScreen = 'SPLASH'`, `isAuthenticated = false`, `isProfileComplete = false`. Renders `<SplashScreen onNavigate={handleNavigate} />`. |
 | **4. Splash UI Render** | Splash screen mounts and renders | `SplashScreen.jsx` | [Source-confirmed] | Logo, brand title ("POND FISH"), tagline ("Fresh Lake Catch Daily"), and loading indicator ("Initializing secure session...") are painted on screen. |
-| **5. Session Check Start** | `checkSession()` execution | `SplashScreen.jsx` (lines 84-93) | [Source-confirmed] | **Original Bottleneck**: `useEffect` enclosed `checkSession()` inside `setTimeout(..., 600)`. The session check was prevented from starting until 600 ms after splash mount. |
-| **6. Keystore Credential Read** | `getAuthTokens()` | `auth-storage.js` (lines 60-66) | [Source-confirmed] | Reads hardware-backed Android Keystore via `Keychain.getGenericPassword({ service: 'com.pondfish.customer.auth' })`. Serialized via `storageMutationQueue`. |
-| **7. Unauthenticated Branch** | No credentials stored (`!stored.token`) | `SplashScreen.jsx` (lines 36-42) | [Source-confirmed] | If no token exists in Keystore, immediately transitions via `onNavigate('PHONE_AUTH')`. No backend API call is performed. |
-| **8. Authenticated Branch** | Active token stored (`stored.token`) | `api.js` (lines 306-316) | [Source-confirmed] | Calls `api.getProfile(stored.token)` via `GET /api/v1/customer/profile` to validate JWT session and retrieve customer profile record. |
-| **9. Decision & Screen Transition** | Profile validated / expired / network error | `SplashScreen.jsx` (lines 46-74) | [Source-confirmed] | - If `isProfileComplete === true`: `onNavigate('HOME', { customer, token })`<br>- If `isProfileComplete === false`: `onNavigate('PROFILE_COMPLETION', { customer, token })`<br>- If HTTP 401: calls `clearAuthTokens()`, then `onNavigate('PHONE_AUTH')`<br>- If network failure: sets user-facing error message, preserves credentials, enables "Try Again" retry button. |
+| **5. Session Check Start** | `checkSession()` execution | `SplashScreen.jsx` | [Source-confirmed] | **Original Bottleneck**: `useEffect` enclosed `checkSession()` inside `setTimeout(..., 600)`. The session check was prevented from starting until 600 ms after splash mount. Now initiated immediately. |
+| **6. Keystore Credential Read** | `getAuthTokens()` | `auth-storage.js` | [Source-confirmed] | Reads hardware-backed Android Keystore via `Keychain.getGenericPassword({ service: 'com.pondfish.customer.auth' })`. Serialized via `storageMutationQueue`. |
+| **7. Unauthenticated Branch** | No credentials stored (`!stored.token`) | `SplashScreen.jsx` / `startup-session.js` | [Source-confirmed] | If no token exists in Keystore, immediately transitions via `onNavigate('PHONE_AUTH')`. No backend API call is performed. |
+| **8. Authenticated Branch** | Active token stored (`stored.token`) | `api.js` | [Source-confirmed] | Calls `api.getProfile(stored.token)` via `GET /api/v1/customer/profile` to validate JWT session and retrieve customer profile record. |
+| **9. Decision & Screen Transition** | Profile validated / expired / network error | `startup-session.js` | [Source-confirmed] | - If `isProfileComplete === true`: `onNavigate('HOME', { customer, token })`<br>- If `isProfileComplete === false`: `onNavigate('PROFILE_COMPLETION', { customer, token })`<br>- If HTTP 401: calls `clearAuthTokens(stored.token)`, verifies returned boolean, and transitions to `PHONE_AUTH` only if verified true.<br>- If network failure: sets user-facing error message, preserves credentials, enables "Try Again" retry button. |
 | **10. Target Screen Paint** | First application screen painted | `HomeScreen.jsx` / `PhoneAuthScreen.jsx` | [Source-confirmed] | `App.jsx` updates `currentScreen` to `HOME` or `PHONE_AUTH`, unmounting `SplashScreen`. |
-| **11. Primary Catalogue Load** | `fetchHomeDataOrchestrated()` | `HomeScreen.jsx` (lines 42-153) | [Source-confirmed] | When `HomeScreen` mounts, it invokes `fetchHomeDataOrchestrated()`, dispatching concurrent requests for `api.getFish()`, `api.getCategories()`, `api.getSubscription()`, and `api.getCustomerLiveTracking()`. |
+| **11. Primary Catalogue Load** | `fetchHomeDataOrchestrated()` | `HomeScreen.jsx` | [Source-confirmed] | When `HomeScreen` mounts, it invokes `fetchHomeDataOrchestrated()`, dispatching concurrent requests for `api.getFish()`, `api.getCategories()`, `api.getSubscription()`, and `api.getCustomerLiveTracking()`. |
 
 ### 2.2 Impact of the 600 ms Delay
 
-The audit confirmed that the 600 ms timer:
-- **Blocked the session check**: `getAuthTokens()` and `api.getProfile()` were not even initiated until 600 ms after mount.
+The source audit confirmed that the 600 ms timer:
+- **Blocked the session check**: `getAuthTokens()` and `api.getProfile()` were not initiated until 600 ms after mount.
 - **Blocked the screen transition**: Because `onNavigate()` was called inside `checkSession()`, no target screen (`HOME` or `PHONE_AUTH`) could be displayed until the 600 ms delay elapsed *plus* the duration of the Keystore read and network call.
 - **Served no architectural purpose**: It was an artificial presentation delay rather than a technical prerequisite.
 
@@ -86,19 +92,27 @@ The audit confirmed that the 600 ms timer:
 
 1. [`customer-app/src/utils/startup-session.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/utils/startup-session.js) *(NEW)*:
    - Contains pure production helper `orchestrateStartupSession`.
-   - Manages Keystore retrieval, backend profile validation, HTTP 401 cleanup, retry handling, concurrency locking (`isCheckingRef`), and unmount safety (`isMountedRef`).
-   - CommonJS compatible (`module.exports`) to allow direct execution in Node.js test environments without transpilation.
+   - Manages Keystore retrieval, backend profile validation, HTTP 401 token identity validation, retry handling, concurrency locking (`isCheckingRef`), and unmount safety (`isMountedRef`).
+   - CommonJS compatible (`module.exports`) for direct execution in Node.js test environments.
 
-2. [`customer-app/src/screens/SplashScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/SplashScreen.jsx) *(MODIFIED)*:
+2. [`customer-app/src/utils/navigation-guard.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/utils/navigation-guard.js) *(NEW)*:
+   - Contains pure production helper `resolveNavigationDecision` and `AUTHENTICATED_SCREENS`.
+   - Manages route alias resolution (e.g. `MARKETPLACE` -> `HOME`), authentication guards, profile completion checks, and target route decisions.
+
+3. [`customer-app/App.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/App.jsx) *(MODIFIED)*:
+   - Imports `AUTHENTICATED_SCREENS` and `resolveNavigationDecision` from `navigation-guard.js`.
+   - Delegates navigation decisions in `handleNavigate` to the pure helper.
+
+4. [`customer-app/src/screens/SplashScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/SplashScreen.jsx) *(MODIFIED)*:
    - Removed `setTimeout` and `clearTimeout`.
    - Initiates `checkSession()` immediately on component mount within `useEffect`.
    - Delegates orchestration to `orchestrateStartupSession`.
    - Preserves all brand styling, layout, logo images, `ActivityIndicator`, and retry UI.
 
-3. [`tests/unit/customer-app-phase3-startup.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase3-startup.test.js) *(NEW)*:
-   - 13 comprehensive unit tests and static checks validating production startup logic.
+5. [`tests/unit/customer-app-phase3-startup.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase3-startup.test.js) *(NEW)*:
+   - 20 comprehensive unit tests and static checks validating production startup logic, 401 race protection, and production navigation decisions.
 
-4. [`customer-app/package.json`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/package.json) *(MODIFIED)*:
+6. [`customer-app/package.json`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/package.json) *(MODIFIED)*:
    - Updated `"test"` script to include `tests/unit/customer-app-phase3-startup.test.js`.
 
 ---
@@ -107,21 +121,25 @@ The audit confirmed that the 600 ms timer:
 
 The implementation strictly satisfies all mandatory safeguards:
 
-1. **No Premature Authenticated Rendering**:
-   - `onNavigate('HOME')` is only called *after* `api.getProfile()` successfully resolves with `customer.isProfileComplete === true`.
-   - `App.jsx` enforces a navigation guard: if `onNavigate('HOME')` is called without an explicit authenticated payload (`customer` and `token`), the navigation is blocked.
-2. **Onboarding Gate Preservation**:
-   - If a customer's session is valid but `customer.isProfileComplete === false`, the orchestrator directs to `PROFILE_COMPLETION`. `App.jsx` actively intercepts and redirects any attempt to access `HOME` before profile completion.
-3. **Keychain-Backed Persistence Integrity**:
-   - Keystore read/write operations continue to use `auth-storage.js` (`getAuthTokens`, `clearAuthTokens`) with hardware-backed Android Keystore and mutation queue serialization.
-4. **Token Revocation & Expiration (HTTP 401)**:
-   - On HTTP 401, `clearAuthTokens()` is awaited before transitioning to `PHONE_AUTH`, preventing stale token leaks.
-5. **Offline & Network Resilience**:
-   - If `api.getProfile()` fails due to network unavailability (non-401 error), stored credentials in Keystore are **not cleared**. The error state is displayed with a "Try Again" button.
-6. **Concurrency & Race Condition Protection**:
+1. **Token Identity Verification on HTTP 401**:
+   - `clearAuthTokens(stored.token)` passes the exact rejected token to the Keystore service.
+   - If the stored token has changed in the interim, `clearAuthTokens` returns `false`, aborting the clearance and preventing an obsolete 401 from wiping an active session.
+   - Transition to `PHONE_AUTH` occurs only if `clearAuthTokens` returned `true` and the component remains mounted.
+2. **Explicit Storage Error Handling**:
+   - If `clearAuthTokens` throws an error, the exception is caught, credentials remain untouched, and a recoverable error state is surfaced to the user.
+3. **No Premature Authenticated Rendering**:
+   - `onNavigate('HOME')` is only called after `api.getProfile()` successfully resolves with `customer.isProfileComplete === true`.
+   - `resolveNavigationDecision` blocks unauthenticated attempts to enter protected screens.
+4. **Onboarding Gate Preservation**:
+   - Incomplete profiles (`customer.isProfileComplete === false`) are strictly redirected to `PROFILE_COMPLETION`.
+5. **Keychain-Backed Persistence Integrity**:
+   - Keystore read/write operations continue to use `auth-storage.js` with hardware-backed Android Keystore and mutation queue serialization.
+6. **Offline & Network Resilience**:
+   - If `api.getProfile()` fails due to transient network failure (non-401 error), stored credentials in Keystore are **not cleared**. The error state is displayed with a "Try Again" button.
+7. **Concurrency & Race Condition Protection**:
    - `isCheckingRef` acts as an atomic lock. If multiple triggers occur concurrently, only the first executes; subsequent calls are aborted immediately.
-7. **Component Unmount Safety**:
-   - `isMountedRef` is checked after every asynchronous await boundary. If `SplashScreen` unmounts while storage or network calls are in flight, state updates and navigation calls are suppressed, preventing memory leaks and stale transitions.
+8. **Component Unmount Safety**:
+   - `isMountedRef` is checked after every asynchronous await boundary (Keystore read, API profile fetch, and token-clear operation). If `SplashScreen` unmounts while calls are in flight, state updates and navigation calls are suppressed.
 
 ---
 
@@ -163,10 +181,12 @@ Evidence: **[Directly measured on physical device]**
 | **Median** | **49.0 ms** | **54.0 ms** | **47.0 ms** | **51.0 ms** | **ok** |
 | **Range** | **46 – 54 ms** | **52 – 59 ms** | **45 – 49 ms** | **49 – 54 ms** | — |
 
-> [!NOTE]
-> **Measurement Distinction: OS Activity Launch vs. JavaScript Timer**:
-> `adb shell am start-activity -W` measures the native Android Activity lifecycle (surface attachment, window creation, and native view display). Because `SplashScreen` is the initial React Native view, removing the in-component JS timer does not alter native OS ActivityManager launch mechanics.
-> The 600 ms optimization operates strictly inside the React Native runtime lifecycle and network pipeline.
+> [!IMPORTANT]
+> **Interpretation of Android OS Activity Launch Measurements**:
+> - `adb shell am start-activity -W` measures the native Android Activity lifecycle (window creation and surface display).
+> - Because `SplashScreen` is the initial React Native view rendered by `App.jsx`, removing the in-component JS timer does **not** alter native OS ActivityManager launch mechanics.
+> - The observed differences in native launch timings (e.g. 204 ms vs 226 ms median) reflect normal OS scheduling, CPU governor states, and thermal variations, not the removal of the JavaScript timer.
+> - The 600 ms optimization operates strictly within the React Native JavaScript runtime and network dispatch pipeline.
 
 ---
 
@@ -176,18 +196,18 @@ The table below contrasts the startup timeline between the baseline implementati
 
 | Measurement / Milestone | Baseline Implementation | Phase 3B.2 Optimized | Delta / Impact | Measurement Source & Evidence |
 | :--- | :---: | :---: | :---: | :--- |
-| **Native App Launch (Cold TotalTime)** | 226.0 ms (median) | 204.0 ms (median) | -22.0 ms (governor variance) | [Directly measured via `am start-activity -W`] |
+| **Native App Launch (Cold TotalTime)** | 226.0 ms (median) | 204.0 ms (median) | System variance | [Directly measured via `am start-activity -W`] |
 | **React Native JS Initialization** | ~15 – 20 ms | ~15 – 20 ms | Parity | [Source-confirmed structure] |
 | **Splash Screen Painted** | ~245 ms | ~245 ms | Parity | [Source-confirmed structure] |
-| **Session Check Start** | **~845 ms** (245 ms + 600 ms wait) | **~245 ms** (245 ms + 0 ms wait) | **-600 ms (-71.0%)** | [Source-confirmed code] |
-| **Unauthenticated Decision (`PHONE_AUTH`)** | ~860 ms | ~260 ms | **-600 ms (-69.8%)** | [Stitched sequence estimate] |
-| **Authenticated Decision (`HOME`)** | ~1,240 ms | ~640 ms | **-600 ms (-48.4%)** | [Stitched sequence estimate] |
-| **First Usable Catalogue (Warmed)** | ~1,920 – 1,950 ms | ~1,320 – 1,350 ms | **~ -600 ms (-31.2%)** | [Stitched sequence estimate] |
+| **Session Check Initiation** | **~845 ms** (245 ms + 600 ms wait) | **~245 ms** (245 ms + 0 ms wait) | **-600 ms (-71.0%)** | [Source-confirmed code] |
+| **Unauthenticated Decision (`PHONE_AUTH`)** | ~860 ms | ~260 ms | Stitched sequence shift | [Stitched sequence estimate] |
+| **Authenticated Decision (`HOME`)** | ~1,240 ms | ~640 ms | Stitched sequence shift | [Stitched sequence estimate] |
+| **First Usable Catalogue (Warmed)** | ~1,920 – 1,950 ms | ~1,320 – 1,350 ms | Stitched sequence shift | [Stitched sequence estimate] |
 
-### Critical Measurement Caveat
-- The 600 ms idle wait was eliminated directly at the source code level.
-- Stitched estimates for end-to-end catalogue readiness combine native launch timing with independently measured Node.js network request latencies (`api.getProfile` ~380 ms, warmed `api.getFish` ~659 ms).
-- Actual end-to-end catalogue paint times on mobile networks vary based on carrier latency and backend query response times; removing the 600 ms timer guarantees requests begin 600 ms earlier, but does not alter network flight time.
+### Critical Evidence Qualifications
+- **Source-Confirmed Improvement**: The elimination of the 600 ms delay is confirmed in source code (`SplashScreen.jsx`); session restoration now initiates immediately after component mount.
+- **Stitched Sequence Estimates**: The timings for authenticated/unauthenticated screen decisions and first usable catalogue paint are **stitched analytical estimates**. They combine native Activity startup (~204 ms) with independently measured Node.js network latencies (`api.getProfile` ~380 ms, warmed `api.getFish` ~659 ms).
+- **No Claim of Directly Measured Device Milestone**: End-to-end catalogue paint was not captured as a single instrumented device trace. Total catalogue readiness depends on carrier network latency and server query response times. Removing the 600 ms timer guarantees requests begin 600 ms earlier, but does not alter network flight time.
 
 ---
 
@@ -207,41 +227,48 @@ TAP version 13
         ok 1 - 1.1: Valid authenticated session with complete profile transitions to HOME with customer & token
         ok 2 - 1.2: Valid authenticated session with incomplete profile transitions to PROFILE_COMPLETION
         ok 3 - 1.3: No stored credentials transitions to PHONE_AUTH without backend API call
-        ok 4 - 1.4: Expired or invalid credentials (HTTP 401) clears Keystore tokens and transitions to PHONE_AUTH
-        ok 5 - 1.5: Session validation failure (network/server error) preserves credentials and exposes retry
-        ok 6 - 1.6: Slow session validation completes safely without premature resolution
-        ok 7 - 1.7: Repeated startup trigger protection prevents concurrent duplicate checks
-        ok 8 - 1.8: Component unmount while storage or network work is pending prevents navigation and state updates
-    # Subtest: Suite 2: [Production Unit Tests] App Navigation Safeguards & State Transitions
+        ok 4 - 1.4: HTTP 401 calls clearAuthTokens with the exact rejected stored.token
+        ok 5 - 1.5: HTTP 401: clearAuthTokens returning true permits safe transition to PHONE_AUTH
+        ok 6 - 1.6: HTTP 401 Race Protection: clearAuthTokens returning false aborts transition to PHONE_AUTH
+        ok 7 - 1.7: HTTP 401 Storage Error: thrown storage-clear exception does not navigate to PHONE_AUTH
+        ok 8 - 1.8: HTTP 401 Unmount Safety: component unmount while token-clear is pending prevents navigation
+        ok 9 - 1.9: Session validation failure (network/server error) preserves credentials and exposes retry
+        ok 10 - 1.10: Slow session validation completes safely without premature resolution
+        ok 11 - 1.11: Repeated startup trigger protection prevents concurrent duplicate checks
+        ok 12 - 1.12: Component unmount while storage read is pending prevents navigation and state updates
+    # Subtest: Suite 2: [Production Unit Tests] Navigation Guard & Onboarding Gate
         ok 1 - 2.1: Navigation guard blocks unauthenticated navigation to authenticated screens
         ok 2 - 2.2: Onboarding gate redirects incomplete profiles to PROFILE_COMPLETION
+        ok 3 - 2.3: Explicit auth transition with completed profile resolves to HOME
+        ok 4 - 2.4: MARKETPLACE alias route resolves to HOME
     # Subtest: Suite 3: [Static Source Checks] Production Code Structure Invariants
         ok 1 - 3.1: [Static Source Check] SplashScreen.jsx does not contain artificial setTimeout delays
         ok 2 - 3.2: [Static Source Check] SplashScreen.jsx imports and utilizes orchestrateStartupSession
-        ok 3 - 3.3: [Static Source Check] startup-session.js correctly exports orchestrateStartupSession
-# tests 71
+        ok 3 - 3.3: [Static Source Check] startup-session.js exports orchestrateStartupSession
+        ok 4 - 3.4: [Static Source Check] App.jsx imports and delegates to resolveNavigationDecision
+# tests 78
 # suites 9
-# pass 71
+# pass 78
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 1409.6626
+# duration_ms 1428.7206
 ```
 
 ### 8.2 Root Project Test Suite
-Command: `npm test`  
+Command: `node --test --test-concurrency=1 "tests/**/*.test.js"`  
 Exit Code: `0`
 
 ```text
-# tests 265
+# tests 272
 # suites 11
-# pass 265
+# pass 272
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 8264.2769
+# duration_ms 27875.116
 ```
 
 ### 8.3 Metro Android Production Bundle
@@ -260,17 +287,8 @@ Command: `cd customer-app/android; ./gradlew assembleRelease`
 Exit Code: `0`
 
 ```text
-BUILD SUCCESSFUL in 1m 31s
+BUILD SUCCESSFUL in 1m 16s
 262 actionable tasks: 9 executed, 253 up-to-date
-```
-
-### 8.5 Release APK Installation
-Command: `adb install -r customer-app/android/app/build/outputs/apk/release/app-release.apk`  
-Exit Code: `0`
-
-```text
-Performing Streamed Install
-Success
 ```
 
 ---
@@ -278,12 +296,11 @@ Success
 ## 9. Known Limitations & Rollback Concerns
 
 1. **Slow Network or Server Outages**:
-   - Removing the 600 ms timer initiates network calls immediately. If the network is slow or offline, `SplashScreen` displays its loading indicator ("Initializing secure session...") until the network request completes or times out (15,000 ms default timeout), followed by the "Try Again" error view.
-   - Eliminating the timer does not truncate or alter network timeouts.
+   - Initiating network calls immediately allows the app to surface content faster under normal conditions. If the network is slow or offline, `SplashScreen` displays its loading indicator ("Initializing secure session...") until the network request completes or times out, followed by the "Try Again" error view.
 2. **Visual Continuity**:
    - Because `SplashScreen` mounts and displays immediately on React Native startup, the user still sees the branded splash screen while the Keystore read and network request take place. There is no white flash, layout glitch, or flicker.
 3. **Rollback Concern**:
-   - Zero rollback concern. The change is isolated to startup scheduling. All authentication logic, Keystore operations, API contracts, error recovery, and navigation targets are preserved 1:1.
+   - Zero rollback concern. The change is isolated to startup scheduling and token identity checking. All authentication logic, Keystore operations, API contracts, error recovery, and navigation targets are preserved 1:1.
 
 ---
 
@@ -291,4 +308,4 @@ Success
 
 **VERDICT: ADOPT**.
 
-The elimination of the artificial 600 ms delay is safe, fully verified on physical Android hardware, backed by 71 passing customer-app unit tests (265 root tests), and successfully accelerates session check initiation and first-content loading by 600 ms without compromising security, authentication, or stability.
+The elimination of the artificial 600 ms delay is safe, source-confirmed, backed by token identity verification on 401 expiration, validated by 78 passing customer-app unit tests (272 root tests), and successfully accelerates session check initiation without compromising security, authentication, or stability.

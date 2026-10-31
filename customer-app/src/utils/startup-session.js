@@ -7,7 +7,8 @@
  * 2. If no credentials exist, transitions immediately to PHONE_AUTH.
  * 3. If credentials exist, validates session with backend (api.getProfile).
  * 4. On valid session, transitions to HOME (if profile complete) or PROFILE_COMPLETION.
- * 5. On HTTP 401 (expired/revoked), clears stale credentials and transitions to PHONE_AUTH.
+ * 5. On HTTP 401 (expired/revoked), clears stale credentials using token identity (clearAuthTokens(stored.token)).
+ *    Only transitions to PHONE_AUTH if the stored token matched and was successfully cleared.
  * 6. On network failure, preserves credentials and surfaces retry state.
  * 7. Enforces concurrency protection (isCheckingRef) and unmount protection (isMountedRef).
  */
@@ -79,17 +80,51 @@ async function orchestrateStartupSession({
       }
 
       if (apiErr?.status === 401) {
-        // Token expired or revoked -> clear stale session and navigate to phone entry
+        // Token expired or revoked -> clear stale session safely verifying token identity
         try {
+          let didClear = false;
           if (typeof clearAuthTokens === 'function') {
-            await clearAuthTokens();
+            didClear = await clearAuthTokens(stored.token);
           }
-        } catch (_) {}
 
-        if (isMountedRef?.current && typeof onNavigate === 'function') {
-          onNavigate('PHONE_AUTH');
+          // Check component mounted state after awaited storage operation
+          if (isMountedRef && !isMountedRef.current) {
+            return null;
+          }
+
+          if (didClear) {
+            // Rejected token was verified and safely cleared -> navigate to phone authentication
+            if (isMountedRef?.current && typeof onNavigate === 'function') {
+              onNavigate('PHONE_AUTH');
+            }
+            return { destination: 'PHONE_AUTH', cleared: true };
+          } else {
+            // Stored token changed or no longer matches -> abort stale clearance, do not navigate to PHONE_AUTH
+            console.warn('[STARTUP SESSION] Aborted 401 session clear: stored token changed');
+            const errorMsg = 'Your session has changed. Please try again.';
+            if (isMountedRef?.current && typeof setError === 'function') {
+              setError(errorMsg);
+            }
+            if (isCheckingRef) {
+              isCheckingRef.current = false;
+            }
+            return { error: errorMsg, cleared: false, aborted: true };
+          }
+        } catch (storageErr) {
+          // Explicitly handle storage clearance exception without silently navigating to PHONE_AUTH
+          console.error('[STARTUP STORAGE ERROR]', storageErr);
+          if (isMountedRef && !isMountedRef.current) {
+            return null;
+          }
+          const errorMsg = 'Unable to reset session. Please try again.';
+          if (isMountedRef?.current && typeof setError === 'function') {
+            setError(errorMsg);
+          }
+          if (isCheckingRef) {
+            isCheckingRef.current = false;
+          }
+          return { error: errorMsg, storageError: storageErr };
         }
-        return { destination: 'PHONE_AUTH', cleared: true };
       } else {
         // Network failure or backend temporarily unreachable -> present retry without clearing credentials
         const errorMsg = 'Unable to connect to PondFish. Please check your connection and try again.';
@@ -118,4 +153,3 @@ async function orchestrateStartupSession({
 module.exports = {
   orchestrateStartupSession,
 };
-
