@@ -1,7 +1,7 @@
 # PONDFISH CUSTOMER MOBILE APPLICATION — PHASE 0
 ## Baseline Establishment & Technical Verification Report
 
-**Document Version:** 1.1.0 (Refined & Evidence-Validated Baseline)  
+**Document Version:** 1.1.1 (Refined Baseline — Calculation & Terminology Correction)  
 **Repository:** `https://github.com/sprojectxx/POND_FISH`  
 **Target Branch:** `main`  
 **Starting Commit SHA:** `dd61fec53fd69018f5a916045dbf34eacd0cb0ad`  
@@ -20,7 +20,7 @@ Following technical review and rigorous empirical validation, this document has 
 ### 0.1 Summary of Corrections
 1. **Image Delivery Analysis Corrected:**
    - **Wire Compression:** PNG assets transmitted over HTTP are **compressed via DEFLATE** at the protocol/file level. They are **not uncompressed bitstreams on the wire**. However, they remain desktop-resolution (1536x1024 px) assets without thumbnail resizing.
-   - **Catalogue Image Volume:** Rather than an estimate of 31.5 MB extrapolated from a single asset, **all 20 unique image URLs** in the 21-item catalogue were individually queried and verified via HTTP `HEAD` requests. The actual measured aggregate transfer size for all 20 unique images is **44,376,391 bytes (42.32 MB)** (min: 1.50 MB, max: 2.71 MB, avg: 2.12 MB).
+   - **Catalogue Image Volume & HTTP HEAD Distinctions:** Rather than an estimate of 31.5 MB extrapolated from a single asset, **all 20 unique image URLs** in the 21-item catalogue were individually queried via HTTP `HEAD` requests. The **aggregate declared image representation size based on HTTP HEAD Content-Length** across all 20 unique images is **44,376,391 bytes (42.32 MB)** (min: 1,570,137 bytes [1.50 MB], max: 2,836,819 bytes [2.71 MB], average: **2,218,819.55 bytes [~2.22 MB]**). Crucially, this metric represents HTTP `Content-Length` metadata returned by HEAD requests, not actual HTTP response-body bytes transferred or verified mobile application download volume. Actual application-level image traffic is governed by client caching (cold-cache vs. warm-cache) and viewport rendering, so 42.32 MB is not proven to be downloaded on every Home-screen mount.
    - **Threading & Decoding:** In React Native Android, remote image fetching, network streaming, and image decoding are handled asynchronously by native background threads (via Fresco and OkHttp), **not on the JavaScript main thread**. The performance impact stems from native memory consumption, decoding overhead, and heap pressure, not direct JS event-loop blocking during downloads.
    - **Optimization Target Clarification:** The reference to "200x200 WebP at 30 KB" is a **hypothetical Phase 1 optimization target**, not an existing verified asset or server capability.
 
@@ -69,7 +69,7 @@ Phase 0 establishes a verifiable, reproducible technical and performance baselin
 6. **Production API Connectivity:**  
    The production API base URL `https://pondfish.in` resolves to Vercel Anycast IP `216.198.79.1`. Unauthenticated read-only endpoints respond successfully: `/api/v1/customer/categories` (200 OK, 933 bytes, 2,390 ms latency, single sample) and `/api/v1/customer/fish` (200 OK, 14,019 bytes, 21 fish records, 1,017 ms latency, single sample). Protected endpoints (`/cart`, `/profile`, `/subscription`, `/gps/live`) correctly reject unauthenticated requests with 401 Unauthorized via middleware; their normal authenticated processing latency is **NOT MEASURED**.
 7. **Image Delivery Bottleneck:**  
-   Product images are hosted on Supabase Storage (`urkxrefqtrwjfttrukhw.supabase.co/storage/v1/object/public/fish-assets/`). All 20 unique images in the catalogue are high-resolution PNG files (average transfer size: **2.12 MB / 2,166,820 bytes**; range: 1.50 MB to 2.71 MB). Downloading the 20 unique catalogue images requires **44,376,391 bytes (42.32 MB)** of network transfer. The files use DEFLATE compression on the wire and are handled by native background threads (Fresco/OkHttp), but high resolution (1536x1024 px) causes substantial native memory footprint and decoding overhead when rendering into 110x110 px thumbnails.
+   Product images are hosted on Supabase Storage (`urkxrefqtrwjfttrukhw.supabase.co/storage/v1/object/public/fish-assets/`). All 20 unique images in the catalogue are high-resolution PNG files with an **aggregate declared image representation size based on HTTP HEAD Content-Length** of **44,376,391 bytes (42.32 MB)** (average declared representation size: **2,218,819.55 bytes [~2.22 MB]**; range: 1,570,137 bytes [1.50 MB] to 2,836,819 bytes [2.71 MB]). This represents declared `Content-Length` metadata from HTTP HEAD queries, not verified application-level response-body bytes transferred (actual network traffic depends on cold-cache vs. warm-cache behavior). The files use DEFLATE compression on the wire and are handled by native background threads (Fresco/OkHttp), but high resolution (1536x1024 px) causes substantial native memory footprint and decoding overhead when rendering into 110x110 px thumbnails.
 8. **Unvirtualized Catalogue Rendering:**  
    `HomeScreen.jsx` renders all catalogue cards, flash sales, and previous purchases using standard vertical and horizontal `ScrollView` with `.map()`. In contrast, `CartScreen.jsx` and `NotificationsScreen.jsx` employ virtualized `FlatList`.
 9. **Architectural & Contract Issues Confirmed:**
@@ -230,13 +230,17 @@ Product images are hosted on Supabase Storage (`urkxrefqtrwjfttrukhw.supabase.co
 #### Empirical Catalogue Image Audit (Measured via HTTP HEAD):
 - **Catalogue Size:** 21 fish items returned in `GET /api/v1/customer/fish`.
 - **Unique Image URLs:** **20 unique image URLs** (one URL is shared between two product variants).
-- **Inspection Coverage:** 20 of 20 unique image URLs measured individually.
-- **Aggregate Transfer Volume (Measured):** **44,376,391 bytes (42.32 MB)** across all 20 unique images.
-- **Minimum Image Size:** **1,570,137 bytes (1.50 MB)** (`apollo-boneless.png`).
-- **Maximum Image Size:** **2,836,819 bytes (2.71 MB)** (`prawns-large.png`).
-- **Average Image Size (Calculated):** **2,166,820 bytes (~2.12 MB)**.
-- **Image Format:** All 20 assets are delivered as PNG (`image/png`).
+- **Inspection Coverage:** 20 of 20 unique image URLs measured individually via HTTP HEAD.
+- **Aggregate Declared Image Representation Size (Based on HTTP HEAD Content-Length):** **44,376,391 bytes (42.32 MB)** across all 20 unique images.
+- **Minimum Declared Image Size:** **1,570,137 bytes (1.50 MB)** (`apollo-boneless.png`).
+- **Maximum Declared Image Size:** **2,836,819 bytes (2.71 MB)** (`prawns-large.png`).
+- **Average Declared Image Size (Calculated):** **2,218,819.55 bytes (~2.22 MB)** (44,376,391 bytes / 20 unique images).
+- **Image Format:** All 20 assets are declared as PNG (`image/png`).
 - **Compression Characterization:** PNG files use DEFLATE compression on the wire. They are **not uncompressed raw bitstreams** during transmission. However, their physical dimensions (1536x1024 px) are designed for desktop displays rather than mobile thumbnails.
+- **Measurement & Network Traffic Distinctions:**
+  - **Content-Length Metadata vs. Transferred Bytes:** The audit inspected HTTP `Content-Length` metadata from HTTP HEAD requests. Unless actual GET response bodies or mobile network traces are captured, this aggregate Content-Length reflects declared asset representation size, **not measured network transfer volume**.
+  - **Application Download Volume:** 42.32 MB is **not proven** to be downloaded during every Home-screen mount. Actual bytes transferred at the mobile application layer depend on viewport visibility, image mounting behavior, and device cache state.
+  - **Cold-Cache vs. Warm-Cache Traffic:** On initial cold launch with empty disk/memory cache, images requested by mounted components initiate network transfers. On subsequent warm navigation, local disk/memory cache (Fresco) or edge caching (`Cache-Control: public, max-age=3600`, `cf-cache-status: HIT`) eliminates repeated full-body network transfers.
 - **Threading Model:** Image downloading, decoding, and caching in React Native Android are executed on native background threads by the Fresco / OkHttp pipeline, **not on the JavaScript main thread**. UI jank occurs due to high native memory consumption and bitmap decompression overhead when mounting dozens of large images into 110x110 px containers simultaneously.
 - **HTTP Cache Headers:** `Cache-Control: public, max-age=3600` (1-hour edge/browser cache), `cf-cache-status: HIT`.
 - **Sample Asset Latency:** Full `GET` download of `apollo-boneless.png` required **2,431 ms** (single sample).
@@ -312,7 +316,7 @@ Every issue from previous technical audits has been audited against code, networ
 | **Duplicate cart retrieval between App shell and Home** | MEDIUM | Confirmed through source inspection | `App.jsx` line 85 invokes `fetchCartSummary()` on navigation to `HOME`. Concurrently, `HomeScreen.jsx` line 70 calls `api.getCart()` inside `loadAllData()`. | **Confirmed through source inspection** | Pass authoritative cart summary from `App.jsx` down to `HomeScreen`; eliminate redundant fetch. |
 | **Home callback identity and unnecessary reload risk** | HIGH | Confirmed through source inspection | In `App.jsx` line 234, `handleCartUpdated` is an unmemoized plain function reference. Passed to `HomeScreen`, it invalidates `loadAllData`'s `useCallback` identity, posing an architectural reload risk. | **Confirmed architectural risk (loop not proven at runtime)** | Wrap `handleCartUpdated` in `useCallback` with stable dependencies in `App.jsx`. |
 | **Home catalogue rendering and list virtualization** | HIGH | Confirmed through source inspection & runtime | `HomeScreen.jsx` lines 833–936 renders all items via `filteredFishes.map(...)` inside vertical `ScrollView`. Compare to `CartScreen.jsx` line 420 which properly uses `FlatList`. | **Confirmed through source inspection** | Refactor `HomeScreen` catalogue grid to virtualized `FlatList` or `FlashList` with memoized item components. |
-| **Image caching and image variant availability** | HIGH | Confirmed through runtime testing | 20 unique PNG images total 42.32 MB (avg 2.12 MB each) at 1536x1024 px. React Native `<Image>` has no disk caching or automatic downsampling. Handled on native background threads. | **Confirmed through runtime testing** | Integrate image caching (`react-native-fast-image` or custom disk cache) and request resized WebP variants from CDN. |
+| **Image caching and image variant availability** | HIGH | Confirmed through runtime testing | 20 unique PNG images have an aggregate declared representation size of 44,376,391 bytes (42.32 MB, average 2,218,819.55 bytes each based on HTTP HEAD Content-Length) at 1536x1024 px. React Native `<Image>` has no disk caching or automatic downsampling. Handled on native background threads. | **Confirmed through runtime testing** | Integrate image caching (`react-native-fast-image` or custom disk cache) and request resized WebP variants from CDN. |
 | **Shared API request timeout absence** | HIGH | Confirmed through source inspection | `src/services/api.js` line 51 calls native `fetch(url, options)` without `AbortController`, signal, or timeout. Slow requests hang indefinitely. | **Confirmed through source inspection** | Implement `AbortController`-based 15-second timeout and retry wrapper in `api.js`. |
 | **Request cancellation and stale response handling** | MEDIUM | Confirmed through source inspection | Neither `HomeScreen` nor `CartScreen` cancels in-flight fetches on unmount. Unhandled async resolutions can trigger state updates on unmounted components. | **Confirmed through source inspection** | Add cancellation signals / cleanup refs to screen-level data-fetching hooks. |
 | **Base64 bill-image upload** | HIGH | Confirmed through source inspection | `ScanBillScreen.jsx` lines 79, 117 pass `includeBase64: true` to image picker. Line 158 builds data URI and sends `image_base64: base64Data` in JSON body instead of streaming multipart form data. | **Confirmed through source inspection** | Default to multipart `FormData` upload with direct file URI streaming, eliminating large base64 allocations in JS memory. |
@@ -374,8 +378,8 @@ Every issue from previous technical audits has been audited against code, networ
 | Single fish image transfer size (`apollo-boneless.png`) | **1,570,137 B (1.50 MB)** | Measured | Live Supabase CDN | HTTP HEAD to `urkxrefqtrwjfttrukhw.supabase.co` | High (Empirical) |
 | Single fish image transfer latency (`apollo-boneless.png`) | **2,431 ms** | Measured (Single sample) | Live Supabase CDN | HTTP GET to `urkxrefqtrwjfttrukhw.supabase.co` | High (Empirical) |
 | Unique catalogue image count | **20 unique images** | Measured | 21 fish items in catalogue | Unique URLs from `GET /api/v1/customer/fish` | High (Empirical) |
-| Total measured catalogue image volume (20 unique images) | **44,376,391 B (42.32 MB)** | Measured (Aggregate) | Live Supabase CDN | Sum of all 20 HTTP HEAD `Content-Length` | High (Empirical) |
-| Average catalogue image size | **2,166,820 B (~2.12 MB)** | Calculated | Live Supabase CDN | 44,376,391 B / 20 unique images | High (Calculated) |
+| Aggregate declared image representation size (20 unique images) | **44,376,391 B (42.32 MB)** | Declared Metadata (HEAD) | Live Supabase CDN | Sum of all 20 HTTP HEAD `Content-Length` headers | High (Empirical Metadata) |
+| Average declared catalogue image size | **2,218,819.55 B (~2.22 MB)** | Calculated | Live Supabase CDN | 44,376,391 B / 20 unique images | High (Calculated) |
 | Maximum catalogue image size (`prawns-large.png`) | **2,836,819 B (2.71 MB)** | Measured | Live Supabase CDN | HTTP HEAD to `urkxrefqtrwjfttrukhw.supabase.co` | High (Empirical) |
 | Scrolling FPS / frame drops on physical device | **NOT MEASURED** | Unavailable | Real physical hardware | Requires physical device USB frame profiling | Blocked (No physical device) |
 
@@ -390,7 +394,7 @@ Ranked by user impact, technical risk, and architectural dependency:
    - *Action:* Extend `POST /api/v1/customer/bookings` backend schema and booking engine to support add-ons and instructions; update mobile API call in `CheckoutScreen.jsx` to transmit them.
 
 2. **Priority 2 (Performance): Image Optimization & CDN Variant Resizing**
-   - *Impact:* Massive (eliminates 42.32 MB of image transfer per cold catalogue mount and reduces native memory pressure).
+   - *Impact:* High. Image optimization is expected to substantially reduce image delivery and decoding costs. Actual savings must be measured through GET response bodies and application-level network profiling.
    - *Action:* Integrate client image caching (`react-native-fast-image` or custom disk cache) and configure CDN thumbnail transforms (e.g., requesting auto-resized 200x200 px WebP variants for 110x110 px thumbnails).
 
 3. **Priority 3 (Performance): Virtualize Home Catalogue Grid**
@@ -440,7 +444,7 @@ Ranked by user impact, technical risk, and architectural dependency:
 | `Resolve-DnsName pondfish.in` | Repo root | 0 | Resolved to `216.198.79.1` |
 | `Invoke-WebRequest https://pondfish.in/api/v1/customer/categories` | Repo root | 0 | HTTP 200 OK, 933 bytes, 2,390 ms |
 | `Invoke-WebRequest https://pondfish.in/api/v1/customer/fish` | Repo root | 0 | HTTP 200 OK, 14,019 bytes, 21 fish records, 1,017 ms |
-| Image HEAD audit (PowerShell script against all 20 unique URLs) | Repo root | 0 | 20 unique images measured; Total: 44,376,391 bytes (42.32 MB), Avg: 2,166,820 bytes (~2.12 MB) |
+| Image HEAD audit (PowerShell script against all 20 unique URLs) | Repo root | 0 | 20 unique images measured via HTTP HEAD; Total declared Content-Length: 44,376,391 bytes (42.32 MB), Avg: 2,218,819.55 bytes (~2.22 MB) |
 | `Invoke-WebRequest https://urkxrefqtrwjfttrukhw.supabase.co/.../apollo-boneless.png` | Repo root | 0 | HTTP 200 OK, 1,570,137 bytes, 1536x1024 px, 2,431 ms |
 | `.\gradlew.bat --version` | `customer-app/android` | 0 | Gradle 8.9, Kotlin 1.9.23, JVM 17.0.10 |
 | `.\gradlew.bat assembleRelease` | `customer-app/android` | 0 | Build successful in 1m 41s (101,432 ms) |
