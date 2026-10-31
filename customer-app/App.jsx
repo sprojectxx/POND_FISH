@@ -71,8 +71,14 @@ export default function App() {
   }, []);
 
   // Update cart count and summary when entering authenticated flow
+  // CartScreen manages its own authoritative cart fetching; exclude CART to prevent duplicate simultaneous requests.
   useEffect(() => {
-    if (AUTHENTICATED_SCREENS.includes(currentScreen) && isProfileComplete && currentScreen !== 'PROFILE_COMPLETION') {
+    if (
+      AUTHENTICATED_SCREENS.includes(currentScreen) &&
+      isProfileComplete &&
+      currentScreen !== 'PROFILE_COMPLETION' &&
+      currentScreen !== 'CART'
+    ) {
       fetchCartSummary();
     }
   }, [currentScreen, isProfileComplete, fetchCartSummary]);
@@ -88,6 +94,7 @@ export default function App() {
         console.warn('[LOGOUT] Session token changed before clearing; aborting obsolete logout');
         return;
       }
+      api.clearInFlightRequests();
     } catch (e) {
       console.warn('[LOGOUT] Error clearing tokens', e);
     } finally {

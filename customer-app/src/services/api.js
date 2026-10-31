@@ -23,119 +23,99 @@ export function setUnauthorizedHandler(callback) {
   onUnauthorizedCallback = callback;
 }
 
-/**
- * Standard API request wrapper with bearer token attachment,
- * centralized AbortController timeout, and caller cancellation support.
- */
-async function request(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
-  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
-  const headers = {
-    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-    ...(options.headers || {}),
-  };
+// Registry of active in-flight GET requests for safe request deduplication
+// Key: "GET:<url>:<token|ANON>"
+// Value: {
+//   key: string,
+//   subscribers: Set<{ resolve, reject, signal, cleanup }>,
+//   controller: AbortController | null,
+//   isSettled: boolean,
+// }
+const inFlightGetRequests = new Map();
 
-  // Resolve effective request timeout in milliseconds
-  let effectiveTimeoutMs = DEFAULT_TIMEOUT_MS;
-  if (options.timeoutMs === 0 || options.timeout === 0 || options.timeoutMs === null || options.timeout === null || options.timeoutMs === false) {
-    effectiveTimeoutMs = 0;
-  } else if (typeof options.timeoutMs === 'number' && options.timeoutMs > 0) {
-    effectiveTimeoutMs = options.timeoutMs;
-  } else if (typeof options.timeout === 'number' && options.timeout > 0) {
-    effectiveTimeoutMs = options.timeout;
-  }
-
-  // Pre-flight check: if caller provided an already aborted signal, abort immediately
-  if (options.signal?.aborted) {
-    const abortErr = new Error(`Request to ${endpoint} was aborted`);
-    abortErr.code = 'API_ABORTED';
-    abortErr.isAborted = true;
-    abortErr.reason = options.signal.reason || 'Operation aborted by caller';
-    throw abortErr;
-  }
-
-  // Attach secure Android Keystore token if not already provided
-  let requestToken = null;
-  if (!headers.Authorization) {
+function clearInFlightRequests() {
+  for (const [key, entry] of inFlightGetRequests.entries()) {
     try {
-      const tokens = await getAuthTokens();
-      if (tokens && tokens.token) {
-        requestToken = tokens.token;
-        headers.Authorization = `Bearer ${tokens.token}`;
+      if (entry.controller) {
+        entry.controller.abort('In-flight requests cleared');
       }
-    } catch (e) {
-      console.warn('[API CLIENT] Could not read keystore credentials', e);
+    } catch (_) {}
+    for (const sub of Array.from(entry.subscribers)) {
+      try {
+        if (sub.cleanup) sub.cleanup();
+        const err = new Error('In-flight request cancelled due to session reset');
+        err.code = 'API_SESSION_RESET';
+        err.isSessionReset = true;
+        sub.reject(err);
+      } catch (_) {}
     }
-  } else if (typeof headers.Authorization === 'string') {
-    const match = headers.Authorization.match(/^Bearer\s+(.*)$/i);
-    requestToken = match ? match[1] : headers.Authorization;
   }
+  inFlightGetRequests.clear();
+}
 
-  // Post-auth check: if caller signal was aborted while awaiting keystore credentials
-  if (options.signal?.aborted) {
-    const abortErr = new Error(`Request to ${endpoint} was aborted`);
-    abortErr.code = 'API_ABORTED';
-    abortErr.isAborted = true;
-    abortErr.reason = options.signal.reason || 'Operation aborted by caller';
-    throw abortErr;
+function getInFlightRequestCount() {
+  return inFlightGetRequests.size;
+}
+
+function cloneResponse(val) {
+  if (val === null || typeof val !== 'object') {
+    return val;
   }
-
-  // Setup AbortController combining internal timeout with caller signal
-  const hasAbortController = typeof AbortController !== 'undefined';
-  const controller = hasAbortController ? new AbortController() : null;
-  let timeoutId = null;
-  let didTimeout = false;
-  let callerAbortListener = null;
-
-  if (controller) {
-    if (options.signal) {
-      callerAbortListener = () => {
-        try {
-          controller.abort(options.signal.reason);
-        } catch (_) {}
-      };
-      if (typeof options.signal.addEventListener === 'function') {
-        options.signal.addEventListener('abort', callerAbortListener);
-      }
-    }
-
-    if (effectiveTimeoutMs > 0) {
-      timeoutId = setTimeout(() => {
-        didTimeout = true;
-        try {
-          controller.abort();
-        } catch (_) {}
-      }, effectiveTimeoutMs);
-    }
-  } else if (effectiveTimeoutMs > 0 || options.signal) {
-    console.warn(
-      '[API CLIENT] AbortController is unavailable in current runtime. ' +
-      'Network socket cancellation is not supported; timeouts and caller cancellations ' +
-      'will reject client-side promises but in-flight HTTP requests cannot be cancelled on the wire.'
-    );
+  try {
+    return JSON.parse(JSON.stringify(val));
+  } catch (_) {
+    return val;
   }
+}
 
-  // Strip internal timeout/signal options before dispatching to native fetch
+/**
+ * Executes a single low-level HTTP network request with timeout, 
+ * response stream parsing, and centralized HTTP 401 handling.
+ */
+async function executeNetworkRequest({
+  url,
+  endpoint,
+  method,
+  headers,
+  requestToken,
+  effectiveTimeoutMs,
+  options,
+  controller,
+}) {
   const {
     timeoutMs: _unusedTimeoutMs,
     timeout: _unusedTimeout,
     signal: _unusedCallerSignal,
     headers: _unusedCustomHeaders,
+    bypassDedup: _unusedBypassDedup,
+    skipUnauthorizedHandler: _unusedSkipUnauthorizedHandler,
     ...restFetchOptions
   } = options;
 
   const fetchOptions = {
     ...restFetchOptions,
+    method,
     headers,
     ...(controller ? { signal: controller.signal } : {}),
   };
+
+  let timeoutId = null;
+  let didTimeout = false;
+
+  if (controller && effectiveTimeoutMs > 0) {
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      try {
+        controller.abort();
+      } catch (_) {}
+    }, effectiveTimeoutMs);
+  }
 
   let response;
   let json;
 
   try {
     if (!controller) {
-      // Safe fallback for runtimes without AbortController
       let fallbackTimer = null;
       let fallbackAbortListener = null;
 
@@ -188,12 +168,10 @@ async function request(endpoint, options = {}) {
       }
     } else {
       response = await fetch(url, fetchOptions);
-
-      // Keep timeout and caller abort active while reading response body stream!
       try {
         json = await response.json();
       } catch (parseErr) {
-        if (didTimeout || options.signal?.aborted || parseErr.name === 'AbortError') {
+        if (didTimeout || (options.signal?.aborted && !controller) || parseErr.name === 'AbortError') {
           throw parseErr;
         }
         json = {};
@@ -212,7 +190,7 @@ async function request(endpoint, options = {}) {
       throw timeoutErr;
     }
 
-    if (options.signal?.aborted || err.name === 'AbortError' || err.code === 'API_ABORTED') {
+    if (err.name === 'AbortError' || err.code === 'API_ABORTED') {
       const abortErr = new Error(`Request to ${endpoint} was aborted`);
       abortErr.code = 'API_ABORTED';
       abortErr.isAborted = true;
@@ -221,20 +199,19 @@ async function request(endpoint, options = {}) {
       throw abortErr;
     }
 
+    if (err.isNetwork || err.code === 'API_NETWORK_ERROR') {
+      throw err;
+    }
+
     const netErr = new Error(err.message || 'Network request failed');
     netErr.code = 'API_NETWORK_ERROR';
     netErr.isNetwork = true;
     netErr.cause = err;
     throw netErr;
   } finally {
-    // Both timers and abort listeners are cleaned up only AFTER body parsing completes or fails
     if (timeoutId) {
       clearTimeout(timeoutId);
       timeoutId = null;
-    }
-    if (callerAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
-      options.signal.removeEventListener('abort', callerAbortListener);
-      callerAbortListener = null;
     }
   }
 
@@ -245,9 +222,6 @@ async function request(endpoint, options = {}) {
     err.status = response.status;
     err.details = json?.error?.details || [];
 
-    // Trigger unauthorized session expiration only for authenticated requests that return HTTP 401
-    // Explicitly exclude initial unauthenticated auth routes (send-otp and verify-otp),
-    // and requests explicitly configured to handle 401 directly (e.g. startup session probe)
     const isAuthEndpoint = !endpoint.includes('/auth/send-otp') && !endpoint.includes('/auth/verify-otp');
     const shouldNotifyUnauthorized = isAuthEndpoint && !options.skipUnauthorizedHandler;
     if (response.status === 401 && shouldNotifyUnauthorized) {
@@ -276,7 +250,219 @@ async function request(endpoint, options = {}) {
   return json;
 }
 
+/**
+ * Standard API request wrapper with bearer token attachment,
+ * centralized AbortController timeout, caller cancellation support,
+ * and safe in-flight GET request deduplication.
+ */
+function request(endpoint, options = {}) {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const method = (options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const headers = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(options.headers || {}),
+  };
+
+  // Pre-flight check: if caller provided an already aborted signal, abort immediately
+  if (options.signal?.aborted) {
+    const abortErr = new Error(`Request to ${endpoint} was aborted`);
+    abortErr.code = 'API_ABORTED';
+    abortErr.isAborted = true;
+    abortErr.reason = options.signal.reason || 'Operation aborted by caller';
+    return Promise.reject(abortErr);
+  }
+
+  // Resolve effective request timeout in milliseconds
+  let effectiveTimeoutMs = DEFAULT_TIMEOUT_MS;
+  if (options.timeoutMs === 0 || options.timeout === 0 || options.timeoutMs === null || options.timeout === null || options.timeoutMs === false) {
+    effectiveTimeoutMs = 0;
+  } else if (typeof options.timeoutMs === 'number' && options.timeoutMs > 0) {
+    effectiveTimeoutMs = options.timeoutMs;
+  } else if (typeof options.timeout === 'number' && options.timeout > 0) {
+    effectiveTimeoutMs = options.timeout;
+  }
+
+  const runWithAuth = async () => {
+    // Attach secure Android Keystore token if not already provided
+    let requestToken = null;
+    if (!headers.Authorization) {
+      try {
+        const tokens = await getAuthTokens();
+        if (tokens && tokens.token) {
+          requestToken = tokens.token;
+          headers.Authorization = `Bearer ${tokens.token}`;
+        }
+      } catch (e) {
+        console.warn('[API CLIENT] Could not read keystore credentials', e);
+      }
+    } else if (typeof headers.Authorization === 'string') {
+      const match = headers.Authorization.match(/^Bearer\s+(.*)$/i);
+      requestToken = match ? match[1] : headers.Authorization;
+    }
+
+    // Post-auth check: if caller signal was aborted while awaiting keystore credentials
+    if (options.signal?.aborted) {
+      const abortErr = new Error(`Request to ${endpoint} was aborted`);
+      abortErr.code = 'API_ABORTED';
+      abortErr.isAborted = true;
+      abortErr.reason = options.signal.reason || 'Operation aborted by caller';
+      throw abortErr;
+    }
+
+    // In-flight GET deduplication evaluation
+    // Deduplicate strictly for GET requests when bypassDedup is not requested
+    const isDeduplicatable = isGet && !options.bypassDedup;
+    const dedupKey = isDeduplicatable ? `GET:${url}:${requestToken || 'ANON'}` : null;
+
+    if (!dedupKey) {
+      // Non-GET mutation or bypassDedup: direct execution with its own controller
+      const hasAbortController = typeof AbortController !== 'undefined';
+      const controller = hasAbortController ? new AbortController() : null;
+      let callerAbortListener = null;
+
+      if (controller && options.signal) {
+        callerAbortListener = () => {
+          try {
+            controller.abort(options.signal.reason);
+          } catch (_) {}
+        };
+        if (typeof options.signal.addEventListener === 'function') {
+          options.signal.addEventListener('abort', callerAbortListener);
+        }
+      }
+
+      try {
+        return await executeNetworkRequest({
+          url,
+          endpoint,
+          method,
+          headers,
+          requestToken,
+          effectiveTimeoutMs,
+          options,
+          controller,
+        });
+      } finally {
+        if (callerAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
+          options.signal.removeEventListener('abort', callerAbortListener);
+        }
+      }
+    }
+
+    // In-flight GET deduplication: either join existing entry or create new initiator entry
+    let entry = inFlightGetRequests.get(dedupKey);
+    const isInitiator = !entry;
+
+    if (isInitiator) {
+      const hasAbortController = typeof AbortController !== 'undefined';
+      const controller = hasAbortController ? new AbortController() : null;
+
+      entry = {
+        key: dedupKey,
+        subscribers: new Set(),
+        controller,
+        isSettled: false,
+      };
+      inFlightGetRequests.set(dedupKey, entry);
+
+      // Launch underlying network fetch in background to serve all subscribers
+      (async () => {
+        try {
+          const json = await executeNetworkRequest({
+            url,
+            endpoint,
+            method,
+            headers,
+            requestToken,
+            effectiveTimeoutMs,
+            options,
+            controller,
+          });
+
+          entry.isSettled = true;
+          for (const sub of Array.from(entry.subscribers)) {
+            entry.subscribers.delete(sub);
+            if (sub.cleanup) sub.cleanup();
+            sub.resolve(cloneResponse(json));
+          }
+        } catch (err) {
+          entry.isSettled = true;
+          for (const sub of Array.from(entry.subscribers)) {
+            entry.subscribers.delete(sub);
+            if (sub.cleanup) sub.cleanup();
+            sub.reject(err);
+          }
+        } finally {
+          entry.isSettled = true;
+          inFlightGetRequests.delete(dedupKey);
+        }
+      })();
+    }
+
+    // Every caller (initiator or subscriber) subscribes to entry
+    return new Promise((resolve, reject) => {
+      const sub = {
+        resolve,
+        reject,
+        signal: options.signal,
+        cleanup: null,
+      };
+
+      if (options.signal) {
+        if (options.signal.aborted) {
+          const abortErr = new Error(`Request to ${endpoint} was aborted`);
+          abortErr.code = 'API_ABORTED';
+          abortErr.isAborted = true;
+          abortErr.networkCancelled = Boolean(entry.controller);
+          abortErr.reason = options.signal.reason || 'Operation aborted by caller';
+          return reject(abortErr);
+        }
+
+        const onCallerAbort = () => {
+          entry.subscribers.delete(sub);
+          if (sub.cleanup) sub.cleanup();
+          const abortErr = new Error(`Request to ${endpoint} was aborted`);
+          abortErr.code = 'API_ABORTED';
+          abortErr.isAborted = true;
+          abortErr.networkCancelled = Boolean(entry.controller);
+          abortErr.reason = options.signal.reason || 'Operation aborted by caller';
+          reject(abortErr);
+
+          // If no subscribers remain listening, abort the underlying fetch
+          if (entry.subscribers.size === 0 && !entry.isSettled) {
+            if (entry.controller) {
+              try {
+                entry.controller.abort(options.signal.reason);
+              } catch (_) {}
+            }
+          }
+        };
+
+        if (typeof options.signal.addEventListener === 'function') {
+          options.signal.addEventListener('abort', onCallerAbort);
+          sub.cleanup = () => {
+            options.signal.removeEventListener('abort', onCallerAbort);
+          };
+        }
+      }
+
+      entry.subscribers.add(sub);
+    });
+  };
+
+  return runWithAuth();
+}
+
 export const api = {
+  /**
+   * Safe request deduplication management
+   */
+  clearInFlightRequests,
+  getInFlightRequestCount,
+  setUnauthorizedHandler: (cb) => setUnauthorizedHandler(cb),
+
   /**
    * Request OTP dispatch to mobile number
    * POST /api/v1/customer/auth/send-otp

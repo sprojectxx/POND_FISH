@@ -53,6 +53,7 @@ export async function fetchHomeDataOrchestrated({
   isMountedRef,
   requestSeqRef,
   isRefresh = false,
+  existingCategories = null,
 }) {
   // Cancel any previous in-flight requests
   if (abortControllerRef.current) {
@@ -95,16 +96,23 @@ export async function fetchHomeDataOrchestrated({
     });
 
   // Secondary Content (Executes concurrently in background without blocking fish catalogue)
-  const catsPromise = apiClient.getCategories({ signal })
-    .then((res) => {
-      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-      setCategories(res.data || []);
-    })
-    .catch((err) => {
-      if (err.code !== 'API_ABORTED') {
-        console.warn('[HOME CATEGORIES NON-FATAL]', err.message);
-      }
-    });
+  // Re-use already loaded categories unless explicitly refreshing
+  const hasCategories = !isRefresh && Array.isArray(existingCategories) && existingCategories.length > 0;
+  const catsPromise = hasCategories
+    ? Promise.resolve().then(() => {
+        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+        setCategories(existingCategories);
+      })
+    : apiClient.getCategories({ signal })
+        .then((res) => {
+          if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
+          setCategories(res.data || []);
+        })
+        .catch((err) => {
+          if (err.code !== 'API_ABORTED') {
+            console.warn('[HOME CATEGORIES NON-FATAL]', err.message);
+          }
+        });
 
   const subPromise = apiClient.getSubscription({ signal })
     .then((res) => {
@@ -163,6 +171,8 @@ export default function HomeScreen({
   const [customer, setCustomer] = useState(initialCustomer);
   const [fishList, setFishList] = useState([]);
   const [categories, setCategories] = useState([]);
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
   const [subData, setSubData] = useState(null);
   const [trackingData, setTrackingData] = useState(null);
   const [cartSummary, setCartSummary] = useState(passedCartSummary);
@@ -215,6 +225,7 @@ export default function HomeScreen({
       isMountedRef,
       requestSeqRef,
       isRefresh,
+      existingCategories: categoriesRef.current,
     });
   }, []);
 
