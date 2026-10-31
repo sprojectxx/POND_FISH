@@ -7,7 +7,7 @@
   "scripts": {
     "start": "react-native start",
     "android": "react-native run-android",
-    "test": "node --test ../tests/unit/customer-app-phase1-responsiveness.test.js ../tests/unit/customer-app-phase2-virtualization.test.js"
+    "test": "node --test ../tests/unit/customer-app-phase1-responsiveness.test.js ../tests/unit/customer-app-phase2-virtualization.test.js ../tests/unit/customer-app-phase3-startup.test.js"
   },
   "dependencies": {
     "@react-native-firebase/app": "^21.14.0",

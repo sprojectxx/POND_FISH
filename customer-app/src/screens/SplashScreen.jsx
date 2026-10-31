@@ -2,6 +2,7 @@
  * Screen: CP-01A — Splash Screen
  * Traceability: PondFish Customer Mobile App UI Specification (Section 8)
  * Checks secure Android Keystore session and determines initial route.
+ * Phase 3B.2: Removed artificial 600ms delay to enable immediate startup session validation.
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -16,79 +17,30 @@ import {
 import { colors } from '../theme/colors';
 import { getAuthTokens, clearAuthTokens } from '../services/auth-storage';
 import { api } from '../services/api';
+import { orchestrateStartupSession } from '../utils/startup-session';
 
 export default function SplashScreen({ onNavigate }) {
   const [error, setError] = useState(null);
   const isCheckingRef = useRef(false);
   const isMountedRef = useRef(true);
 
-  async function checkSession() {
-    if (isCheckingRef.current) return;
-    isCheckingRef.current = true;
-    if (isMountedRef.current) {
-      setError(null);
-    }
-
-    try {
-      // 1. Read hardware-backed Android Keystore
-      const stored = await getAuthTokens();
-
-      if (!stored || !stored.token) {
-        // No existing session -> go to phone authentication
-        if (isMountedRef.current) {
-          onNavigate('PHONE_AUTH');
-        }
-        return;
-      }
-
-      // 2. Validate session with PondFish backend
-      try {
-        const response = await api.getProfile(stored.token);
-        const customer = response?.data;
-
-        if (customer && customer.isProfileComplete) {
-          if (isMountedRef.current) {
-            onNavigate('HOME', { customer, token: stored.token });
-          }
-        } else {
-          if (isMountedRef.current) {
-            onNavigate('PROFILE_COMPLETION', { customer, token: stored.token });
-          }
-        }
-      } catch (apiErr) {
-        if (apiErr.status === 401) {
-          // Token expired or revoked -> clear stale session and navigate to phone entry
-          try {
-            await clearAuthTokens();
-          } catch (_) {}
-          if (isMountedRef.current) {
-            onNavigate('PHONE_AUTH');
-          }
-        } else {
-          // Network failure or backend temporarily unreachable -> present retry without clearing credentials
-          if (isMountedRef.current) {
-            setError('Unable to connect to PondFish. Please check your connection and try again.');
-            isCheckingRef.current = false;
-          }
-        }
-      }
-    } catch (e) {
-      console.error('[SPLASH ERROR]', e);
-      if (isMountedRef.current) {
-        setError('We couldn’t start PondFish.');
-        isCheckingRef.current = false;
-      }
-    }
-  }
+  const checkSession = () => {
+    return orchestrateStartupSession({
+      getAuthTokens,
+      clearAuthTokens,
+      apiClient: api,
+      onNavigate,
+      setError,
+      isCheckingRef,
+      isMountedRef,
+    });
+  };
 
   useEffect(() => {
     isMountedRef.current = true;
-    const timer = setTimeout(() => {
-      checkSession();
-    }, 600);
+    checkSession();
     return () => {
       isMountedRef.current = false;
-      clearTimeout(timer);
     };
   }, []);
 
