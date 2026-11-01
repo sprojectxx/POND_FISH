@@ -578,7 +578,7 @@ npm test --prefix customer-app
    - `5.43`: Production request scheme isolation: `Bearer foo` versus raw `foo` versus `Basic foo` dispatch independent fetches and verify wire headers.
    - `5.44`: Production request scheme coalescing: identical schemes coalesce; case and whitespace variations normalize to canonical wire header.
    - `5.45`: Production request Keystore vs explicit Authorization: wire values compare accurately without cross-scheme coalescing.
-   - `5.46`: Production request 401 token lifecycle: extracted token (not scheme prefix) passed to unauthorized handler and clearAuthTokens; startup probe isolation verified.
+   - `5.46`: Production request 401 token lifecycle: verifies that when a 401 response is received, `api.js` passes the **extracted token** (e.g. `explicit-bearer-token-val` or `mock-session-secret`) — not the full Authorization header value (e.g. `Bearer explicit-bearer-token-val`) — to the registered unauthorized callback. The callback in this test is a **mock handler** registered via `setUnauthorizedHandler`; it invokes a **mock `clearAuthTokens`** (not the real `auth-storage.js` implementation) to record which token was passed. The test does **not** exercise the real `App.jsx` unauthorized handler or the real `auth-storage.js` integration. Part 2 additionally verifies that requests with `skipUnauthorizedHandler: true` (startup probe pattern) do not invoke the handler at all, and no tokens are cleared. Real `App.jsx` and `auth-storage.js` 401 coordination is covered by tests 2.1–2.8 in the Phase 3B.2 suite.
 5. **Phase 3B.3 Cart & Home Data Ownership Suite (Suite 6):** 13/13 passed
    - `6.1`: Navigating to `CART` does not trigger `fetchCartSummary` from App shell.
    - `6.2`: App shell `handleCartUpdated` updates `cartSummary` and item count from mutations.
@@ -595,23 +595,41 @@ npm test --prefix customer-app
    - `6.13`: Static check: `api.js` preserves authorization scheme in request deduplication identity.
 
 ### 7.2 Root Ecosystem Test Suite (`npm test` & Concurrency 1)
-Execution commands:
+
+| Execution mode | Command | Passed | Failed | Skipped | Exit code |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| Customer app suite | `npm test --prefix customer-app` | 141 | 0 | 0 | **0** |
+| Root parallel run | `npm test` | 335 | 0 | 0 | **0** |
+| Root sequential run | `node --test --test-concurrency=1 "tests/**/*.test.js"` | 335 | 0 | 0 | **0** |
+
+#### Standard Ecosystem Run (`npm test`) — PASSED
 ```bash
 npm test
+```
+- **Total Tests:** 335
+- **Total Suites:** 14
+- **Pass:** 335 / **Fail:** 0
+- **Duration:** 16.1s
+- **Exit code:** `0`
+- **Outcome:** All unit, integration, and security suites pass in parallel.
+
+#### Sequential Run (`node --test --test-concurrency=1`) — PASSED
+```bash
 node --test --test-concurrency=1 "tests/**/*.test.js"
 ```
-**Results:**
-- **Standard Ecosystem Run (`npm test`):**
-  - **Total Tests:** 335
-  - **Total Suites:** 14
-  - **Pass:** 335
-  - **Fail:** 0
-  - **Pass Rate:** **100.0%** (30.6s)
-  - **Outcome:** Clean 100% pass across all unit, integration, and security suites in the repository.
-- **Sequential Run (`node --test --test-concurrency=1`):**
-  - **Total Tests:** 335
-  - **Total Suites:** 14
-  - **Environmental Note:** All customer-app suites (141/141) and root unit/synthetic suites pass 100%. Two integration tests connecting to the live remote PostgreSQL database on Supabase (`tests/integration/postgres-bill-concurrency-and-scoping.test.js` and `tests/integration/postgres-subscription-lifecycle.test.js`) occasionally encounter connection checkout latency exceeding the 5000ms driver timeout (`Connection terminated due to connection timeout` / `timeout exceeded when trying to connect` in `lib/db/pool.js:127`) during prolonged sequential runs (>160s), which fails closed cleanly as designed.
+- **Total Tests:** 335
+- **Total Suites:** 14
+- **Pass:** 335 / **Fail:** 0
+- **Duration:** 42.5s
+- **Exit code:** `0`
+- **Outcome:** All suites pass sequentially when the remote Supabase PostgreSQL database is reachable and the connection pool has sufficient capacity within the 5000ms checkout timeout (`lib/db/pool.js:127`).
+
+#### Known Infrastructure Sensitivity
+The two PostgreSQL integration test files (`tests/integration/postgres-bill-concurrency-and-scoping.test.js` and `tests/integration/postgres-subscription-lifecycle.test.js`) depend on live remote Supabase connectivity. Under sustained sequential load (>160s runs) or when the remote Supabase instance is under high latency, the connection pool checkout timeout (5000ms) can be exceeded, producing:
+- `Connection terminated due to connection timeout`
+- `timeout exceeded when trying to connect`
+
+When this infrastructure condition occurs, affected integration tests fail closed (as designed), resulting in exit code 1 and up to 6 failures cascading from the initial connection failure. This is a **remote database availability constraint**, not an application code defect. All application source files are identical; the same tests pass when the DB is reachable within the pool timeout.
 
 ### 7.3 Metro Production Bundle Verification
 Execution command:
@@ -664,5 +682,5 @@ All Phase 3B.3 objectives and corrections have been successfully achieved:
 10. Delimiter-collision-free keys guarantee unique identities across arbitrary headers and semantic fetch options (`cache`, `credentials`, etc.), with safe direct bypass for unsupported options.
 11. Category re-fetching on non-refresh transitions eliminated while keeping pull-to-refresh and priority 1 catalogue paint intact.
 12. Account lifecycle and token boundaries safely protected.
-13. 141/141 customer-app tests passing; 335 root tests verified; production Metro bundle and Android release build verified.
+13. 141/141 customer-app tests passing; 335/335 root tests pass on `npm test` (parallel, exit code 0) and `node --test --test-concurrency=1` (sequential, exit code 0 when Supabase is reachable; exit code 1 with up to 6 integration test failures under remote DB connection timeout). Production Metro bundle and Android release build verified.
 
