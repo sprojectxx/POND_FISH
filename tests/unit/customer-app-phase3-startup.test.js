@@ -2880,15 +2880,15 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       );
     });
 
-    test('7.5: Different endpoint identities: categories and subscription plans store distinct non-colliding cache entries', async () => {
+    test('7.5: Different endpoint identities: categories and profile store distinct non-colliding cache entries', async () => {
       let fetchCount = 0;
       const mockFetch = async (url) => {
         fetchCount++;
         if (url.includes('/categories')) {
           return { ok: true, status: 200, json: async () => ({ success: true, data: [{ id: 'cat' }] }) };
         }
-        if (url.includes('/plans')) {
-          return { ok: true, status: 200, json: async () => ({ success: true, data: [{ id: 'plan' }] }) };
+        if (url.includes('/profile')) {
+          return { ok: true, status: 200, json: async () => ({ success: true, data: { id: 'prof' } }) };
         }
         return { ok: false, status: 404 };
       };
@@ -2898,22 +2898,22 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
         mockFetch
       );
 
-      const [cats, plans] = await Promise.all([
+      const [cats, prof] = await Promise.all([
         productionApi.getCategories(),
-        productionApi.getSubscriptionPlans(),
+        productionApi.getProfile(),
       ]);
       assert.equal(fetchCount, 2);
       assert.deepEqual(cats.data, [{ id: 'cat' }]);
-      assert.deepEqual(plans.data, [{ id: 'plan' }]);
+      assert.deepEqual(prof.data, { id: 'prof' });
 
       // Sequential re-reads must both hit their respective cache entries
-      const [cats2, plans2] = await Promise.all([
+      const [cats2, prof2] = await Promise.all([
         productionApi.getCategories(),
-        productionApi.getSubscriptionPlans(),
+        productionApi.getProfile(),
       ]);
       assert.equal(fetchCount, 2, 'Both distinct endpoints must hit their respective cache entries');
       assert.deepEqual(cats2.data, [{ id: 'cat' }]);
-      assert.deepEqual(plans2.data, [{ id: 'plan' }]);
+      assert.deepEqual(prof2.data, { id: 'prof' });
       assert.equal(productionApi.getResponseCacheStats().hits, 2);
     });
 
@@ -3529,8 +3529,8 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
         'CACHEABLE_ENDPOINTS must include /api/v1/customer/categories'
       );
       assert.ok(
-        apiCode.includes("'/api/v1/customer/subscription/plans'"),
-        'CACHEABLE_ENDPOINTS must include /api/v1/customer/subscription/plans'
+        !apiCode.includes("'/api/v1/customer/subscription/plans':"),
+        'CACHEABLE_ENDPOINTS must NOT include /api/v1/customer/subscription/plans (must not cache pricing)'
       );
       assert.ok(
         apiCode.includes("'/api/v1/customer/profile'"),
@@ -3773,12 +3773,19 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.equal(productionApi.getResponseCacheStats().evictions, 2, '2 oldest category entries must have been evicted');
     });
 
-    test('7.30: Per-endpoint limit enforcement: Subscription plans cannot exceed configured maxEntries (10)', async () => {
-      const mockFetch = async (url) => {
+    test('7.30: Repeated subscription plan requests retrieve fresh data from server and do not return a cached response', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
         return {
           ok: true,
           status: 200,
-          json: async () => ({ success: true, data: [{ url }] }),
+          json: async () => ({
+            success: true,
+            data: [
+              { id: 'plan-1', name: 'Starter', price: fetchCount === 1 ? 499 : 549 },
+            ],
+          }),
         };
       };
 
@@ -3787,12 +3794,22 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
         mockFetch
       );
 
-      for (let i = 1; i <= 11; i++) {
-        await productionApi.request(`/api/v1/customer/subscription/plans?tier=${i}`, { method: 'GET' });
-      }
+      // Verify endpoint is excluded from cache policy
+      const policy = productionApi.getCachePolicy('/api/v1/customer/subscription/plans');
+      assert.strictEqual(policy, null, 'Subscription plans must not be in CACHEABLE_ENDPOINTS');
 
-      assert.equal(productionApi.getResponseCacheSize(), 10, 'Subscription plans must not exceed configured maxEntries (10)');
-      assert.equal(productionApi.getResponseCacheStats().evictions, 1);
+      // First call
+      const res1 = await productionApi.getSubscriptionPlans();
+      assert.equal(fetchCount, 1);
+      assert.equal(res1.data[0].price, 499);
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'Subscription plans must not be added to cache');
+
+      // Second repeated call must hit the network and fetch fresh updated data
+      const res2 = await productionApi.getSubscriptionPlans();
+      assert.equal(fetchCount, 2, 'Repeated subscription plan requests must fetch from network, not cache');
+      assert.equal(res2.data[0].price, 549, 'Repeated call must return fresh server data');
+      assert.equal(productionApi.getResponseCacheStats().hits, 0, 'Response cache hits must remain 0');
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'Response cache size must remain 0');
     });
 
     test('7.31: Per-endpoint limit enforcement: Profile entries cannot exceed configured maxEntries (5)', async () => {
@@ -3821,35 +3838,32 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
     });
 
     test('7.32: Global limit enforcement: Cache size cannot exceed MAX_TOTAL_CACHE_ENTRIES (25)', async () => {
-      const mockFetch = async (url) => {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ success: true, data: { url } }),
-        };
-      };
+      const { api: productionApi } = loadProductionApiModule();
 
-      const { api: productionApi } = loadProductionApiModule(
-        { getAuthTokens: async () => ({ token: 'mock-token' }) },
-        mockFetch
-      );
-
-      // Fill 10 categories + 10 plans + 5 profiles = 25 entries
-      for (let i = 1; i <= 10; i++) {
-        await productionApi.request(`/api/v1/customer/categories?p=${i}`, { method: 'GET' });
-      }
-      for (let i = 1; i <= 10; i++) {
-        await productionApi.request(`/api/v1/customer/subscription/plans?p=${i}`, { method: 'GET' });
-      }
-      for (let i = 1; i <= 5; i++) {
-        await productionApi.request(`/api/v1/customer/profile?p=${i}`, { method: 'GET' });
+      // Insert 25 distinct entries
+      for (let i = 1; i <= 25; i++) {
+        productionApi.saveToResponseCache(`custom-key-${i}`, {
+          baseEndpoint: `/api/v1/custom-endpoint-${i}`,
+          data: { id: i },
+          timestamp: Date.now(),
+          generation: 0,
+          byteSize: 100,
+        });
       }
 
-      assert.equal(productionApi.getResponseCacheSize(), 25, 'Cache must reach exactly 25 entries');
+      assert.equal(productionApi.getResponseCacheSize(), 25, 'Cache must reach exactly MAX_TOTAL_CACHE_ENTRIES (25)');
 
-      // Adding 1 more entry must evict the global oldest entry to respect 25 limit
-      await productionApi.request('/api/v1/customer/categories?p=99', { method: 'GET' });
+      // Adding the 26th entry must evict the global oldest entry to respect 25 limit
+      productionApi.saveToResponseCache('custom-key-26', {
+        baseEndpoint: '/api/v1/custom-endpoint-26',
+        data: { id: 26 },
+        timestamp: Date.now(),
+        generation: 0,
+        byteSize: 100,
+      });
+
       assert.equal(productionApi.getResponseCacheSize(), 25, 'Cache must never exceed MAX_TOTAL_CACHE_ENTRIES (25)');
+      assert.equal(productionApi.getResponseCacheStats().evictions, 1, 'Oldest entry must be evicted on global limit');
     });
 
     test('7.33: LRU ordering: Accessing an older entry refreshes its eviction priority across endpoints', async () => {
@@ -4074,10 +4088,10 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.equal(productionApi.estimatePayloadBytes(payload), expectedBytes);
     });
 
-    test('7.42: Subscription plans enforced with tight 2-minute TTL for fresh pricing', () => {
+    test('7.42: Subscription plans endpoint is excluded from cache policy to guarantee live pricing', () => {
       const { api: productionApi } = loadProductionApiModule();
       const planPolicy = productionApi.getCachePolicy('/api/v1/customer/subscription/plans');
-      assert.equal(planPolicy.ttlMs, 120000, 'Subscription plans must use 2-minute TTL for tight pricing freshness');
+      assert.strictEqual(planPolicy, null, 'Subscription plans must not be in CACHEABLE_ENDPOINTS');
     });
 
     test('7.43: Replacing an existing cache key refreshes its insertion order in LRU map', async () => {
@@ -4108,6 +4122,68 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       const stats = productionApi.getResponseCacheStats();
       await productionApi.request('/api/v1/customer/categories?id=1', { method: 'GET' });
       assert.equal(productionApi.getResponseCacheStats().hits, stats.hits + 1, 'Replaced Category 1 must have refreshed LRU position');
+    });
+
+    test('7.44: Manual UTF-8 byte length fallback handles surrogate pairs, unmatched surrogates, and non-surrogates accurately', () => {
+      const { api: productionApi } = loadProductionApiModule();
+
+      // 1. ASCII
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('hello'), 5);
+      assert.equal(productionApi.getUtf8ByteLength('hello', true), 5);
+
+      // 2. Two-byte character (Latin / Greek / Cyrillic)
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\u00A9'), 2); // ©
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\u03B1'), 2); // α
+
+      // 3. Three-byte BMP character (Rupee ₹, Devanagari)
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('₹'), 3);
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('ताज़ा'), 15);
+
+      // 4. Valid surrogate pair (Emoji, supplementary planes) -> 4 UTF-8 bytes
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('🐟'), 4);
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uD83D\uDC1F'), 4);
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uD800\uDC00'), 4); // U+10000 minimum surrogate pair
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uDBFF\uDFFF'), 4); // U+10FFFF maximum surrogate pair
+
+      // 5. Unmatched high surrogate -> 3 UTF-8 bytes (U+FFFD replacement character)
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uD800'), 3);
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uDBFF'), 3);
+
+      // 6. Unmatched low surrogate -> 3 UTF-8 bytes (U+FFFD replacement character)
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uDC00'), 3);
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uDFFF'), 3);
+
+      // 7. High surrogate followed by ordinary non-surrogate character -> 3 bytes + 1 byte = 4 bytes (does not skip following char)
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uD800A'), 4);
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uD800₹'), 6); // 3 (surrogate) + 3 (₹)
+
+      // 8. Consecutive unmatched high surrogates
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uD800\uD800'), 6);
+
+      // 9. Unmatched low surrogate followed by unmatched high surrogate
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uDC00\uD800'), 6);
+
+      // 10. High surrogate followed by a valid surrogate pair
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback('\uD800\uD83D\uDC1F'), 7); // 3 + 4 = 7
+
+      // 11. Edge cases: empty / non-string
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback(''), 0);
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback(null), 0);
+      assert.equal(productionApi.calculateUtf8ByteLengthFallback(undefined), 0);
+
+      // 12. estimatePayloadBytes using manual fallback matches TextEncoder / Buffer.byteLength
+      const complexPayload = {
+        title: 'Fish Market',
+        price: '₹499',
+        icon: '🐟',
+        corrupted: '\uD800A',
+        trailing: '\uDC00',
+      };
+      const serialized = JSON.stringify(complexPayload);
+      const expectedBytes = Buffer.byteLength(serialized, 'utf8');
+
+      assert.equal(productionApi.estimatePayloadBytes(complexPayload, true), expectedBytes);
+      assert.equal(productionApi.getUtf8ByteLength(serialized, true), expectedBytes);
     });
   });
 });

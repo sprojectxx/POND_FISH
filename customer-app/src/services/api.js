@@ -298,11 +298,6 @@ const CACHEABLE_ENDPOINTS = {
     isSessionScoped: false,
     maxEntries: 10,
   },
-  '/api/v1/customer/subscription/plans': {
-    ttlMs: 2 * 60 * 1000, // 2 minutes (tight TTL for pricing freshness)
-    isSessionScoped: false,
-    maxEntries: 10,
-  },
   '/api/v1/customer/profile': {
     ttlMs: 2 * 60 * 1000, // 2 minutes
     isSessionScoped: true, // Strictly customer-session isolated
@@ -323,19 +318,17 @@ function getEndpointGeneration(baseEndpoint) {
 }
 
 /**
- * Calculates the exact UTF-8 encoded byte length of a string.
- * Accounts for 1-byte ASCII, 2-byte Latin/Greek/Cyrillic, 3-byte CJK/Indian scripts/Rupee symbol ₹,
- * and 4-byte surrogate pairs/emoji.
+ * Manual fallback to calculate the exact UTF-8 encoded byte length of a string.
+ * Accounts for:
+ * - 1-byte ASCII (0x00 - 0x7F)
+ * - 2-byte characters (0x80 - 0x7FF)
+ * - 3-byte BMP characters (0x800 - 0xFFFF, e.g. Rupee symbol ₹, Indian regional scripts)
+ * - 4-byte surrogate pairs for valid emoji / supplementary code points (0x10000 - 0x10FFFF)
+ * - 3-byte replacement character (U+FFFD) for unmatched high or low surrogates without skipping unrelated characters
  */
-function getUtf8ByteLength(str) {
+function calculateUtf8ByteLengthFallback(str) {
   if (typeof str !== 'string' || !str) {
     return 0;
-  }
-  if (typeof TextEncoder !== 'undefined') {
-    return new TextEncoder().encode(str).length;
-  }
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.byteLength(str, 'utf8');
   }
   let bytes = 0;
   for (let i = 0; i < str.length; i++) {
@@ -345,19 +338,45 @@ function getUtf8ByteLength(str) {
     } else if (code <= 0x7ff) {
       bytes += 2;
     } else if (code >= 0xd800 && code <= 0xdbff) {
-      bytes += 4;
-      i++; // Skip low surrogate
+      // High surrogate: check if followed by a valid low surrogate
+      if (i + 1 < str.length) {
+        const nextCode = str.charCodeAt(i + 1);
+        if (nextCode >= 0xdc00 && nextCode <= 0xdfff) {
+          bytes += 4;
+          i++; // Valid pair: skip the consumed low surrogate
+          continue;
+        }
+      }
+      // Unmatched high surrogate: replacement character U+FFFD is 3 UTF-8 bytes (never skip next char)
+      bytes += 3;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      // Unmatched low surrogate: replacement character U+FFFD is 3 UTF-8 bytes
+      bytes += 3;
     } else {
+      // 3-byte BMP characters (0x0800 - 0xD7FF and 0xE000 - 0xFFFF)
       bytes += 3;
     }
   }
   return bytes;
 }
 
-function estimatePayloadBytes(data) {
+function getUtf8ByteLength(str, forceFallback = false) {
+  if (typeof str !== 'string' || !str) {
+    return 0;
+  }
+  if (!forceFallback && typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(str).length;
+  }
+  if (!forceFallback && typeof Buffer !== 'undefined') {
+    return Buffer.byteLength(str, 'utf8');
+  }
+  return calculateUtf8ByteLengthFallback(str);
+}
+
+function estimatePayloadBytes(data, forceFallback = false) {
   try {
     const str = typeof data === 'string' ? data : JSON.stringify(data);
-    return str ? getUtf8ByteLength(str) : 0;
+    return str ? getUtf8ByteLength(str, forceFallback) : 0;
   } catch (_) {
     return 0;
   }
@@ -1043,6 +1062,7 @@ export const api = {
    */
   clearResponseCache,
   invalidateResponseCache,
+  saveToResponseCache,
   getResponseCacheStats,
   resetResponseCacheStats,
   getResponseCacheSize: () => responseCache.size,
@@ -1051,6 +1071,7 @@ export const api = {
   getCachePolicy: (ep) => (ep ? CACHEABLE_ENDPOINTS[ep] || null : { ...CACHEABLE_ENDPOINTS }),
   buildCacheKey,
   getUtf8ByteLength,
+  calculateUtf8ByteLengthFallback,
   estimatePayloadBytes,
   MAX_TOTAL_CACHE_ENTRIES,
   MAX_ENTRY_PAYLOAD_BYTES,
