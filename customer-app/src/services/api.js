@@ -299,7 +299,7 @@ const CACHEABLE_ENDPOINTS = {
     maxEntries: 10,
   },
   '/api/v1/customer/subscription/plans': {
-    ttlMs: 5 * 60 * 1000, // 5 minutes
+    ttlMs: 2 * 60 * 1000, // 2 minutes (tight TTL for pricing freshness)
     isSessionScoped: false,
     maxEntries: 10,
   },
@@ -322,10 +322,42 @@ function getEndpointGeneration(baseEndpoint) {
   return endpointGenerations.get(baseEndpoint) || 0;
 }
 
+/**
+ * Calculates the exact UTF-8 encoded byte length of a string.
+ * Accounts for 1-byte ASCII, 2-byte Latin/Greek/Cyrillic, 3-byte CJK/Indian scripts/Rupee symbol ₹,
+ * and 4-byte surrogate pairs/emoji.
+ */
+function getUtf8ByteLength(str) {
+  if (typeof str !== 'string' || !str) {
+    return 0;
+  }
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(str).length;
+  }
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.byteLength(str, 'utf8');
+  }
+  let bytes = 0;
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code <= 0x7f) {
+      bytes += 1;
+    } else if (code <= 0x7ff) {
+      bytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      bytes += 4;
+      i++; // Skip low surrogate
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+}
+
 function estimatePayloadBytes(data) {
   try {
     const str = typeof data === 'string' ? data : JSON.stringify(data);
-    return str ? str.length : 0;
+    return str ? getUtf8ByteLength(str) : 0;
   } catch (_) {
     return 0;
   }
@@ -377,12 +409,13 @@ function saveToResponseCache(cacheKey, entry) {
     return false;
   }
 
-  // If replacing existing entry, deduct its byte size first
+  // If replacing existing entry, deduct its byte size and remove to refresh insertion order
   if (responseCache.has(cacheKey)) {
     const existing = responseCache.get(cacheKey);
     if (existing && existing.byteSize) {
       currentCacheBytes = Math.max(0, currentCacheBytes - existing.byteSize);
     }
+    responseCache.delete(cacheKey);
   }
 
   // 2. Per-endpoint maximum entry limit enforcement
@@ -1017,6 +1050,8 @@ export const api = {
   getInvalidationGeneration: (ep) => (ep ? getEndpointGeneration(ep) : globalInvalidationGeneration),
   getCachePolicy: (ep) => (ep ? CACHEABLE_ENDPOINTS[ep] || null : { ...CACHEABLE_ENDPOINTS }),
   buildCacheKey,
+  getUtf8ByteLength,
+  estimatePayloadBytes,
   MAX_TOTAL_CACHE_ENTRIES,
   MAX_ENTRY_PAYLOAD_BYTES,
   MAX_TOTAL_CACHE_BYTES,

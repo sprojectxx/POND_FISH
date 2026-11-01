@@ -4049,5 +4049,65 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
         'updateProfile must only invalidate cache when res.success !== false'
       );
     });
+
+    test('7.41: Accurate UTF-8 serialized byte accounting for multi-byte Unicode strings (Rupee ₹, Hindi, emoji)', () => {
+      const { api: productionApi } = loadProductionApiModule();
+
+      // ASCII
+      assert.equal(productionApi.getUtf8ByteLength('hello'), 5);
+
+      // Indian Rupee Symbol (₹ is 3 bytes, whereas string length is 1)
+      assert.equal('₹499'.length, 4);
+      assert.equal(productionApi.getUtf8ByteLength('₹499'), 6, '₹499 must measure exactly 6 UTF-8 bytes');
+
+      // Regional Devanagari script (each char is 3 UTF-8 bytes)
+      const hindiText = 'ताज़ा मछली';
+      assert.equal(productionApi.getUtf8ByteLength(hindiText), Buffer.byteLength(hindiText, 'utf8'));
+
+      // Emoji (surrogate pair, string length 2, 4 UTF-8 bytes)
+      assert.equal('🐟'.length, 2);
+      assert.equal(productionApi.getUtf8ByteLength('🐟'), 4, 'Emoji surrogate pair must measure 4 UTF-8 bytes');
+
+      // estimatePayloadBytes on JSON object with unicode
+      const payload = { plan: 'Gold Plan', price: '₹999', icon: '🐟' };
+      const expectedBytes = Buffer.byteLength(JSON.stringify(payload), 'utf8');
+      assert.equal(productionApi.estimatePayloadBytes(payload), expectedBytes);
+    });
+
+    test('7.42: Subscription plans enforced with tight 2-minute TTL for fresh pricing', () => {
+      const { api: productionApi } = loadProductionApiModule();
+      const planPolicy = productionApi.getCachePolicy('/api/v1/customer/subscription/plans');
+      assert.equal(planPolicy.ttlMs, 120000, 'Subscription plans must use 2-minute TTL for tight pricing freshness');
+    });
+
+    test('7.43: Replacing an existing cache key refreshes its insertion order in LRU map', async () => {
+      const mockFetch = async (url) => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: [{ url }] }),
+      });
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      // Insert category 1 and category 2
+      await productionApi.request('/api/v1/customer/categories?id=1', { method: 'GET' });
+      await productionApi.request('/api/v1/customer/categories?id=2', { method: 'GET' });
+
+      // Overwrite/update category 1 via bypassCache: true (fresh network fetch)
+      await productionApi.request('/api/v1/customer/categories?id=1', { method: 'GET', bypassCache: true });
+
+      // Add 9 more categories to force an eviction (limit is 10)
+      for (let i = 3; i <= 11; i++) {
+        await productionApi.request(`/api/v1/customer/categories?id=${i}`, { method: 'GET' });
+      }
+
+      // Category 2 was older than the updated Category 1, so Category 2 should be evicted and Category 1 retained
+      const stats = productionApi.getResponseCacheStats();
+      await productionApi.request('/api/v1/customer/categories?id=1', { method: 'GET' });
+      assert.equal(productionApi.getResponseCacheStats().hits, stats.hits + 1, 'Replaced Category 1 must have refreshed LRU position');
+    });
   });
 });
