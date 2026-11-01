@@ -3267,7 +3267,7 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.equal(productionApi.getResponseCacheStats().hits, 1);
     });
 
-    test('7.17: Business-critical endpoints never return cached authoritative data', async () => {
+    test('7.17: Business-critical endpoints never return cached authoritative data (all 13 endpoints verified)', async () => {
       let fetchCount = 0;
       const mockFetch = async (url) => {
         fetchCount++;
@@ -3283,34 +3283,72 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
         mockFetch
       );
 
-      // The 6 critical endpoints called twice sequentially
+      // 1. Fish catalogue
       await productionApi.getFish();
       await productionApi.getFish();
 
+      // 2. Individual fish details
+      await productionApi.getFishDetails('fish-101');
+      await productionApi.getFishDetails('fish-101');
+
+      // 3. Cart
       await productionApi.getCart();
       await productionApi.getCart();
 
+      // 4. Subscription balance and status
       await productionApi.getSubscription();
       await productionApi.getSubscription();
 
+      // 5. Subscription ledger
+      await productionApi.getSubscriptionLedger();
+      await productionApi.getSubscriptionLedger();
+
+      // 6. Bookings
       await productionApi.getBookings();
       await productionApi.getBookings();
 
+      // 7. Individual booking details
+      await productionApi.getBookingDetails('booking-202');
+      await productionApi.getBookingDetails('booking-202');
+
+      // 8. Bill scan details
+      await productionApi.getBillScan('scan-303');
+      await productionApi.getBillScan('scan-303');
+
+      // 9. Transaction history
+      await productionApi.getCustomerTransactions();
+      await productionApi.getCustomerTransactions();
+
+      // 10. Individual transaction details
+      await productionApi.getTransactionDetails('tx-404');
+      await productionApi.getTransactionDetails('tx-404');
+
+      // 11. Live GPS
       await productionApi.getCustomerLiveTracking();
       await productionApi.getCustomerLiveTracking();
 
-      await productionApi.getCustomerTransactions();
-      await productionApi.getCustomerTransactions();
+      // 12. GPS journey details
+      await productionApi.getCustomerJourneyById('journey-505');
+      await productionApi.getCustomerJourneyById('journey-505');
+
+      // 13. Notifications
+      await productionApi.getNotifications();
+      await productionApi.getNotifications();
 
       assert.equal(
         fetchCount,
-        12,
-        'All 12 calls to business-critical endpoints must execute network fetches (0 cache hits)'
+        26,
+        'All 26 calls to all 13 business-critical endpoints must execute network fetches (0 cache hits)'
       );
       assert.equal(
         productionApi.getResponseCacheStats().hits,
         0,
         'Zero cache hits must be recorded for business-critical endpoints'
+      );
+      assert.equal(
+        productionApi.getResponseCacheSize(),
+        0,
+        'Business-critical endpoints must never populate the response cache'
       );
     });
 
@@ -3522,6 +3560,493 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.ok(
         apiCode.includes("invalidateResponseCache('/api/v1/customer/profile')"),
         'updateProfile must call invalidateResponseCache'
+      );
+    });
+
+    test('7.25: Stale in-flight race prevention: GET starts -> profile PUT succeeds -> old GET completes -> next GET must fetch fresh data', async () => {
+      let getDeferred = null;
+      let getCallCount = 0;
+      let putCallCount = 0;
+
+      const mockFetch = async (url, opts) => {
+        const method = opts?.method || 'GET';
+        if (url.includes('/customer/profile')) {
+          if (method === 'GET') {
+            getCallCount++;
+            if (getCallCount === 1) {
+              getDeferred = {};
+              getDeferred.promise = new Promise((resolve) => {
+                getDeferred.resolve = resolve;
+              });
+              await getDeferred.promise;
+              return {
+                ok: true,
+                status: 200,
+                json: async () => ({ success: true, data: { name: 'Old Stale Name', age: 25 } }),
+              };
+            } else {
+              return {
+                ok: true,
+                status: 200,
+                json: async () => ({ success: true, data: { name: 'New Fresh Name', age: 26 } }),
+              };
+            }
+          } else if (method === 'PUT') {
+            putCallCount++;
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({ success: true, message: 'Profile updated' }),
+            };
+          }
+        }
+        return { ok: true, status: 200, json: async () => ({ success: true }) };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      // 1. Initial slow GET starts and pauses
+      const slowGetPromise = productionApi.getProfile();
+      await new Promise((r) => setImmediate(r));
+      assert.equal(getCallCount, 1, 'Initial GET must have started');
+
+      // 2. While GET is still in-flight, user updates profile via PUT
+      const updateResult = await productionApi.updateProfile({ name: 'New Fresh Name', age: 26, area: 'North' });
+      assert.equal(updateResult.success, true);
+      assert.equal(putCallCount, 1, 'Profile PUT must have succeeded');
+
+      // 3. Slow GET finally completes and resolves
+      getDeferred.resolve();
+      const slowGetData = await slowGetPromise;
+      assert.equal(slowGetData.data.name, 'Old Stale Name');
+
+      // 4. Stale response must NOT have entered cache because generation was incremented
+      // Next GET must perform a fresh network fetch and return the new data!
+      const nextGetData = await productionApi.getProfile();
+      assert.equal(getCallCount, 2, 'Next GET must execute a network fetch (stale in-flight response must not enter cache)');
+      assert.equal(nextGetData.data.name, 'New Fresh Name');
+    });
+
+    test('7.26: Stale in-flight race prevention: GET starts -> endpoint invalidation -> old GET completes -> old response must not enter cache', async () => {
+      let getDeferred = null;
+      let getCallCount = 0;
+
+      const mockFetch = async (url) => {
+        getCallCount++;
+        getDeferred = {};
+        getDeferred.promise = new Promise((resolve) => {
+          getDeferred.resolve = resolve;
+        });
+        await getDeferred.promise;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: 'cat-old', name: 'Old Categories' }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      const inFlightReq = productionApi.getCategories();
+      await new Promise((r) => setImmediate(r));
+      assert.equal(getCallCount, 1);
+
+      // Invalidate while in flight
+      productionApi.invalidateResponseCache('/api/v1/customer/categories');
+
+      // Old request finishes
+      getDeferred.resolve();
+      await inFlightReq;
+
+      // Cache must be empty; old response dropped
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'Old in-flight response must not enter invalidated cache');
+    });
+
+    test('7.27: Stale in-flight race prevention: GET starts -> HTTP 401 clears cache -> old GET completes -> invalidated data must not be restored', async () => {
+      let getDeferred = null;
+
+      const mockFetch = async (url) => {
+        if (url.includes('/customer/profile')) {
+          getDeferred = {};
+          getDeferred.promise = new Promise((resolve) => {
+            getDeferred.resolve = resolve;
+          });
+          await getDeferred.promise;
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ success: true, data: { name: 'Cached Profile' } }),
+          };
+        }
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized session' } }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      const profilePromise = productionApi.getProfile();
+      await new Promise((r) => setImmediate(r));
+
+      // Trigger 401 on an unauthenticated request to clear cache
+      await assert.rejects(productionApi.request('/api/v1/customer/user-session-check', { method: 'GET' }), (err) => {
+        assert.equal(err.status, 401);
+        assert.equal(err.code, 'UNAUTHORIZED');
+        return true;
+      });
+
+      // Now resolve the in-flight profile GET
+      getDeferred.resolve();
+      await profilePromise;
+
+      // Cache must not contain the profile
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'Cache must remain cleared after 401 invalidation');
+    });
+
+    test('7.28: Stale in-flight race prevention: Logout/session reset while cacheable request is in progress -> old response cannot enter cache', async () => {
+      let getDeferred = null;
+
+      const mockFetch = async () => {
+        getDeferred = {};
+        getDeferred.promise = new Promise((resolve) => {
+          getDeferred.resolve = resolve;
+        });
+        await getDeferred.promise;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { name: 'User 1' } }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      const inFlightReq = productionApi.getProfile();
+      await new Promise((r) => setImmediate(r));
+
+      // User logs out, triggering clearResponseCache
+      productionApi.clearResponseCache();
+
+      // Old request finishes
+      getDeferred.resolve();
+      await inFlightReq;
+
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'Cache must remain empty after logout invalidation');
+    });
+
+    test('7.29: Per-endpoint limit enforcement: Categories cannot exceed configured maxEntries (10)', async () => {
+      const mockFetch = async (url) => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ url }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      // Add 12 different category queries (maxEntries is 10)
+      for (let i = 1; i <= 12; i++) {
+        await productionApi.request(`/api/v1/customer/categories?page=${i}`, { method: 'GET' });
+      }
+
+      const policy = productionApi.getCachePolicy('/api/v1/customer/categories');
+      assert.equal(policy.maxEntries, 10);
+      assert.equal(productionApi.getResponseCacheSize(), 10, 'Categories in cache must not exceed configured maxEntries (10)');
+      assert.equal(productionApi.getResponseCacheStats().evictions, 2, '2 oldest category entries must have been evicted');
+    });
+
+    test('7.30: Per-endpoint limit enforcement: Subscription plans cannot exceed configured maxEntries (10)', async () => {
+      const mockFetch = async (url) => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ url }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      for (let i = 1; i <= 11; i++) {
+        await productionApi.request(`/api/v1/customer/subscription/plans?tier=${i}`, { method: 'GET' });
+      }
+
+      assert.equal(productionApi.getResponseCacheSize(), 10, 'Subscription plans must not exceed configured maxEntries (10)');
+      assert.equal(productionApi.getResponseCacheStats().evictions, 1);
+    });
+
+    test('7.31: Per-endpoint limit enforcement: Profile entries cannot exceed configured maxEntries (5)', async () => {
+      const mockFetch = async (url) => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { url } }),
+        };
+      };
+
+      let currentToken = 'token-1';
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: currentToken }) },
+        mockFetch
+      );
+
+      // Profile is session scoped, so 7 different tokens produce 7 cache keys (limit is 5)
+      for (let i = 1; i <= 7; i++) {
+        currentToken = `token-${i}`;
+        await productionApi.getProfile();
+      }
+
+      assert.equal(productionApi.getResponseCacheSize(), 5, 'Profile cache entries must not exceed configured maxEntries (5)');
+      assert.equal(productionApi.getResponseCacheStats().evictions, 2);
+    });
+
+    test('7.32: Global limit enforcement: Cache size cannot exceed MAX_TOTAL_CACHE_ENTRIES (25)', async () => {
+      const mockFetch = async (url) => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { url } }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      // Fill 10 categories + 10 plans + 5 profiles = 25 entries
+      for (let i = 1; i <= 10; i++) {
+        await productionApi.request(`/api/v1/customer/categories?p=${i}`, { method: 'GET' });
+      }
+      for (let i = 1; i <= 10; i++) {
+        await productionApi.request(`/api/v1/customer/subscription/plans?p=${i}`, { method: 'GET' });
+      }
+      for (let i = 1; i <= 5; i++) {
+        await productionApi.request(`/api/v1/customer/profile?p=${i}`, { method: 'GET' });
+      }
+
+      assert.equal(productionApi.getResponseCacheSize(), 25, 'Cache must reach exactly 25 entries');
+
+      // Adding 1 more entry must evict the global oldest entry to respect 25 limit
+      await productionApi.request('/api/v1/customer/categories?p=99', { method: 'GET' });
+      assert.equal(productionApi.getResponseCacheSize(), 25, 'Cache must never exceed MAX_TOTAL_CACHE_ENTRIES (25)');
+    });
+
+    test('7.33: LRU ordering: Accessing an older entry refreshes its eviction priority across endpoints', async () => {
+      const mockFetch = async (url) => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { url } }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      // Insert category 1 and category 2
+      await productionApi.request('/api/v1/customer/categories?id=1', { method: 'GET' });
+      await productionApi.request('/api/v1/customer/categories?id=2', { method: 'GET' });
+
+      // Re-access category 1 to refresh its LRU priority
+      await productionApi.request('/api/v1/customer/categories?id=1', { method: 'GET' });
+
+      // Add 9 more categories (total 11 added, limit is 10)
+      for (let i = 3; i <= 11; i++) {
+        await productionApi.request(`/api/v1/customer/categories?id=${i}`, { method: 'GET' });
+      }
+
+      // Category 2 was least recently used, so Category 2 should have been evicted, while Category 1 was preserved
+      const stats = productionApi.getResponseCacheStats();
+      await productionApi.request('/api/v1/customer/categories?id=1', { method: 'GET' });
+      assert.equal(productionApi.getResponseCacheStats().hits, stats.hits + 1, 'Category 1 should have been kept in cache due to LRU refresh');
+    });
+
+    test('7.34: Memory budget: Oversized entries exceeding MAX_ENTRY_PAYLOAD_BYTES (50 KB) are rejected from cache', async () => {
+      const largePayload = 'X'.repeat(60 * 1024); // 60 KB string > 50 KB limit
+      const mockFetch = async () => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: largePayload }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      const res = await productionApi.getCategories();
+      assert.equal(res.data, largePayload);
+
+      // Oversized entry must NOT be added to response cache
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'Oversized payload exceeding 50 KB must be rejected from cache');
+      assert.equal(productionApi.getCacheBytes(), 0);
+    });
+
+    test('7.35: Memory budget: Cache evicts oldest entries when MAX_TOTAL_CACHE_BYTES (200 KB) is exceeded', async () => {
+      const payload40KB = 'A'.repeat(40 * 1024); // 40 KB per entry
+      const mockFetch = async () => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: payload40KB }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      // Insert 6 entries of 40 KB each = 240 KB > MAX_TOTAL_CACHE_BYTES (200 KB)
+      for (let i = 1; i <= 6; i++) {
+        await productionApi.request(`/api/v1/customer/categories?page=${i}`, { method: 'GET' });
+      }
+
+      assert.ok(
+        productionApi.getCacheBytes() <= productionApi.MAX_TOTAL_CACHE_BYTES,
+        `currentCacheBytes (${productionApi.getCacheBytes()}) must not exceed MAX_TOTAL_CACHE_BYTES (${productionApi.MAX_TOTAL_CACHE_BYTES})`
+      );
+      assert.ok(
+        productionApi.getResponseCacheStats().evictions >= 1,
+        'Oldest entries must have been evicted to satisfy byte budget'
+      );
+    });
+
+    test('7.36: Mutation invalidation semantics: Failing updateProfile (HTTP 400/500 or application error) does not invalidate cache', async () => {
+      let profileGetCount = 0;
+      let putStatus = 400;
+      let putSuccess = false;
+
+      const mockFetch = async (url, opts) => {
+        const method = opts?.method || 'GET';
+        if (url.includes('/customer/profile')) {
+          if (method === 'GET') {
+            profileGetCount++;
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({ success: true, data: { name: 'Valid User' } }),
+            };
+          } else if (method === 'PUT') {
+            if (putStatus !== 200) {
+              return {
+                ok: false,
+                status: putStatus,
+                json: async () => ({ success: false, message: 'Bad request' }),
+              };
+            } else {
+              return {
+                ok: true,
+                status: 200,
+                json: async () => ({ success: putSuccess, message: 'Application validation failure' }),
+              };
+            }
+          }
+        }
+        return { ok: true, status: 200, json: async () => ({ success: true }) };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      // 1. Initial GET caches the profile
+      await productionApi.getProfile();
+      assert.equal(profileGetCount, 1);
+      assert.equal(productionApi.getResponseCacheSize(), 1);
+
+      // 2. PUT fails with HTTP 400
+      await assert.rejects(productionApi.updateProfile({ name: 'Invalid' }));
+      // Cache must NOT be invalidated by HTTP failure
+      assert.equal(productionApi.getResponseCacheSize(), 1);
+
+      // Next GET still hits cache
+      await productionApi.getProfile();
+      assert.equal(profileGetCount, 1, 'GET must hit cache; failing HTTP PUT must not invalidate');
+
+      // 3. PUT returns HTTP 200 but application-level success: false
+      putStatus = 200;
+      putSuccess = false;
+      const appFailRes = await productionApi.updateProfile({ name: 'Invalid' });
+      assert.equal(appFailRes.success, false);
+
+      // Cache must NOT be invalidated by application-level failure
+      assert.equal(productionApi.getResponseCacheSize(), 1);
+      await productionApi.getProfile();
+      assert.equal(profileGetCount, 1, 'GET must still hit cache; application-level failed PUT must not invalidate');
+    });
+
+    test('7.37: Fetch option hygiene: bypassCache is stripped and never forwarded as native fetch option', async () => {
+      let forwardedOptions = null;
+      const mockFetch = async (url, opts) => {
+        forwardedOptions = opts;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: '1' }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      await productionApi.getCategories({ bypassCache: true, headers: { 'X-Custom': '1' } });
+
+      assert.ok(forwardedOptions, 'Fetch options must have been captured');
+      assert.equal(forwardedOptions.bypassCache, undefined, 'bypassCache must NOT be forwarded to native fetch()');
+      assert.equal(forwardedOptions.headers['X-Custom'], '1', 'Legitimate headers must be preserved');
+    });
+
+    test('7.38: [Static Source Check] api.js defines MAX_ENTRY_PAYLOAD_BYTES and MAX_TOTAL_CACHE_BYTES', () => {
+      assert.ok(
+        apiCode.includes('MAX_ENTRY_PAYLOAD_BYTES = 50 * 1024'),
+        'api.js must define MAX_ENTRY_PAYLOAD_BYTES bound'
+      );
+      assert.ok(
+        apiCode.includes('MAX_TOTAL_CACHE_BYTES = 200 * 1024'),
+        'api.js must define MAX_TOTAL_CACHE_BYTES bound'
+      );
+    });
+
+    test('7.39: [Static Source Check] executeNetworkRequest strips bypassCache from restFetchOptions', () => {
+      assert.ok(
+        apiCode.includes('bypassCache: _unusedBypassCache'),
+        'executeNetworkRequest must destructure and strip bypassCache'
+      );
+    });
+
+    test('7.40: [Static Source Check] updateProfile checks res.success !== false before invalidating', () => {
+      assert.ok(
+        apiCode.includes('if (res && res.success !== false) {\n      invalidateResponseCache'),
+        'updateProfile must only invalidate cache when res.success !== false'
       );
     });
   });

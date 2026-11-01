@@ -311,6 +311,26 @@ const CACHEABLE_ENDPOINTS = {
 };
 
 const MAX_TOTAL_CACHE_ENTRIES = 25;
+const MAX_ENTRY_PAYLOAD_BYTES = 50 * 1024; // 50 KB per-entry serialized ceiling
+const MAX_TOTAL_CACHE_BYTES = 200 * 1024;  // 200 KB aggregate serialized payload budget
+
+let globalInvalidationGeneration = 0;
+const endpointGenerations = new Map();
+let currentCacheBytes = 0;
+
+function getEndpointGeneration(baseEndpoint) {
+  return endpointGenerations.get(baseEndpoint) || 0;
+}
+
+function estimatePayloadBytes(data) {
+  try {
+    const str = typeof data === 'string' ? data : JSON.stringify(data);
+    return str ? str.length : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
 const responseCache = new Map();
 const cacheStats = {
   hits: 0,
@@ -334,6 +354,9 @@ function getFromResponseCache(cacheKey) {
   const entry = responseCache.get(cacheKey);
   const now = Date.now();
   if (now - entry.timestamp > entry.ttlMs) {
+    if (entry.byteSize) {
+      currentCacheBytes = Math.max(0, currentCacheBytes - entry.byteSize);
+    }
     responseCache.delete(cacheKey);
     cacheStats.expirations++;
     return null;
@@ -345,19 +368,80 @@ function getFromResponseCache(cacheKey) {
 }
 
 function saveToResponseCache(cacheKey, entry) {
-  // Evict oldest entry if maximum bound reached
+  const baseEndpoint = entry.baseEndpoint;
+  const policy = CACHEABLE_ENDPOINTS[baseEndpoint];
+  const byteSize = entry.byteSize || 0;
+
+  // 1. Oversized entry rejection: entries larger than MAX_ENTRY_PAYLOAD_BYTES are not cached
+  if (byteSize > MAX_ENTRY_PAYLOAD_BYTES) {
+    return false;
+  }
+
+  // If replacing existing entry, deduct its byte size first
+  if (responseCache.has(cacheKey)) {
+    const existing = responseCache.get(cacheKey);
+    if (existing && existing.byteSize) {
+      currentCacheBytes = Math.max(0, currentCacheBytes - existing.byteSize);
+    }
+  }
+
+  // 2. Per-endpoint maximum entry limit enforcement
+  if (policy && policy.maxEntries && !responseCache.has(cacheKey)) {
+    const matchingKeys = [];
+    for (const [k, e] of responseCache.entries()) {
+      if (e.baseEndpoint === baseEndpoint) {
+        matchingKeys.push(k);
+      }
+    }
+    if (matchingKeys.length >= policy.maxEntries) {
+      const oldestMatchingKey = matchingKeys[0];
+      const oldestEntry = responseCache.get(oldestMatchingKey);
+      if (oldestEntry && oldestEntry.byteSize) {
+        currentCacheBytes = Math.max(0, currentCacheBytes - oldestEntry.byteSize);
+      }
+      responseCache.delete(oldestMatchingKey);
+      cacheStats.evictions++;
+    }
+  }
+
+  // 3. Global maximum entries limit enforcement
   if (responseCache.size >= MAX_TOTAL_CACHE_ENTRIES && !responseCache.has(cacheKey)) {
     const oldestKey = responseCache.keys().next().value;
     if (oldestKey) {
+      const oldestEntry = responseCache.get(oldestKey);
+      if (oldestEntry && oldestEntry.byteSize) {
+        currentCacheBytes = Math.max(0, currentCacheBytes - oldestEntry.byteSize);
+      }
       responseCache.delete(oldestKey);
       cacheStats.evictions++;
     }
   }
+
+  // 4. Global total cache byte budget enforcement
+  while ((currentCacheBytes + byteSize > MAX_TOTAL_CACHE_BYTES) && responseCache.size > 0) {
+    const oldestKey = responseCache.keys().next().value;
+    if (oldestKey) {
+      const oldestEntry = responseCache.get(oldestKey);
+      if (oldestEntry && oldestEntry.byteSize) {
+        currentCacheBytes = Math.max(0, currentCacheBytes - oldestEntry.byteSize);
+      }
+      responseCache.delete(oldestKey);
+      cacheStats.evictions++;
+    } else {
+      break;
+    }
+  }
+
   responseCache.set(cacheKey, entry);
+  currentCacheBytes += byteSize;
+  return true;
 }
 
 function clearResponseCache() {
+  globalInvalidationGeneration++;
+  endpointGenerations.clear();
   responseCache.clear();
+  currentCacheBytes = 0;
   cacheStats.invalidations++;
 }
 
@@ -366,9 +450,20 @@ function invalidateResponseCache(target) {
     clearResponseCache();
     return;
   }
+  // Increment generation for target endpoint and any matching configured endpoints
+  endpointGenerations.set(target, (endpointGenerations.get(target) || 0) + 1);
+  for (const ep of Object.keys(CACHEABLE_ENDPOINTS)) {
+    if (ep === target || ep.includes(target)) {
+      endpointGenerations.set(ep, (endpointGenerations.get(ep) || 0) + 1);
+    }
+  }
+
   let count = 0;
   for (const [key, entry] of Array.from(responseCache.entries())) {
     if (entry.baseEndpoint === target || key.includes(target)) {
+      if (entry.byteSize) {
+        currentCacheBytes = Math.max(0, currentCacheBytes - entry.byteSize);
+      }
       responseCache.delete(key);
       count++;
     }
@@ -386,6 +481,8 @@ function getResponseCacheStats() {
     evictions: cacheStats.evictions,
     invalidations: cacheStats.invalidations,
     size: responseCache.size,
+    bytes: currentCacheBytes,
+    globalGeneration: globalInvalidationGeneration,
   };
 }
 
@@ -418,6 +515,7 @@ async function executeNetworkRequest({
     signal: _unusedCallerSignal,
     headers: _unusedCustomHeaders,
     bypassDedup: _unusedBypassDedup,
+    bypassCache: _unusedBypassCache,
     skipUnauthorizedHandler: _unusedSkipUnauthorizedHandler,
     ...restFetchOptions
   } = options;
@@ -660,6 +758,10 @@ function request(endpoint, options = {}) {
     // Phase 3B.4 Safe Response Cache Evaluation
     const baseEndpoint = endpoint.split('?')[0];
     const cachePolicy = isGet ? CACHEABLE_ENDPOINTS[baseEndpoint] : null;
+
+    // Capture invalidation generations at request evaluation time
+    const requestGlobalGen = globalInvalidationGeneration;
+    const requestEndpointGen = getEndpointGeneration(baseEndpoint);
     const shouldReadCache = Boolean(
       isGet &&
       !options.bypassCache &&
@@ -735,7 +837,12 @@ function request(endpoint, options = {}) {
           controller,
           callerSignal: controller ? null : (options.signal || null),
         });
-        if (shouldWriteCache && cacheKey && netRes && netRes.success !== false) {
+        const isGenerationValid =
+          requestGlobalGen === globalInvalidationGeneration &&
+          requestEndpointGen === getEndpointGeneration(baseEndpoint);
+
+        if (shouldWriteCache && cacheKey && isGenerationValid && netRes && netRes.success !== false) {
+          const byteSize = estimatePayloadBytes(netRes);
           saveToResponseCache(cacheKey, {
             data: cloneResponse(netRes),
             timestamp: Date.now(),
@@ -743,6 +850,7 @@ function request(endpoint, options = {}) {
             baseEndpoint,
             sessionScoped: cachePolicy.isSessionScoped,
             requestToken: cachePolicy.isSessionScoped ? requestToken : null,
+            byteSize,
           });
         }
         return netRes;
@@ -788,7 +896,12 @@ function request(endpoint, options = {}) {
             callerSignal: null, // Shared network request MUST NOT inherit initiating subscriber's signal
           });
 
-          if (shouldWriteCache && cacheKey && json && json.success !== false) {
+          const isGenerationValid =
+            requestGlobalGen === globalInvalidationGeneration &&
+            requestEndpointGen === getEndpointGeneration(baseEndpoint);
+
+          if (shouldWriteCache && cacheKey && isGenerationValid && json && json.success !== false) {
+            const byteSize = estimatePayloadBytes(json);
             saveToResponseCache(cacheKey, {
               data: cloneResponse(json),
               timestamp: Date.now(),
@@ -796,6 +909,7 @@ function request(endpoint, options = {}) {
               baseEndpoint,
               sessionScoped: cachePolicy.isSessionScoped,
               requestToken: cachePolicy.isSessionScoped ? requestToken : null,
+              byteSize,
             });
           }
 
@@ -884,6 +998,7 @@ export const api = {
   /**
    * Safe request deduplication management
    */
+  request: (endpoint, options) => request(endpoint, options),
   clearInFlightRequests,
   getInFlightRequestCount,
   buildDeduplicationKey,
@@ -898,8 +1013,13 @@ export const api = {
   getResponseCacheStats,
   resetResponseCacheStats,
   getResponseCacheSize: () => responseCache.size,
+  getCacheBytes: () => currentCacheBytes,
+  getInvalidationGeneration: (ep) => (ep ? getEndpointGeneration(ep) : globalInvalidationGeneration),
   getCachePolicy: (ep) => (ep ? CACHEABLE_ENDPOINTS[ep] || null : { ...CACHEABLE_ENDPOINTS }),
   buildCacheKey,
+  MAX_TOTAL_CACHE_ENTRIES,
+  MAX_ENTRY_PAYLOAD_BYTES,
+  MAX_TOTAL_CACHE_BYTES,
 
   /**
    * Request OTP dispatch to mobile number
@@ -956,7 +1076,9 @@ export const api = {
       headers,
       body: JSON.stringify({ name, age, area }),
     });
-    invalidateResponseCache('/api/v1/customer/profile');
+    if (res && res.success !== false) {
+      invalidateResponseCache('/api/v1/customer/profile');
+    }
     return res;
   },
 
@@ -1176,7 +1298,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ planId }),
     });
-    invalidateResponseCache('/api/v1/customer/subscription/plans');
+    if (res && res.success !== false) {
+      invalidateResponseCache('/api/v1/customer/subscription/plans');
+    }
     return res;
   },
 
@@ -1196,7 +1320,9 @@ export const api = {
         razorpaySignature,
       }),
     });
-    invalidateResponseCache('/api/v1/customer/subscription/plans');
+    if (res && res.success !== false) {
+      invalidateResponseCache('/api/v1/customer/subscription/plans');
+    }
     return res;
   },
 
