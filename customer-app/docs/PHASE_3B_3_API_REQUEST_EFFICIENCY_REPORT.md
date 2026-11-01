@@ -1,229 +1,110 @@
-# POND FISH — Phase 3B.3 Implementation Report
+# POND FISH — Phase 3B.3 Implementation & Verification Report
 ## API Request Ownership, Deduplication & Data-Loading Efficiency
 
-**Repository:** `https://github.com/sprojectxx/POND_FISH`  
-**Application:** `customer-app/`  
-**Starting Commit Baseline:** `0824d31c4ce34d91a12fadb4aeae3cdfec7fb391`  
-**Target Branch:** `main`  
-**Execution Date:** 2026-11-01  
+**Repository:** `https://github.com/sprojectxx/POND_FISH`<br>
+**Application:** `customer-app/`<br>
+**Starting Commit Baseline:** `0824d31c4ce34d91a12fadb4aeae3cdfec7fb391`<br>
+**Target Branch:** `main`<br>
+**Latest Implementation Commit:** `121a9bdf2b1e21bfabb734d6a230f1f5d9956ad6`<br>
+**Latest Report-Related Commit:** `118a4498e7a7f851fdd49c31b323009798c825f2`<br>
+**Execution Date:** 2026-11-01<br>
 **Optimization Scope:** Workstreams A, B, C, and D (Cart Ownership, Safe In-Flight GET Deduplication, Category & Home Data Efficiency, Account Lifecycle Safety)
 
 ---
 
-## 1. Executive Summary
+## 1. Phase Objective
 
-Phase 3B.3 delivers authoritative data-fetch ownership, eliminates duplicate network requests, and establishes in-flight request deduplication across the PondFish customer mobile application.
+The primary objective of Phase 3B.3 is to eliminate redundant API requests, prevent duplicate in-flight network round-trips over mobile connections, establish authoritative data-fetch ownership, and improve customer application data-loading efficiency without changing existing business rules or serving stale data.
 
-Prior to Phase 3B.3, the application exhibited two major request inefficiencies:
-1. **Cart Retrieval Duplication:** Navigating to the `CART` screen simultaneously triggered two concurrent `GET /api/v1/customer/cart` requests—one dispatched by the `App.jsx` navigation lifecycle `useEffect`, and a second dispatched by `CartScreen.jsx` upon mounting.
-2. **Missing In-Flight Coalescing:** The low-level API client (`customer-app/src/services/api.js`) lacked an in-flight request registry. Concurrent or overlapping invocations of identical `GET` endpoints (e.g. fish catalogue, categories, or cart summaries) each spawned independent network socket requests over the wire.
+Specifically, the work addresses two major architectural inefficiencies identified on `main`:
+1. **Cart Retrieval Duplication:** Navigating to the `CART` screen simultaneously triggered two concurrent `GET /api/v1/customer/cart` network requests—one initiated by the `App.jsx` navigation lifecycle `useEffect` to update global badges, and a second initiated by `CartScreen.jsx` upon mounting.
+2. **Missing In-Flight Request Deduplication:** The core API client (`customer-app/src/services/api.js`) lacked an in-flight request coalescing mechanism. Concurrent or overlapping invocations of identical `GET` endpoints (e.g. fish catalogue, categories, or cart queries) each spawned independent network socket requests over the wire.
 
-Phase 3B.3 resolves these structural and network inefficiencies through four coordinated workstreams:
-- **Workstream A (Cart Ownership):** `CartScreen.jsx` is established as the sole authoritative owner of cart data when the user visits the cart screen. `App.jsx` excludes `currentScreen === 'CART'` from its background cart retrieval trigger, eliminating duplicate simultaneous requests while preserving continuous cart synchronization via `onCartUpdated`.
-- **Workstream B (In-Flight GET Deduplication):** A non-caching, subscriber-based in-flight request registry is implemented in `customer-app/src/services/api.js`. Concurrent identical `GET` requests share a single network round-trip. Mutations (`POST`, `PUT`, `PATCH`, `DELETE`) are strictly excluded. Authorization headers are case-insensitively normalized via `extractAndNormalizeAuthorization`, rejecting ambiguous conflicting credentials with `API_INVALID_HEADERS` while preserving explicit tokens without overwriting from Keystore. Authentication identity is structured unambiguously as `['AUTH', effectiveAuth]` vs `['ANON']`, representing the exact effective normalized Authorization header (including its authentication scheme such as `Bearer`, `Basic`, or raw credentials). This eliminates prefix-matching collisions (`foo` vs `AUTH:foo`) as well as scheme collisions (`Bearer foo` vs raw `foo` vs `Basic foo`), ensuring that differing wire HTTP headers never share an in-flight network request. The entire deduplication key is serialized as a structured JSON array (`JSON.stringify(['GET', url, authIdentity, skip401, timeout, headers, opts])`), completely eliminating delimiter collisions across URLs, query strings, and tokens. Registry lifecycles are protected against stale-entry deletion races using identity-aware entry checks. Caller cancellations are fully isolated so that one component unmounting or aborting never cancels shared in-flight fetches for other active components.
-- **Workstream C (Category & Home Data Ownership):** `fetchHomeDataOrchestrated` in `customer-app/src/screens/HomeScreen.jsx` reuses existing categories on non-refresh transitions, preventing redundant network requests, while enforcing full refetching on user pull-to-refresh (`isRefresh = true`). The critical fish catalogue remains strictly Priority 1, unblocking visual display immediately upon arrival.
-- **Workstream D (Account & Lifecycle Safety):** `api.clearInFlightRequests()` is integrated into `App.jsx`'s logout handler (`handleLogout`), cancelling active in-flight requests on session clearance and safely marking entries settled so old requests cannot resolve replacement requests. Request keys are bound to token identity, preventing cross-user data leakage. Centralized single-owner HTTP 401 handling from Phase 3B.2 is fully preserved.
-
-All 141 unit and integration tests in the customer app suite pass with zero failures (100% pass rate). All 335 tests in the root ecosystem suite pass with zero failures on `npm test` (30.6s). Production Metro bundling and Android release compilation (`assembleRelease` in 1m 20s) completed with zero errors.
+The phase delivers authoritative cart ownership, in-flight GET coalescing with strict caller cancellation isolation, case-insensitive Authorization header normalization, collision-safe structured request identity, category caching with pull-to-refresh invalidation, and session-scoped lifecycle cleanup.
 
 ---
 
-## 2. Mandatory Source Audit & Request Ownership Findings
+## 2. Exact Implementation Commits
 
-Before implementing changes, a source audit of request ownership was conducted across all customer app screens and network services:
+All changes have been committed directly to `main` without creating auxiliary branches or rewriting history:
 
-| Component / File | Endpoint(s) Invoked | Trigger / Lifecycle | Ownership Role & Identified Inefficiency |
-| :--- | :--- | :--- | :--- |
-| `customer-app/App.jsx` | `GET /api/v1/customer/cart` | `useEffect` on entering any screen in `AUTHENTICATED_SCREENS` (`HOME`, `CART`, etc.) | **Root Cause of Cart Duplication:** When `currentScreen === 'CART'`, `App.jsx` dispatched `api.getCart()` at the exact same instant that `CartScreen.jsx` mounted and dispatched its own `api.getCart()`. |
-| `customer-app/src/screens/CartScreen.jsx` | `GET /api/v1/customer/cart`<br>`PATCH /api/v1/customer/cart/items/:id`<br>`DELETE /api/v1/customer/cart/items/:id`<br>`DELETE /api/v1/customer/cart` | Mount `useEffect`<br>Pull-to-refresh<br>Quantity stepper<br>Item removal<br>Cart clearance | **Authoritative Cart Owner:** Manages full itemized cart state, inventory revalidation, and checkout eligibility. Communicates state back to `App.jsx` via `onCartUpdated(cartData)`. Having `App.jsx` also fetch on mount was 100% redundant. |
-| `customer-app/src/screens/HomeScreen.jsx` | `GET /api/v1/customer/fish`<br>`GET /api/v1/customer/categories`<br>`GET /api/v1/customer/subscription`<br>`GET /api/v1/customer/tracking/live`<br>`GET /api/v1/customer/profile` | Mount `useEffect`<br>Pull-to-refresh (`fetchHomeDataOrchestrated`) | **Catalogue Prioritization & Category Fetching:** Priority 1 fish catalogue properly unblocks UI immediately. However, categories were refetched over the wire even on non-refresh remounts when categories were already populated in state. |
-| `customer-app/src/services/api.js` | All Customer API endpoints | Direct caller invocations | **Missing In-Flight Deduplication:** Dispatched separate HTTP fetches for every call, regardless of whether an identical request was already in flight on the wire. `AbortController` was tied 1:1 to single caller signals. |
-| `customer-app/src/services/auth-storage.js` | Android Keystore | `getAuthTokens`<br>`saveAuthTokens`<br>`clearAuthTokens` | **Hardware-Backed Session Storage:** Single-mutation queue serializing storage operations. Stored token identity needed to be bound into in-flight request keys to prevent cross-session request coalescing. |
-| `customer-app/src/screens/ProfileScreen.jsx` | `GET /api/v1/customer/profile`<br>`GET /api/v1/customer/subscription` | Mount `useEffect`<br>Pull-to-refresh | **Independent Profile & Subscription:** Clean single-screen ownership; benefits from in-flight deduplication if profile was pre-fetched during home initialization. |
-| `customer-app/src/screens/SubscriptionScreen.jsx` | `GET /api/v1/customer/subscription`<br>`GET /api/v1/customer/subscription/plans`<br>`GET /api/v1/customer/subscription/ledger` | Mount `useEffect`<br>Pull-to-refresh | **Independent Subscription Hub:** Clean single-screen ownership; benefits from in-flight deduplication. |
-
----
-
-## 3. Workstream A: Cart Request Ownership
-
-### 3.1 Problem Analysis
-`App.jsx` maintains a global `cartSummary` state used to display cart badge counts on screens throughout the app. An effect hook in `App.jsx` triggered `fetchCartSummary()` whenever `currentScreen` changed to any screen in `AUTHENTICATED_SCREENS`. Because `AUTHENTICATED_SCREENS` includes `'CART'`, navigating to the Cart screen resulted in:
-1. `App.jsx` invoking `api.getCart()`.
-2. `CartScreen.jsx` mounting and invoking `api.getCart()`.
-3. Two identical concurrent HTTP `GET /api/v1/customer/cart` requests racing across the network.
-4. Redundant bandwidth consumption and potential state overwrites.
-
-### 3.2 Implemented Solution
-1. **Explicit Cart Screen Exclusion in App Shell:**
-   In `customer-app/App.jsx`, the cart retrieval effect was updated to exclude `CART`:
-   ```javascript
-   // Update cart count and summary when entering authenticated flow
-   // CartScreen manages its own authoritative cart fetching; exclude CART to prevent duplicate simultaneous requests.
-   useEffect(() => {
-     if (
-       AUTHENTICATED_SCREENS.includes(currentScreen) &&
-       isProfileComplete &&
-       currentScreen !== 'PROFILE_COMPLETION' &&
-       currentScreen !== 'CART'
-     ) {
-       fetchCartSummary();
-     }
-   }, [currentScreen, isProfileComplete, fetchCartSummary]);
-   ```
-2. **Preserved Continuous Synchronization via `onCartUpdated`:**
-   `CartScreen.jsx` already invokes `onCartUpdated(cartData)` on:
-   - Initial fetch resolution (`fetchCart`)
-   - Pull-to-refresh resolution (`handleRefresh`)
-   - Stepper quantity increments and decrements (`handleUpdateQty`)
-   - Item removal (`handleRemoveItem`)
-   - Cart clearance (`handleClearCart`)
-   
-   In `App.jsx`, `handleCartUpdated` consumes `cartData.summary` directly:
-   ```javascript
-   const handleCartUpdated = useCallback((cartData) => {
-     if (cartData?.summary) {
-       setCartSummary(cartData.summary);
-     } else if (Array.isArray(cartData?.items)) {
-       setCartSummary((prev) => ({
-         ...prev,
-         totalItems: cartData.items.length,
-       }));
-     }
-   }, []);
-   ```
-   When navigating to `CART`, exactly **one** network request is made (by `CartScreen`), and `App.jsx`'s `cartSummary` is updated immediately via `onCartUpdated` when `CartScreen` receives the response.
+| Commit Hash | Type | Summary |
+| :--- | :--- | :--- |
+| `0824d31c4ce34d91a12fadb4aeae3cdfec7fb391` | Baseline | Approved starting baseline commit on `main`. |
+| `2b542947fa611f1792775bcb8403c5ad1b42e073` | Feature | Initial Phase 3B.3 implementation across Workstreams A, B, C, and D. |
+| `a0168361c579084bf8747580cf9706832e61bcb5` | Correction | Request identity isolation (skipUnauthorizedHandler & timeout scoping), cancellation fallback, and 23 deduplication tests. |
+| `c4c47084e269730e46d68a6bb6177c542d9ab58c` | Correction | Stale-entry deletion race fix via identity checks, semantic fetch option support, and direct bypass safety. |
+| `d0ce60b5a9b8b47c1963665f1d4fa94efb6111a3` | Correction | Case-insensitive Authorization header normalization, ambiguous credential rejection (`API_INVALID_HEADERS`), and explicit token preservation. |
+| `1e04156c471358073184186b37366ab20bd3b4ee` | Correction | Structured JSON array deduplication key and tuple auth identity (`['AUTH', token]` vs `['ANON']`), eliminating prefix collisions (`foo` vs `AUTH:foo`) and delimiter collisions. |
+| `121a9bdf2b1e21bfabb734d6a230f1f5d9956ad6` | Correction | Authorization scheme preservation in request identity (`['AUTH', effectiveAuth]`), ensuring `Bearer foo`, raw `foo`, and `Basic foo` dispatch distinct fetches while canonical casing/whitespace coalesce cleanly. |
+| `a81945a0cb9c0300bfcf4dff74902072e0f93dfd` | Test/Doc | Added Test 5.46 verifying extracted 401 token lifecycle and startup probe isolation; updated documentation. |
+| `118a4498e7a7f851fdd49c31b323009798c825f2` | Docs | Initial Phase 3B.3 report qualification and correction. |
 
 ---
 
-## 4. Workstream B: Safe In-Flight GET Request Deduplication
+## 3. Files Changed
 
-### 4.1 Architecture and Request-Option Aware Key Construction
-In `customer-app/src/services/api.js`, an in-flight request registry is maintained:
+| File Path | Nature of Changes |
+| :--- | :--- |
+| [`customer-app/App.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/App.jsx) | Excluded `currentScreen === 'CART'` from authenticated `fetchCartSummary` effect trigger; added `api.clearInFlightRequests()` to `handleLogout` upon session clearance. |
+| [`customer-app/src/services/api.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js) | Implemented case-insensitive Authorization header detection and normalization via `extractAndNormalizeAuthorization`, rejection of conflicting credentials with `API_INVALID_HEADERS`, preservation of explicit caller tokens without Keystore overwrites, canonical Authorization scheme representation in deduplication identity (`['AUTH', effectiveAuth]` vs `['ANON']`), option-aware collision-safe `buildDeduplicationKey` using complete JSON structured array serialization (`JSON.stringify(['GET', url, authIdentity, skip401, timeout, headers, opts])`), semantic fetch options extraction (`SUPPORTED_SEMANTIC_FETCH_OPTIONS`), safe bypass for unrepresentable options, identity-safe deletion guards (`inFlightGetRequests.get(dedupKey) === entry`), settled entry state hygiene, uniform subscriber model, AbortController fallback mechanics, cancellation isolation, settle cleanup, response cloning, and exported management methods (`clearInFlightRequests`, `getInFlightRequestCount`). |
+| [`customer-app/src/screens/HomeScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/HomeScreen.jsx) | Added `existingCategories` support in `fetchHomeDataOrchestrated` to reuse loaded categories on non-refresh transitions; added `categoriesRef` in `HomeScreen` to pass cached categories without triggering hook dependency re-render loops. |
+| [`tests/unit/customer-app-phase3-startup.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase3-startup.test.js) | Added Suite 5 (46 tests: 5.1–5.46) covering in-flight GET request deduplication, case-insensitive Authorization normalization, conflicting header rejection, 401 identity isolation, cancellation fallbacks, replacement-entry race protection, structured collision-safe keys, production request credential isolation (`foo` vs `AUTH:foo`, auth vs anon, token named `ANON`), authorization scheme preservation (`Bearer foo` vs raw `foo` vs `Basic foo`), wire header verification, delimiter safety, query string distinctness, 401 token lifecycle extraction verification; and Suite 6 (13 tests: 6.1–6.13) covering cart/home request ownership and static code structure invariants. |
+| [`customer-app/docs/PHASE_3B_3_API_REQUEST_EFFICIENCY_REPORT.md`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/docs/PHASE_3B_3_API_REQUEST_EFFICIENCY_REPORT.md) | Comprehensive engineering, QA audit, and verification report for Phase 3B.3. |
+
+---
+
+## 4. Request Deduplication Behavior
+
+### 4.1 In-Flight GET Request Registry
+In `customer-app/src/services/api.js`, an in-flight request registry is maintained in memory:
 ```javascript
 const inFlightGetRequests = new Map();
 ```
+When a network request is initiated via `request(endpoint, options)`:
+1. **Method Check:** Deduplication is strictly evaluated for HTTP `GET` requests (`isGet = method === 'GET'`). Non-GET mutations (`POST`, `PUT`, `PATCH`, `DELETE`) evaluate `dedupKey = null` and completely bypass the registry. Every mutation spawns its own independent HTTP socket.
+2. **Key Computation:** If eligible, `buildDeduplicationKey` computes an option-aware identity string.
+3. **Registry Lookup:** If an active, unsettled entry already exists for that key (`entry && !entry.isSettled`), the calling invocation registers as an additional subscriber on that entry rather than initiating a new network fetch.
+4. **Initiator Lifecycle:** If no active entry exists, the calling invocation becomes the initiator. It creates an `AbortController` (if supported) for the network socket, initializes an empty `Set` of subscribers, and dispatches the actual fetch asynchronously.
+5. **Settlement & Data Isolation:** When the underlying network promise settles:
+   - On success, each registered subscriber's promise is resolved with an independent deep clone (`cloneResponse(json)`) to guarantee data isolation and prevent cross-subscriber object mutation.
+   - On rejection, the error is propagated to all waiting subscribers.
+   - The entry is marked `entry.isSettled = true`, and removed from `inFlightGetRequests`.
+   - **No Caching:** Completed responses are never cached in memory or served to subsequent calls. Any request initiated after settlement triggers a fresh network round-trip.
 
-#### Deduplication Identity Isolation
-Early iterations keyed entries simply as `GET:<url>:<token|ANON>`. However, an audit revealed that this was insufficient when different callers requested the same URL and token with differing request semantics. Most critically, during app launch:
-- **Startup Profile Validation (`startup-session.js`):** Invokes `getProfile` with `{ skipUnauthorizedHandler: true, timeoutMs: 5000 }`.
-- **Normal Authenticated Request (`HomeScreen.jsx` / `ProfileScreen.jsx`):** Invokes `getProfile` with `{ skipUnauthorizedHandler: false, timeoutMs: 15000 }` (defaults).
-
-If coalesced:
-1. **Startup-First Order:** The normal user request would share the probe's promise, suppressing the centralized `onUnauthorizedCallback` when an authentication failure occurs, leaving the user stranded without navigation to login.
-2. **Normal-First Order:** The startup probe would share the normal request, causing a startup probe 401 to trigger an unexpected global logout sequence.
-
-To guarantee complete behavioral isolation, case-insensitive Authorization header safety, and delimiter collision prevention, `extractAndNormalizeAuthorization` normalizes credentials and `buildDeduplicationKey` structures keys deterministically:
-```javascript
-function extractAndNormalizeAuthorization(headers) {
-  if (!headers || typeof headers !== 'object') {
-    return { hasAuth: false, token: null, rawValue: null, isSafe: true };
+### 4.2 Stale-Entry Race Protection
+To eliminate race conditions between settling operations and newly registered requests:
+- Deletions in both the `finally` block and subscriber detachment handlers are strictly identity-guarded by reference equality:
+  ```javascript
+  if (inFlightGetRequests.get(dedupKey) === entry) {
+    inFlightGetRequests.delete(dedupKey);
   }
+  ```
+  If all subscribers abort or `clearInFlightRequests()` runs and a new request registers under the same key before the old network socket closes, the old settling request cannot delete the newly registered entry.
+- Furthermore, `request()` ignores any entry where `entry.isSettled === true`, ensuring stale settling promises never resolve replacement callers.
 
-  const authKeys = Object.keys(headers).filter(
-    (k) => k.toLowerCase() === 'authorization'
-  );
+---
 
-  if (authKeys.length === 0) {
-    return { hasAuth: false, token: null, rawValue: null, isSafe: true };
-  }
+## 5. Authentication Identity and Session Isolation Behavior
 
-  const firstKey = authKeys[0];
-  const firstValue = headers[firstKey];
+### 5.1 Case-Insensitive Authorization Normalization
+HTTP header names are case-insensitive. Callers or middleware may provide `Authorization`, `authorization`, or `AUTHORIZATION`. The helper `extractAndNormalizeAuthorization(headers)` handles all variations:
+- It locates all header keys matching `authorization` case-insensitively.
+- If multiple Authorization headers are provided with conflicting values, it throws an error with `err.code = 'API_INVALID_HEADERS'` and immediately fails closed without dispatching network traffic.
+- If values match, it deletes all casing duplicates and attaches exactly one canonical `headers.Authorization` property.
+- When an explicit Authorization header is present, Keystore lookup is bypassed, preserving caller credentials and preventing Keystore overwriting.
 
-  for (let i = 1; i < authKeys.length; i++) {
-    const k = authKeys[i];
-    const val = headers[k];
-    if (String(firstValue).trim() !== String(val).trim()) {
-      const err = new Error('Ambiguous conflicting Authorization headers supplied');
-      err.code = 'API_INVALID_HEADERS';
-      throw err;
-    }
-  }
+### 5.2 Scheme Preservation & Delimiter-Safe Key Structure
+Early implementations keyed entries with token strings, which caused collisions between distinct HTTP schemes (`Bearer foo` vs raw `foo` vs `Basic foo`) and delimiter collisions.
 
-  for (const k of authKeys) {
-    delete headers[k];
-  }
-
-  if (firstValue === null || firstValue === undefined) {
-    return { hasAuth: true, token: null, rawValue: null, isSafe: true, isExplicitEmpty: true };
-  }
-
-  if (typeof firstValue !== 'string') {
-    return { hasAuth: true, token: null, rawValue: firstValue, isSafe: false };
-  }
-
-  const trimmed = firstValue.trim();
-  if (trimmed.length === 0) {
-    return { hasAuth: true, token: null, rawValue: '', isSafe: false };
-  }
-
-  const match = trimmed.match(/^Bearer\s+(.+)$/i);
-  const token = match ? match[1].trim() : trimmed;
-
-  // Set single canonical Authorization header, normalizing Bearer scheme casing
-  const canonicalAuth = match ? `Bearer ${token}` : trimmed;
-  headers.Authorization = canonicalAuth;
-  return { hasAuth: true, token, rawValue: canonicalAuth, isSafe: true };
-}
-
-function buildDeduplicationKey({
-  url,
-  requestToken,
-  skipUnauthorizedHandler = false,
-  effectiveTimeoutMs = DEFAULT_TIMEOUT_MS,
-  headers = {},
-  semanticOptions = null,
-  fetchOptions = null,
-}) {
-  let effectiveAuth = null;
-
-  // Inspect headers case-insensitively for Authorization header
-  if (headers && typeof headers === 'object') {
-    try {
-      const authInfo = extractAndNormalizeAuthorization({ ...headers });
-      if (!authInfo.isSafe) return null;
-      if (authInfo.hasAuth && authInfo.rawValue) {
-        effectiveAuth = authInfo.rawValue;
-      }
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // If headers did not contain Authorization, fallback to requestToken if explicitly passed
-  if (!effectiveAuth && requestToken !== undefined && requestToken !== null) {
-    const trimmed = String(requestToken).trim();
-    if (trimmed.length === 0) {
-      return null;
-    }
-    effectiveAuth = trimmed;
-  }
-
-  const normalizedHeaders = [];
-  if (headers && typeof headers === 'object') {
-    const keys = Object.keys(headers).sort((a, b) => {
-      const cmp = a.toLowerCase().localeCompare(b.toLowerCase());
-      return cmp !== 0 ? cmp : a.localeCompare(b);
-    });
-    for (const k of keys) {
-      const lower = k.toLowerCase();
-      if (lower !== 'authorization' && lower !== 'content-type') {
-        normalizedHeaders.push([lower, String(headers[k])]);
-      }
-    }
-  }
-
-  let semanticList = [];
-  if (Array.isArray(semanticOptions)) {
-    semanticList = [...semanticOptions].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
-  } else if (fetchOptions && typeof fetchOptions === 'object') {
-    semanticList = extractSemanticFetchOptions(fetchOptions);
-  }
-
-  const authIdentity = effectiveAuth !== null
-    ? ['AUTH', effectiveAuth]
-    : ['ANON'];
-
+In the corrected implementation:
+- `authInfo.rawValue` preserves the canonical wire header string (e.g. `Bearer foo`, `foo`, or `Basic foo`).
+- `authIdentity` is structured as a two-element tuple:
+  ```javascript
+  const authIdentity = effectiveAuth !== null ? ['AUTH', effectiveAuth] : ['ANON'];
+  ```
+- The complete deduplication key is serialized as a single JSON array:
+  ```javascript
   return JSON.stringify([
     'GET',
     url,
@@ -233,454 +114,282 @@ function buildDeduplicationKey({
     normalizedHeaders,
     semanticList,
   ]);
-}
-```
+  ```
+- **Collision Invariants Guaranteed:**
+  - `Authorization: Bearer foo` produces `['AUTH', 'Bearer foo']`.
+  - Raw `Authorization: foo` produces `['AUTH', 'foo']`.
+  - `Authorization: Basic foo` produces `['AUTH', 'Basic foo']`.
+  - Token `AUTH:foo` produces `['AUTH', 'AUTH:foo']`.
+  - Anonymous requests produce `['ANON']`.
+  - A token named `'ANON'` produces `['AUTH', 'ANON']`.
+  All states remain strictly collision-safe under JSON serialization.
+  Equivalent schemes with casing/whitespace variations (`bearer  foo  `) canonicalize to `Bearer foo` and coalesce cleanly.
 
-**Key Invariants & Collision Protection:**
-- **GET Requests Only:** Non-GET methods (`POST`, `PUT`, `PATCH`, `DELETE`) evaluate `dedupKey = null` and bypass deduplication completely. Every mutation creates its own independent HTTP socket request.
-- **Authorization Scheme Preservation:** Deduplication identity represents the exact effective normalized Authorization header sent over the wire, including authentication scheme (`Bearer`, `Basic`, or raw credentials). Callers providing `Authorization: Bearer foo`, raw `Authorization: foo`, and `Authorization: Basic foo` produce `['AUTH', 'Bearer foo']`, `['AUTH', 'foo']`, and `['AUTH', 'Basic foo']` respectively. Distinct wire Authorization schemes never share an in-flight network request. Equivalent schemes with casing or whitespace variations (`bearer foo`, `   Bearer   foo   `) normalize to `Bearer foo` and coalesce cleanly.
-- **Prefix Collision Elimination:** In previous iterations, prefix string manipulation (`effectiveToken.startsWith('AUTH:') ? effectiveToken : 'AUTH:' + effectiveToken`) allowed `foo` and `AUTH:foo` to collapse to the same identity (`AUTH:foo`). In the corrected implementation, authentication state is represented as a structured 2-element tuple `['AUTH', effectiveAuth]` vs `['ANON']`. Under JSON serialization:
-  - Token `Bearer foo` -> `['AUTH', 'Bearer foo']` -> `["AUTH","Bearer foo"]`
-  - Token `foo` -> `['AUTH', 'foo']` -> `["AUTH","foo"]`
-  - Token `AUTH:foo` -> `['AUTH', 'AUTH:foo']` -> `["AUTH","AUTH:foo"]`
-  - Anonymous -> `['ANON']` -> `["ANON"]`
-  - Token named `ANON` -> `['AUTH', 'ANON']` -> `["AUTH","ANON"]`
-  All authentication states, schemes, and distinct credentials remain strictly collision-safe and distinct.
-- **Structured Array Delimiter Collision Immunity:** Rather than joining key fields with colons (`parts.join(':')`), which allowed delimiter characters in URLs, query parameters, and tokens to cross field boundaries, the entire key is serialized as a single JSON array `['GET', url, authIdentity, skip401, timeout, headers, opts]`. Each field occupies an exact array index and is self-delimited by standard JSON syntax.
-- **Case-Insensitive Authorization Normalization:** Detects `Authorization`, `authorization`, `AUTHORIZATION`, and other casing variants. Deletes casing duplicates and attaches exactly one canonical `Authorization` header.
-- **Ambiguous Header Conflict Rejection:** If multiple differently-cased Authorization properties are supplied with conflicting values, throws `API_INVALID_HEADERS` and immediately rejects the promise without dispatching network calls.
-- **Explicit Token Preservation:** If the caller provides an explicit Authorization header (e.g. `getProfile(token)`), Keystore lookup is bypassed so stored credentials never overwrite caller-specified tokens.
-- **Semantic Fetch Option Scoping:** Fetch options that alter response semantics (`cache`, `credentials`, `mode`, etc.) are sorted and included deterministically in the structured array, preventing inappropriate coalescing between different fetch modes.
-- **Safe Deduplication Bypass:** Requests containing non-standard configurations (e.g. GET requests with a body), unrepresentable or unsafe Authorization (non-string, empty), unknown/unrepresented options, or complex non-primitive option values safely return `dedupKey = null` and execute directly without in-flight deduplication.
-- **URL & Query Parameter Specificity:** `url` includes the complete request path and serialized query parameters at index 1, ensuring distinct queries never coalesce.
-- **401 Handler Isolation:** `skipUnauthorizedHandler` is serialized as boolean `true` or `false` at index 3, guaranteeing disjoint keys and preventing startup probe / normal request coalescing.
-- **Timeout Isolation:** Requests with different timeouts (e.g. 5000ms vs 15000ms) serialize distinct numbers at index 4 and run independently.
-- **Credential Protection:** In-flight keys and header values are kept in memory and are never written to application logs.
-
-### 4.2 Uniform Subscriber Lifecycle & Stale-Entry Race Protection
-Every caller awaiting an in-flight request is treated uniformly as a subscriber:
-```javascript
-let entry = inFlightGetRequests.get(dedupKey);
-if (entry && entry.isSettled) {
-  entry = null;
-}
-const isInitiator = !entry;
-
-if (isInitiator) {
-  const hasAbortController = typeof AbortController !== 'undefined';
-  const controller = hasAbortController ? new AbortController() : null;
-
-  entry = {
-    key: dedupKey,
-    subscribers: new Set(),
-    controller,
-    isSettled: false,
-  };
-  inFlightGetRequests.set(dedupKey, entry);
-
-  // Background network execution
-  (async () => {
-    try {
-      const json = await executeNetworkRequest({
-        url,
-        endpoint,
-        method,
-        headers,
-        requestToken,
-        effectiveTimeoutMs,
-        options,
-        controller,
-        callerSignal: null, // Shared network request MUST NOT inherit initiating subscriber's signal
-      });
-      entry.isSettled = true;
-      for (const sub of Array.from(entry.subscribers)) {
-        entry.subscribers.delete(sub);
-        if (sub.cleanup) sub.cleanup();
-        sub.resolve(cloneResponse(json));
-      }
-    } catch (err) {
-      entry.isSettled = true;
-      for (const sub of Array.from(entry.subscribers)) {
-        entry.subscribers.delete(sub);
-        if (sub.cleanup) sub.cleanup();
-        sub.reject(err);
-      }
-    } finally {
-      entry.isSettled = true;
-      // Stale-entry protection: delete only if this exact entry is still current in registry
-      if (inFlightGetRequests.get(dedupKey) === entry) {
-        inFlightGetRequests.delete(dedupKey);
-      }
-    }
-  })();
-}
-```
-
-**Identity-Aware Stale Deletion Protection:**
-In both the `finally` block and the subscriber detachment handler, `inFlightGetRequests.delete(dedupKey)` is strictly guarded by reference equality:
-```javascript
-if (inFlightGetRequests.get(dedupKey) === entry) {
-  inFlightGetRequests.delete(dedupKey);
-}
-```
-This eliminates the race condition where:
-1. All subscribers abort or `clearInFlightRequests()` clears the map.
-2. A new request with the same key is registered immediately.
-3. The old background request settles later.
-4. Without the identity check, the old request's `finally` block would wipe the newly registered replacement entry from the map!
-
-**Settled State Hygiene:**
-When `clearInFlightRequests()` executes, each active entry is flagged `entry.isSettled = true` and `entry.subscribers.clear()`. When new callers invoke `request()`, any entry with `entry.isSettled === true` is ignored, guaranteeing that old settling requests can never resolve or reject newer requests.
-
-### 4.3 Cancellation Isolation & AbortController Fallback Mechanics
-
-#### Cancellation Isolation when `AbortController` is Available
-If Caller A provides `signalA` and aborts (e.g., component unmounts), Caller A is detached from `entry.subscribers` and its promise rejects with `API_ABORTED`. Crucially, the underlying network socket is **not aborted** as long as other subscribers remain in `entry.subscribers`:
-```javascript
-const onCallerAbort = () => {
-  entry.subscribers.delete(sub);
-  if (sub.cleanup) sub.cleanup();
-  const abortErr = new Error(`Request to ${endpoint} was aborted`);
-  abortErr.code = 'API_ABORTED';
-  abortErr.isAborted = true;
-  abortErr.networkCancelled = Boolean(entry.controller);
-  abortErr.reason = options.signal.reason || 'Operation aborted by caller';
-  reject(abortErr);
-
-  // Abort the underlying fetch ONLY if no subscribers remain listening
-  if (entry.subscribers.size === 0 && !entry.isSettled) {
-    if (entry.controller) {
-      try {
-        entry.controller.abort(options.signal.reason);
-      } catch (_) {}
-      entry.isSettled = true;
-      if (inFlightGetRequests.get(dedupKey) === entry) {
-        inFlightGetRequests.delete(dedupKey);
-      }
-    }
-  }
-};
-```
-If and only if **all** subscribers have aborted does `entry.controller.abort()` fire on the wire. Stale identity verification prevents premature deletion of subsequent replacement entries.
-```
-If and only if **all** subscribers have aborted does `entry.controller.abort()` fire on the wire.
-
-#### Cancellation Fallback when `AbortController` is Unavailable
-In environments where native `AbortController` is unavailable:
-1. **No Signal Inheritance:** `executeNetworkRequest` is invoked with `callerSignal: null`. The shared fetch does not race against any single subscriber's signal.
-2. **Independent Subscriber Detachment:** Each subscriber attaches its own abort listener to its individual subscriber promise. If Caller A aborts, Caller A detaches and rejects with `code: 'API_ABORTED'`, `networkCancelled: false`, leaving Caller B actively listening.
-3. **Socket Boundary:** Because no native `AbortController` is present, the underlying HTTP socket cannot be physically cancelled (`networkCancelled: false`). Timeout is enforced via `fallbackTimer`.
-4. **Resolution Guarantee:** When the underlying request finishes, any remaining subscribers (e.g. Caller B) receive the completed response data. If all subscribers detach, the request finishes cleanly in the background and removes the entry in `finally`.
-
-### 4.4 Data Isolation
-To prevent object mutation bugs across co-subscribers sharing the same response, `cloneResponse(json)` provides deep payload isolation so that one subscriber modifying `res.data` cannot mutate the other subscriber's data.
+### 5.3 Request Identity Isolation for Startup Probes
+Startup session validation (`startup-session.js`) executes `getProfile(stored.token, { skipUnauthorizedHandler: true, timeoutMs: 5000 })`.
+Normal screens (`HomeScreen.jsx`, `ProfileScreen.jsx`) execute `getProfile()` with `{ skipUnauthorizedHandler: false, timeoutMs: 15000 }`.
+Because `skipUnauthorizedHandler` (boolean at index 3) and `effectiveTimeoutMs` (number at index 4) are encoded directly in the structured JSON array:
+- The startup probe and standard profile requests produce disjoint keys and **never coalesce**.
+- A 401 on the startup probe cannot inadvertently trigger global logout via the centralized handler.
+- A 401 on a normal user request cannot be swallowed by a coalesced probe.
 
 ---
 
-## 5. Workstream C: Category & Home Data Ownership
+## 6. Request Ownership and Cancellation Behavior
 
-### 5.1 Conditional Category Reuse
-In `customer-app/src/screens/HomeScreen.jsx`, categories are relatively static metadata compared to dynamic fish inventory. `fetchHomeDataOrchestrated` was updated to accept `existingCategories`:
-```javascript
-export async function fetchHomeDataOrchestrated({
-  apiClient,
-  setFishList,
-  setCategories,
-  setSubData,
-  setTrackingData,
-  setCustomer,
-  setLoading,
-  setRefreshing,
-  setError,
-  abortControllerRef,
-  isMountedRef,
-  requestSeqRef,
-  isRefresh = false,
-  existingCategories = null,
-}) {
-  ...
-  // Re-use already loaded categories unless explicitly refreshing
-  const hasCategories = !isRefresh && Array.isArray(existingCategories) && existingCategories.length > 0;
-  const catsPromise = hasCategories
-    ? Promise.resolve().then(() => {
-        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-        setCategories(existingCategories);
-      })
-    : apiClient.getCategories({ signal })
-        .then((res) => {
-          if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-          setCategories(res.data || []);
-        })
-        .catch((err) => {
-          if (err.code !== 'API_ABORTED') {
-            console.warn('[HOME CATEGORIES NON-FATAL]', err.message);
-          }
-        });
-  ...
-}
-```
+### 6.1 Uniform Subscriber Model & Cancellation Isolation
+Every caller awaiting an in-flight request is treated as an independent subscriber attached to `entry.subscribers`:
+- Each subscriber registers its own `resolve`, `reject`, and optional `cleanup` callback.
+- **No Shared Signal Inheritance:** The shared underlying network socket does **not** inherit the initiating caller's `AbortSignal`.
+- **Individual Abort:** When Subscriber A aborts (e.g., due to component unmounting or navigation):
+  1. Subscriber A is removed from `entry.subscribers`.
+  2. Subscriber A's promise immediately rejects with `API_ABORTED` (`isAborted: true`, `reason: ...`).
+  3. The underlying network request is **not aborted** as long as other subscribers remain in `entry.subscribers`.
+  4. Subscriber B continues awaiting the network response without interruption.
+- **Wire Abort on Last Subscriber:** If and only if **all** subscribers abort before the request settles does the shared `entry.controller.abort()` fire on the wire.
 
-### 5.2 Category Reference Stability in HomeScreen
-In `HomeScreen.jsx`, a ref (`categoriesRef`) tracks the latest categories state without creating re-render loops:
-```javascript
-const [categories, setCategories] = useState([]);
-const categoriesRef = useRef(categories);
-categoriesRef.current = categories;
+### 6.2 Fallback Mechanics When `AbortController` is Unavailable
+In environments where `AbortController` is not supported:
+- `entry.controller` is `null`.
+- Subscribers attach abort listeners to their individual subscriber promises. If Subscriber A aborts, Subscriber A detaches and rejects with `code: 'API_ABORTED'`, `networkCancelled: false`.
+- The shared background network operation completes cleanly, delivering data to any remaining subscribers without unhandled rejections.
 
-const loadAllData = useCallback(async (isRefresh = false) => {
-  return fetchHomeDataOrchestrated({
-    apiClient: api,
-    setFishList,
-    setCategories,
-    setSubData,
-    setTrackingData,
-    setCustomer,
-    setLoading,
-    setRefreshing,
-    setError,
-    abortControllerRef,
-    isMountedRef,
-    requestSeqRef,
-    isRefresh,
-    existingCategories: categoriesRef.current,
+### 6.3 Logout Session Clearance
+When the user logs out (`handleLogout` in `App.jsx`):
+- `api.clearInFlightRequests()` is invoked immediately after clearing Keystore tokens.
+- Active in-flight requests abort their underlying controllers and reject all waiting subscribers with `API_SESSION_RESET`.
+- The registry is emptied, preventing any pending responses from resolving in an unauthenticated or subsequent user session.
+
+---
+
+## 7. Home-Screen Startup Orchestration Behavior
+
+### 7.1 Category Re-fetching Optimization
+In `customer-app/src/screens/HomeScreen.jsx`:
+- Categories represent relatively static product classification metadata.
+- `fetchHomeDataOrchestrated` accepts `existingCategories = null`.
+- When navigating back to `HOME` during normal use:
+  - If `categories` already exist in state and the request is not a user pull-to-refresh (`!isRefresh && existingCategories?.length > 0`), the orchestrator reuses `existingCategories` immediately via `Promise.resolve()`, making **zero** network requests.
+  - When the user performs a pull-to-refresh (`isRefresh = true`), existing categories are bypassed and a fresh network request is dispatched to `api.getCategories()`.
+- In `HomeScreen.jsx`, a `categoriesRef` holds the latest categories across renders, allowing `loadAllData` to access current categories without adding `categories` to its `useCallback` dependency array, eliminating unnecessary re-render and re-fetching loops.
+
+### 7.2 Fish Catalogue Priority 1 Preserved
+The critical fish inventory catalogue remains strictly Priority 1:
+- `api.getFish()` resolves and immediately invokes `setLoading(false)` and `setFishList(res.data)`.
+- Visual display of available inventory unblocks instantly, decoupled from secondary metadata queries (subscription, tracking, profile).
+
+---
+
+## 8. Cart Data Ownership Behavior
+
+### 8.1 CartScreen Authoritative Ownership
+Prior to Phase 3B.3, `App.jsx` triggered `fetchCartSummary()` on entry to any screen in `AUTHENTICATED_SCREENS`. Navigating to `CART` produced two simultaneous `GET /api/v1/customer/cart` requests (one from `App.jsx`, one from `CartScreen.jsx`).
+
+To establish clear, authoritative data ownership:
+- `customer-app/App.jsx` explicitly excludes `'CART'` from the authenticated screen badge-fetch trigger:
+  ```javascript
+  useEffect(() => {
+    if (
+      AUTHENTICATED_SCREENS.includes(currentScreen) &&
+      isProfileComplete &&
+      currentScreen !== 'PROFILE_COMPLETION' &&
+      currentScreen !== 'CART'
+    ) {
+      fetchCartSummary();
+    }
+  }, [currentScreen, isProfileComplete, fetchCartSummary]);
+  ```
+- `CartScreen.jsx` is the sole authoritative owner of cart data when the user visits the Cart screen. It fetches the full itemized cart state upon mounting and during pull-to-refresh.
+
+### 8.2 Continuous Synchronization via `onCartUpdated`
+Global badge counts in `App.jsx` remain perfectly synchronized:
+- `CartScreen.jsx` notifies `App.jsx` via `onCartUpdated(cartData)` on:
+  - Initial fetch completion (`fetchCart`)
+  - Pull-to-refresh resolution (`handleRefresh`)
+  - Stepper quantity changes (`handleUpdateQty`)
+  - Item removals (`handleRemoveItem`)
+  - Cart clearance (`handleClearCart`)
+- When the user navigates to `CART`, exactly **one** network request is made (by `CartScreen`), and `App.jsx`'s `cartSummary` badge updates immediately upon response arrival.
+
+---
+
+## 9. Tests and Exact Test Results
+
+### 9.1 Test Execution Table
+
+| Execution | Exact Command | Passed | Failed | Skipped | Exit Code | Explanation |
+| :--- | :--- | ---: | ---: | ---: | ---: | :--- |
+| **Customer App Unit & Integration Suite** | `npm test --prefix customer-app` | 141 | 0 | 0 | **0** | **PASSED:** All 12 customer-app suites (141 tests) pass cleanly in ~15.9s. Covers Responsiveness (Phase 1), Virtualization (Phase 2), Startup & 401 Coordination (Phase 3B.2), In-Flight GET Deduplication (Suite 5: 46 tests), and Cart/Home Ownership (Suite 6: 13 tests). |
+| **Root Repository Parallel Suite** | `npm test` | 335 | 0 | 0 | **0** | **PASSED:** All 14 suites in root ecosystem pass in parallel in 16.1s (exit code 0). Remote Supabase DB responded within connection pool timeout. |
+| **Root Repository Sequential Suite (Clean Run)** | `node --test --test-concurrency=1 "tests/**/*.test.js"` | 335 | 0 | 0 | **0** | **PASSED:** Executed sequentially across all 14 suites in 74.2s (Task 3543, exit code 0). All unit, integration, and PostgreSQL suites passed. |
+| **Root Repository Sequential Suite (Historical DB Latency)** | `node --test --test-concurrency=1 "tests/**/*.test.js"` | 329 | 6 | 0 | **1** | **FAILED (Infrastructure):** Executed in Task 3394 (79.3s) and Task 3425 (162.5s). Exited with code 1 due to remote Supabase PostgreSQL connection pool timeout (5000ms checkout timeout in `lib/db/pool.js:127`). Failing tests: `tests/integration/postgres-subscription-lifecycle.test.js` (`1. Initial purchase...` failed with `Connection terminated due to connection timeout`, cascading to 5 subtests and suite failure) and `tests/integration/postgres-bill-concurrency-and-scoping.test.js` (`timeout exceeded when trying to connect`). Customer app suites (141/141) passed 100%. |
+| **Root Repository Parallel Run (Historical Network Degradation)** | `npm test` | 321 | 14 | 0 | **1** | **FAILED (Infrastructure):** Executed in Task 3450 (94.0s). Exited with code 1 when remote Supabase network latency caused connection checkout timeouts across both PostgreSQL integration test suites. |
+
+---
+
+### 9.2 Customer App Test Breakdown (141/141 Passing)
+- **Suite 1: Phase 1 Responsiveness Suite (38 tests):**
+  - Section 1.1–1.4: Keystore stale-token logout protection & atomic token clearing.
+  - Section 3.1–3.15: API client timeout, abort, retry boundaries, and AbortController fallbacks.
+  - Section 5.1–5.6: Home screen prioritized data-loading orchestration.
+- **Suite 2: Phase 2 Virtualization Suite (21 tests):**
+  - List virtualization configuration, windowing, item layout measurements, fish image optimization.
+- **Suite 3: Phase 3B.2 Startup & Navigation Guard Suite (23 tests):**
+  - Startup session orchestrator transitions, 401 single-owner coordination, navigation guard gates.
+- **Suite 5: Phase 3B.3 In-Flight GET Request Deduplication Suite (46 tests: 5.1–5.46):**
+  - Coalescing concurrent GETs into single fetch (5.1); distinct URLs, query parameters, and tokens (5.2, 5.3, 5.42); mutations bypass dedup (5.4); `bypassDedup: true` (5.5); immediate settle cleanup (5.6); error propagation and non-caching (5.7, 5.8); cancellation isolation (5.9); all-subscriber cancellation (5.10); pre-aborted signal fast-fail (5.11); session reset clearance (5.12); response clone data isolation (5.13); startup probe vs authenticated request isolation (5.14, 5.15, 5.16); timeout isolation (5.17); custom header isolation (5.18); mutation safety during session reset (5.19); AbortController unavailable fallback (5.20); registry timeout cleanup (5.21); all-caller abort cleanup (5.22); option-aware key verification (5.23); stale entry race protection on abort settle (5.24); stale entry race protection on session reset (5.25); replacement subscriber isolation (5.26); collision-safe headers (5.27); case-insensitive header normalization (5.28); semantic fetch options (5.29); unsupported options bypass (5.30); case-insensitive Authorization normalization (5.31); conflicting Authorization rejection with `API_INVALID_HEADERS` (5.32); duplicate Authorization collapse (5.33); explicit token isolation (5.34); custom Authorization vs Keystore token (5.35); unsafe Authorization bypass (5.36); explicit getProfile token behavior (5.37); production request isolation for `foo` vs `AUTH:foo` (5.38); production request coalescing for identical tokens (5.39); auth vs anon vs token-named-`ANON` isolation (5.40); delimiter safety in URLs/tokens (5.41); query string isolation and coalescing (5.42); scheme isolation (`Bearer foo` vs raw `foo` vs `Basic foo`) (5.43); scheme coalescing and whitespace normalization (5.44); Keystore vs explicit Authorization wire comparison (5.45); and 401 token lifecycle extraction verification (5.46).
+- **Suite 6: Phase 3B.3 Cart & Home Ownership Suite (13 tests: 6.1–6.13):**
+  - Cart navigation exclusion in App shell (6.1, 6.6); `handleCartUpdated` state update (6.2); category reuse on non-refresh transitions (6.3); category refetch on pull-to-refresh (6.4); fish catalogue Priority 1 paint (6.5); logout in-flight clearance static check (6.7); api client deduplication registry export static checks (6.8–6.13).
+
+---
+
+### 9.3 Detailed Audit of Test 5.46 and Authentication Verification
+
+#### What Production API Code Does:
+In `customer-app/src/services/api.js`:
+1. `extractAndNormalizeAuthorization(headers)` parses the Authorization header. If formatted as `Bearer <token>`, it extracts `token = match[1].trim()`, while setting `canonicalAuth = Bearer ${token}`.
+2. In `request()`, `requestToken` is bound to the extracted clean token (e.g. `authInfo.token` for explicit headers, or `tokens.token` when retrieved from Keystore).
+3. If an authenticated request receives an HTTP 401 and `options.skipUnauthorizedHandler` is false, line 453 executes `onUnauthorizedCallback(requestToken)`.
+4. Crucially, the callback receives `requestToken`—the **extracted token string** (e.g. `my-token`), **not** the full Authorization header (e.g. `Bearer my-token`).
+
+#### What Test 5.46 Directly Verifies:
+Test 5.46 in `tests/unit/customer-app-phase3-startup.test.js` verifies:
+- **Part 1:** When an explicit `Authorization: Bearer explicit-bearer-token-val` request receives a 401, `api.js` extracts `explicit-bearer-token-val` and delivers that extracted string (without the `Bearer ` prefix) to the registered unauthorized callback.
+- **Part 2:** When a request passes `skipUnauthorizedHandler: true` (the startup probe pattern), a 401 response does **not** invoke the unauthorized callback, and no tokens are submitted for clearing.
+- **Part 3:** When a request derives its Authorization header from Keystore (`Bearer mock-session-secret`), a 401 response delivers the clean stored token `mock-session-secret` to the unauthorized callback.
+
+#### Nature of Test Doubles in Test 5.46:
+- The callback registered via `setUnauthorizedHandler` is a **mock test double closure**:
+  ```javascript
+  setUnauthorizedHandler(async (rejectedToken) => {
+    reportedUnauthorizedToken = rejectedToken;
+    await mockStorage.clearAuthTokens(rejectedToken);
   });
-}, []);
-```
-- **Initial Mount (`categories = []`):** `hasCategories` is false; dispatches `api.getCategories()`.
-- **Secondary Non-Refresh Transitions:** `hasCategories` is true; reuses `existingCategories` instantly with zero network round-trips.
-- **Pull-to-Refresh (`isRefresh = true`):** `hasCategories` is false; executes a fresh network call to `api.getCategories()`.
-- **Catalogue Priority 1 Preserved:** `api.getFish()` continues to unblock visual loading (`setLoading(false)`) immediately upon arrival, completely decoupled from secondary calls.
+  ```
+- `mockStorage.clearAuthTokens` is an **in-memory mock function**:
+  ```javascript
+  clearAuthTokens: async (expectedToken) => {
+    clearedTokens.push(expectedToken);
+    return true;
+  }
+  ```
+- The mock callback forwards the extracted token directly to the mock token-clearing function.
+
+#### What Test 5.46 Does NOT Independently Prove:
+- Test 5.46 does **not** execute the real `App.jsx` React component or its lifecycle hooks (`useEffect`, `useCallback`).
+- Test 5.46 does **not** execute the real `customer-app/src/services/auth-storage.js` implementation or interact with Android Keystore hardware via `react-native-keychain`.
+- Test 5.46 does **not** demonstrate that `App.jsx`'s `handleUnauthorized` -> `handleLogout` state transitions successfully execute in a live React Native DOM/tree.
+
+#### Separate Independent Test Coverage:
+Separate test suites independently verify the components that Test 5.46 mocks:
+1. **Real `auth-storage.js` Implementation:**
+   - File: `tests/unit/customer-app-phase1-responsiveness.test.js`
+   - Tests: Section 1.1 (`An obsolete 401 does not clear either current auth token or current device token`), Section 1.2 (`A matching expected token clears the session and device token atomically`), Section 1.3 (`Ordinary user logout clears credentials...`), Section 1.4 (`Concurrent logout calls do not corrupt session state or storage queue`).
+   - Verifies the real `auth-storage.js` source code with a serialized mutation queue against a mock Keychain store, verifying that `clearAuthTokens(expectedToken)` returns `false` on token mismatch and `true` on match.
+2. **Real Startup Orchestrator 401 Coordination:**
+   - File: `tests/unit/customer-app-phase3-startup.test.js`
+   - Tests: Suite 2 tests 2.1–2.8 (e.g. Test 2.2: `Global unauthorized callback and startup orchestrator do not independently clear the same token`, Test 2.3: `The rejected token is passed to the one responsible clearAuthTokens operation`, Test 2.4: `A newer token is never removed by a stale 401`).
+   - Verifies that `orchestrateStartupSession` coordinates cleanly with production API logic and safely aborts transitions when token clearing is rejected.
+3. **Real Navigation Decision Logic:**
+   - File: `tests/unit/customer-app-phase3-startup.test.js`
+   - Tests: Suite 3 tests 3.1–3.4 (verifying `resolveNavigationDecision` redirects and gates).
+4. **Static Structural Invariants:**
+   - File: `tests/unit/customer-app-phase3-startup.test.js`
+   - Tests: Suite 4 (tests 4.1–4.5) and Suite 6 (tests 6.6, 6.7) verify that `App.jsx`, `SplashScreen.jsx`, and `startup-session.js` wire these production handlers and guard against race conditions.
 
 ---
 
-## 6. Workstream D: Account & Lifecycle Safety
+## 10. Build and Bundle Verification Results
 
-### 6.1 Logout Cleanup & Session Reset
-In `customer-app/src/services/api.js`, `clearInFlightRequests()` iterates over any active requests, aborts their controllers, rejects all waiting callers with `API_SESSION_RESET`, and clears the registry:
-```javascript
-function clearInFlightRequests() {
-  for (const [key, entry] of inFlightGetRequests.entries()) {
-    try {
-      if (entry.controller) {
-        entry.controller.abort('In-flight requests cleared');
-      }
-    } catch (_) {}
-    for (const sub of Array.from(entry.subscribers)) {
-      try {
-        if (sub.cleanup) sub.cleanup();
-        const err = new Error('In-flight request cancelled due to session reset');
-        err.code = 'API_SESSION_RESET';
-        err.isSessionReset = true;
-        sub.reject(err);
-      } catch (_) {}
-    }
-  }
-  inFlightGetRequests.clear();
-}
-```
-
-In `customer-app/App.jsx`, `handleLogout` invokes `api.clearInFlightRequests()` immediately after clearing credentials:
-```javascript
-  try {
-    didClear = await clearAuthTokens(expectedToken);
-    if (!didClear && expectedToken) {
-      console.warn('[LOGOUT] Session token changed before clearing; aborting obsolete logout');
-      return;
-    }
-    api.clearInFlightRequests();
-  } catch (e) {
-    console.warn('[LOGOUT] Error clearing tokens', e);
-  }
-```
-
-### 6.2 Preserved Single-Owner HTTP 401 Coordination
-The single-owner HTTP 401 token invalidation established in Phase 3B.2 is fully preserved:
-- Requests with `options.skipUnauthorizedHandler: true` (e.g. startup session probe) bypass the global unauthorized callback, allowing the startup orchestrator exclusive ownership of session clearance.
-- Standard authenticated requests encountering HTTP 401 notify the centralized handler, which passes the rejected token identity to `clearAuthTokens(expectedToken)`.
-- Concurrent in-flight 401 responses propagate the 401 rejection to all co-subscribers, while the de-duplication timestamp window (`now - lastRejectedTime < 1500`) prevents duplicate handler dispatches.
-
----
-
-## 7. Verification & Empirical Evidence
-
-### 7.1 Customer App Test Suite (`npm test --prefix customer-app`)
-Execution command:
-```bash
-npm test --prefix customer-app
-```
-**Results:**
-- **Total Tests:** 141
-- **Total Suites:** 12
-- **Pass:** 141
-- **Fail:** 0
-- **Cancelled:** 0
-- **Skipped:** 0
-- **Pass Rate:** **100.0%**
-
-#### Detailed Breakdown by Suite
-1. **Phase 1 Responsiveness Suite:** 38/38 passed
-   - Keystore stale-token logout protection (1.1–1.4)
-   - API client timeout, abort, and retry boundaries (3.1–3.15)
-   - Home screen prioritized orchestration (5.1–5.6)
-2. **Phase 2 Virtualization Suite:** 21/21 passed
-   - List virtualization configuration (1.1–1.5)
-   - Layout measurement stability & `getItemLayout` (2.1–2.4)
-   - Key extractor uniqueness & render optimization (3.1–3.4)
-   - Optimized fish image downsampling & error safety (4.1–4.5)
-3. **Phase 3B.2 Startup & Navigation Guard Suite:** 23/23 passed
-   - Startup session orchestrator state transitions (1.1–1.7)
-   - 401 coordination & single-owner unauthorized handling (2.1–2.8)
-   - Navigation guard & onboarding gate transitions (3.1–3.4)
-   - Static source structural invariants (4.1–4.5)
-4. **Phase 3B.3 In-Flight GET Request Deduplication Suite (Suite 5):** 46/46 passed
-   - `5.1`: Multiple identical concurrent GET requests share exactly 1 low-level network fetch.
-   - `5.2`: Distinct GET requests with different query parameters execute separate fetches.
-   - `5.3`: Distinct session tokens execute separate fetches.
-   - `5.4`: Non-GET mutations (POST, PUT, PATCH, DELETE) are never deduplicated.
-   - `5.5`: `bypassDedup: true` forces a fresh fetch.
-   - `5.6`: Immediate settle cleanup: in-flight entry deleted immediately after settlement; subsequent calls dispatch fresh fetches.
-   - `5.7`: Error propagation: rejected fetch propagates error to all concurrent callers.
-   - `5.8`: Error non-caching: failed request does not poison future requests.
-   - `5.9`: Caller cancellation isolation: Caller A aborting does NOT interrupt Caller B.
-   - `5.10`: All callers aborting cancels the underlying network fetch controller.
-   - `5.11`: Pre-aborted caller signal fails fast without making a network call.
-   - `5.12`: `clearInFlightRequests()` aborts active in-flight requests with `API_SESSION_RESET`.
-   - `5.13`: Data isolation: co-subscribers receive isolated clones of response payload.
-   - `5.14`: Request identity isolation: startup profile probe (`skipUnauthorizedHandler: true`) and normal profile request (`skipUnauthorizedHandler: false`) do NOT coalesce into one request.
-   - `5.15`: Startup-first ordering: 401 on startup probe does not invoke global unauthorized handler.
-   - `5.16`: Normal-first ordering: 401 on normal request invokes global unauthorized handler with rejected token.
-   - `5.17`: Timeout isolation: requests with different `timeoutMs` do not share in-flight entry.
-   - `5.18`: Header isolation: requests with different custom headers do not share in-flight entry.
-   - `5.19`: Direct mutations (POST, PUT, DELETE) are never cancelled by `clearInFlightRequests()`.
-   - `5.20`: Cancellation fallback when `AbortController` is NOT available: Caller A aborting does NOT fail Caller B; Caller B receives data; `networkCancelled: false` reported accurately.
-   - `5.21`: Timeout cleanup in registry: request timing out removes entry from Map.
-   - `5.22`: All callers aborting when `AbortController` is available cleans up registry immediately.
-   - `5.23`: `buildDeduplicationKey`: validates option-aware hashing, header sorting, case-insensitive Authorization normalization, and token segregation.
-   - `5.24`: Stale entry race: old request aborting all subscribers does not delete replacement entry on settle.
-   - `5.25`: Stale entry race: `clearInFlightRequests` followed by immediate new same-key request preserves new entry.
-   - `5.26`: Replacement subscriber isolation: old request settlement cannot resolve or reject subscribers belonging to replacement entry.
-   - `5.27`: Collision-safe headers: header value containing `=` and `&` versus separate headers produce distinct keys.
-   - `5.28`: Header case-insensitivity: different casing produces equivalent deduplication keys.
-   - `5.29`: Semantic fetch options: differing credentials, cache, or mode produce distinct keys.
-   - `5.30`: Unsupported or unrepresented options safely bypass deduplication.
-   - `5.31`: Case-insensitive Authorization header normalization: uppercase and lowercase coalesce cleanly.
-   - `5.32`: Two differently-cased Authorization headers with conflicting values reject with `API_INVALID_HEADERS`.
-   - `5.33`: Multiple identically-valued differently-cased Authorization headers normalize safely to single header.
-   - `5.34`: Requests using different explicit Authorization tokens do NOT coalesce.
-   - `5.35`: Custom lowercase Authorization header does not coalesce with Keystore stored token.
-   - `5.36`: Unsafe or unrepresentable custom Authorization safely bypasses deduplication.
-   - `5.37`: Existing getProfile explicit token behavior and 401 callback ownership preserved.
-   - `5.38`: Production request isolation: concurrent requests using tokens `foo` and `AUTH:foo` dispatch two independent fetches without coalescing.
-   - `5.39`: Production request coalescing: concurrent requests using the same token coalesce into a single fetch and share the response.
-   - `5.40`: Production request isolation: authenticated, anonymous, and token-named-`ANON` requests never coalesce and dispatch distinct fetches.
-   - `5.41`: Production request collision safety: URLs and tokens containing delimiter characters (colons, commas, quotes) do not create key collisions and dispatch distinct fetches.
-   - `5.42`: Production request query strings: different query strings remain distinct, identical query strings coalesce.
-   - `5.43`: Production request scheme isolation: `Bearer foo` versus raw `foo` versus `Basic foo` dispatch independent fetches and verify wire headers.
-   - `5.44`: Production request scheme coalescing: identical schemes coalesce; case and whitespace variations normalize to canonical wire header.
-   - `5.45`: Production request Keystore vs explicit Authorization: wire values compare accurately without cross-scheme coalescing.
-   - `5.46`: Production request 401 token lifecycle: verifies that when a 401 response is received, `api.js` passes the **extracted token** (e.g. `explicit-bearer-token-val` or `mock-session-secret`) — not the full Authorization header value (e.g. `Bearer explicit-bearer-token-val`) — to the registered unauthorized callback. The callback in this test is a **mock handler** registered via `setUnauthorizedHandler`; it invokes a **mock `clearAuthTokens`** (not the real `auth-storage.js` implementation) to record which token was passed. The test does **not** exercise the real `App.jsx` unauthorized handler or the real `auth-storage.js` integration. Part 2 additionally verifies that requests with `skipUnauthorizedHandler: true` (startup probe pattern) do not invoke the handler at all, and no tokens are cleared. Real `App.jsx` and `auth-storage.js` 401 coordination is covered by tests 2.1–2.8 in the Phase 3B.2 suite.
-5. **Phase 3B.3 Cart & Home Data Ownership Suite (Suite 6):** 13/13 passed
-   - `6.1`: Navigating to `CART` does not trigger `fetchCartSummary` from App shell.
-   - `6.2`: App shell `handleCartUpdated` updates `cartSummary` and item count from mutations.
-   - `6.3`: `fetchHomeDataOrchestrated` reuses `existingCategories` without refetching on non-refresh transitions.
-   - `6.4`: `fetchHomeDataOrchestrated` with `isRefresh: true` refetches categories from backend.
-   - `6.5`: Critical fish catalogue is Priority 1: unblocks visual display before secondary requests settle.
-   - `6.6`: Static check: `App.jsx` excludes `CART` from `fetchCartSummary` trigger.
-   - `6.7`: Static check: `App.jsx` calls `api.clearInFlightRequests` on logout.
-   - `6.8`: Static check: `api.js` implements in-flight deduplication registry and exports management methods.
-   - `6.9`: Static check: `api.js` implements option-aware `buildDeduplicationKey`.
-   - `6.10`: Static check: `api.js` implements identity-safe deletion and collision-safe keys.
-   - `6.11`: Static check: `api.js` implements case-insensitive Authorization header normalization.
-   - `6.12`: Static check: `api.js` uses structured JSON array for deduplication key without delimiter concatenation or prefix matching.
-   - `6.13`: Static check: `api.js` preserves authorization scheme in request deduplication identity.
-
-### 7.2 Root Ecosystem Test Suite (`npm test` & Concurrency 1)
-
-| Execution mode | Command | Passed | Failed | Skipped | Exit code |
-| :--- | :--- | ---: | ---: | ---: | ---: |
-| Customer app suite | `npm test --prefix customer-app` | 141 | 0 | 0 | **0** |
-| Root parallel run | `npm test` | 335 | 0 | 0 | **0** |
-| Root sequential run | `node --test --test-concurrency=1 "tests/**/*.test.js"` | 335 | 0 | 0 | **0** |
-
-#### Standard Ecosystem Run (`npm test`) — PASSED
-```bash
-npm test
-```
-- **Total Tests:** 335
-- **Total Suites:** 14
-- **Pass:** 335 / **Fail:** 0
-- **Duration:** 16.1s
-- **Exit code:** `0`
-- **Outcome:** All unit, integration, and security suites pass in parallel.
-
-#### Sequential Run (`node --test --test-concurrency=1`) — PASSED
-```bash
-node --test --test-concurrency=1 "tests/**/*.test.js"
-```
-- **Total Tests:** 335
-- **Total Suites:** 14
-- **Pass:** 335 / **Fail:** 0
-- **Duration:** 42.5s
-- **Exit code:** `0`
-- **Outcome:** All suites pass sequentially when the remote Supabase PostgreSQL database is reachable and the connection pool has sufficient capacity within the 5000ms checkout timeout (`lib/db/pool.js:127`).
-
-#### Known Infrastructure Sensitivity
-The two PostgreSQL integration test files (`tests/integration/postgres-bill-concurrency-and-scoping.test.js` and `tests/integration/postgres-subscription-lifecycle.test.js`) depend on live remote Supabase connectivity. Under sustained sequential load (>160s runs) or when the remote Supabase instance is under high latency, the connection pool checkout timeout (5000ms) can be exceeded, producing:
-- `Connection terminated due to connection timeout`
-- `timeout exceeded when trying to connect`
-
-When this infrastructure condition occurs, affected integration tests fail closed (as designed), resulting in exit code 1 and up to 6 failures cascading from the initial connection failure. This is a **remote database availability constraint**, not an application code defect. All application source files are identical; the same tests pass when the DB is reachable within the pool timeout.
-
-### 7.3 Metro Production Bundle Verification
-Execution command:
+Metro production JavaScript bundle compilation was verified directly using the React Native CLI:
 ```bash
 cd customer-app; npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/build/test.bundle
 ```
-**Result:**
-- Exit code: `0`
-- Bundle generation: Successful
-- Syntax errors: 0
-- Transform cache: clean
+**Results:**
+- **Exit Code:** `0`
+- **Output:** `info Done writing bundle output`
+- **Bundle File:** Successfully created at `android/app/build/test.bundle` (subsequently deleted).
+- **Hermes/Babel Transformations:** Clean; zero syntax errors, zero missing imports, zero module resolution failures.
 
-### 7.4 Android Release Compilation (`assembleRelease`)
-Execution command:
+---
+
+## 11. Android Release-Build Verification Results
+
+Android native compilation was verified using the Gradle build system:
 ```bash
 cd customer-app/android; ./gradlew assembleRelease
 ```
-**Result:**
-- Output: `BUILD SUCCESSFUL in 1m 20s`
-- Actionable tasks: 262 (5 executed, 257 up-to-date)
-- Release APK: Generated successfully at `customer-app/android/app/build/outputs/apk/release/app-release.apk`
-- Exit code: `0`
+**Results:**
+- **Exit Code:** `0`
+- **Build Status:** `BUILD SUCCESSFUL in 1m 20s`
+- **Actionable Tasks:** 262 tasks (5 executed, 257 up-to-date)
+- **Artifact Output:** Release APK successfully compiled at:
+  `customer-app/android/app/build/outputs/apk/release/app-release.apk`
+- **Native Linkage:** React Native Keychain, FastImage, and core runtime linked without symbol errors or proguard/R8 conflicts.
 
 ---
 
-## 8. Summary of Files Changed
+## 12. Known Limitations
 
-| File | Change Description |
-| :--- | :--- |
-| [`customer-app/App.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/App.jsx) | Excluded `currentScreen === 'CART'` from authenticated `fetchCartSummary` effect trigger; added `api.clearInFlightRequests()` to `handleLogout`. |
-| [`customer-app/src/services/api.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js) | Implemented case-insensitive Authorization header detection and normalization via `extractAndNormalizeAuthorization`, rejection of conflicting credentials with `API_INVALID_HEADERS`, preservation of explicit caller tokens without Keystore overwrites, canonical Authorization scheme representation in deduplication identity (`['AUTH', effectiveAuth]` vs `['ANON']`), option-aware collision-safe `buildDeduplicationKey` using complete JSON structured array serialization (`JSON.stringify(['GET', url, authIdentity, skip401, timeout, headers, opts])`), semantic fetch options extraction (`SUPPORTED_SEMANTIC_FETCH_OPTIONS`), safe bypass for unrepresentable options, identity-safe deletion guards (`inFlightGetRequests.get(dedupKey) === entry`), settled entry state hygiene, uniform subscriber model, AbortController fallback mechanics, cancellation isolation, settle cleanup, response cloning, and exported management methods. |
-| [`customer-app/src/screens/HomeScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/HomeScreen.jsx) | Added `existingCategories` support in `fetchHomeDataOrchestrated` to reuse loaded categories on non-refresh transitions; added `categoriesRef` in `HomeScreen` to pass cached categories without triggering hook dependency loops. |
-| [`tests/unit/customer-app-phase3-startup.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase3-startup.test.js) | Added Suite 5 (46 tests) for option-aware in-flight GET request deduplication, case-insensitive Authorization normalization, conflicting header rejection, 401 identity isolation, cancellation fallbacks, replacement-entry race protection, structured collision-safe keys, production request credential isolation (`foo` vs `AUTH:foo`, auth vs anon, token named `ANON`), authorization scheme preservation (`Bearer foo` vs raw `foo` vs `Basic foo`), wire header verification, delimiter safety, query string distinctness, 401 token lifecycle extraction verification, and Suite 6 (13 tests) for cart/home request ownership and static code structure checks. |
-| [`customer-app/docs/PHASE_3B_3_API_REQUEST_EFFICIENCY_REPORT.md`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/docs/PHASE_3B_3_API_REQUEST_EFFICIENCY_REPORT.md) | Comprehensive engineering and verification report for Phase 3B.3. |
+1. **In-Memory Request Registry:** The in-flight deduplication registry is purely transient and lives in JavaScript memory. It coalesces overlapping concurrent calls; it does not persist HTTP responses across full screen unmounts once an in-flight entry has settled.
+2. **Strict GET Scoping:** In-flight request deduplication is deliberately restricted to idempotent `GET` requests. State-altering mutations (`POST`, `PUT`, `PATCH`, `DELETE`) are intentionally non-deduplicatable to avoid swallowing caller intent or corrupting transaction sequences.
+3. **Headless Test Emulation:** In the Node.js test environment, React Native native modules (such as `react-native-keychain`) are executed via faithful emulated doubles rather than physical Android Keystore hardware. Full hardware-backed crypto execution occurs when running the compiled APK on a physical Android device.
+4. **Headless React Lifecycle:** Automated unit and integration tests exercise the extracted JavaScript business logic, orchestrators, and AST source invariants. They do not run a full Android headless browser or live React Native UI rendering pipeline.
 
 ---
 
-## 9. Final Phase 3B.3 Status
+## 13. Environmental Dependencies and Failed Executions
 
-All Phase 3B.3 objectives and corrections have been successfully achieved:
-1. Cart request duplication between `App.jsx` and `CartScreen.jsx` eliminated.
-2. Case-insensitive Authorization header normalization implemented, rejecting ambiguous conflicting credentials with `API_INVALID_HEADERS`.
-3. Explicit caller tokens preserved without Keystore overwrites or duplicate Authorization headers.
-4. Authorization identity scheme preservation and prefix collision resolved: structured tuple representation `['AUTH', effectiveAuth]` vs `['ANON']` binds deduplication identity to the exact effective wire header (including scheme `Bearer`, `Basic`, etc.), preventing `Bearer foo`, raw `foo`, `Basic foo`, `AUTH:foo`, and token named `ANON` from colliding.
-5. Complete deduplication key serialized as structured JSON array, eliminating delimiter collisions across URLs, query strings, and tokens.
-6. Request identity isolation established with option-aware `buildDeduplicationKey` preventing startup probe and authenticated request coalescing.
-7. Centralized single-owner HTTP 401 handling strictly isolated and preserved across startup and normal flows.
-8. Robust cancellation fallback when `AbortController` is unavailable, ensuring individual subscriber aborts never fail co-subscribers.
-9. In-flight request registry lifecycle completely protected against stale-entry deletion races using identity-safe entry verification.
-10. Delimiter-collision-free keys guarantee unique identities across arbitrary headers and semantic fetch options (`cache`, `credentials`, etc.), with safe direct bypass for unsupported options.
-11. Category re-fetching on non-refresh transitions eliminated while keeping pull-to-refresh and priority 1 catalogue paint intact.
-12. Account lifecycle and token boundaries safely protected.
-13. 141/141 customer-app tests passing; 335/335 root tests pass on `npm test` (parallel, exit code 0) and `node --test --test-concurrency=1` (sequential, exit code 0 when Supabase is reachable; exit code 1 with up to 6 integration test failures under remote DB connection timeout). Production Metro bundle and Android release build verified.
+### 13.1 Remote Database Dependency
+The root repository test suite contains two PostgreSQL integration test files:
+- `tests/integration/postgres-bill-concurrency-and-scoping.test.js`
+- `tests/integration/postgres-subscription-lifecycle.test.js`
 
+These tests establish live network connections to a remote PostgreSQL database hosted on Supabase (`aws-0-ap-south-1.pooler.supabase.com:6543`). The database connection pool (`lib/db/pool.js`) enforces a strict 5000ms checkout timeout:
+```javascript
+connectionTimeoutMillis: 5000
+```
+
+### 13.2 Documented Failed Executions
+During Phase 3B.3 verification, sequential test runs (`node --test --test-concurrency=1 "tests/**/*.test.js"`) and parallel runs (`npm test`) were executed multiple times to assess stability:
+1. **Task 3394 (`node --test --test-concurrency=1 "tests/**/*.test.js"`):**
+   - Duration: 79.3s
+   - Exit Code: **1**
+   - Result: 329 passed, 6 failed (0 skipped).
+   - Root Cause: Remote Supabase database connection timeout in `tests/integration/postgres-subscription-lifecycle.test.js`. The initial test `1. Initial purchase...` threw `'Connection terminated due to connection timeout'`, cascading to 5 subtests and 1 suite failure.
+2. **Task 3425 (`node --test --test-concurrency=1 "tests/**/*.test.js"`):**
+   - Duration: 162.5s
+   - Exit Code: **1**
+   - Result: 329 passed, 6 failed (0 skipped).
+   - Root Cause: Sustained sequential execution exceeded the remote connection checkout threshold (`timeout exceeded when trying to connect`), failing tests in `tests/integration/postgres-bill-concurrency-and-scoping.test.js` and `tests/integration/postgres-subscription-lifecycle.test.js`.
+3. **Task 3450 (`npm test`):**
+   - Duration: 94.0s
+   - Exit Code: **1**
+   - Result: 321 passed, 14 failed (0 skipped).
+   - Root Cause: Temporary network latency degradation to remote Supabase pooler causing connection checkout failures across both PostgreSQL suites.
+
+### 13.3 Customer App Isolation
+All customer-app-specific tests (`npm test --prefix customer-app`) are 100% local, have zero external network or database dependencies, and consistently achieve a **100% pass rate (141/141 passed, exit code 0)** in under 16 seconds. When the remote Supabase database is reachable within the 5000ms pool timeout, the root test suite also passes 100% (335/335 passed, exit code 0, as demonstrated in Task 3543 and Task 3626).
+
+---
+
+## 14. Remaining Risks
+
+1. **Slow Mobile Connection Latency:** On high-latency mobile networks (2G/3G), pull-to-refresh requests in `HomeScreen` and `CartScreen` could overlap with earlier in-flight requests. This risk is mitigated by request sequence counters (`requestSeqRef`) and mounted flags (`isMountedRef`) that ignore stale out-of-order responses.
+2. **App Backgrounding During Active Fetch:** If an Android activity is backgrounded or destroyed by OS memory management while an in-flight request is pending, component unmount triggers subscriber abort. The uniform subscriber model guarantees that individual subscriber aborts never abort the shared socket if other components remain listening, and cleans up the controller if all subscribers detach.
+3. **Third-Party Supabase Pooler Latency:** If Supabase connection latency exceeds 5000ms during CI/CD test execution, root PostgreSQL integration tests will fail closed as designed. This is an external network dependency, not a customer-app code defect.
+
+---
+
+## 15. Explicit Phase Disposition
+
+### **READY FOR INDEPENDENT REVIEW**
+
+All four Phase 3B.3 workstreams (Cart Ownership, Safe In-Flight GET Deduplication, Category & Home Data Ownership, and Account Lifecycle Safety) have been implemented, tested, and empirically verified:
+- Cart request duplication between `App.jsx` and `CartScreen.jsx` is eliminated.
+- In-flight GET request deduplication is option-aware, scheme-preserving, collision-safe, and cancellation-isolated.
+- Case-insensitive Authorization header normalization rejects ambiguous conflicting headers and preserves explicit tokens.
+- Category re-fetching on non-refresh transitions is eliminated while preserving pull-to-refresh and Priority 1 fish catalogue loading.
+- 141/141 customer-app tests pass with zero failures (exit code 0).
+- Metro production bundle and Android release APK compile with zero errors (exit code 0).
+- Historical test executions and environmental Supabase database connection dependencies are fully and transparently documented.
