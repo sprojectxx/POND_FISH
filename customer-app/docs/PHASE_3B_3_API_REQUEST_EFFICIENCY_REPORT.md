@@ -6,7 +6,7 @@
 **Starting Commit Baseline:** `0824d31c4ce34d91a12fadb4aeae3cdfec7fb391`<br>
 **Target Branch:** `main`<br>
 **Latest Implementation Commit:** `121a9bdf2b1e21bfabb734d6a230f1f5d9956ad6`<br>
-**Latest Report-Related Commit:** `118a4498e7a7f851fdd49c31b323009798c825f2`<br>
+**Previous Report Commit:** `118a4498e7a7f851fdd49c31b323009798c825f2`<br>
 **Execution Date:** 2026-11-01<br>
 **Optimization Scope:** Workstreams A, B, C, and D (Cart Ownership, Safe In-Flight GET Deduplication, Category & Home Data Efficiency, Account Lifecycle Safety)
 
@@ -38,7 +38,7 @@ All changes have been committed directly to `main` without creating auxiliary br
 | `1e04156c471358073184186b37366ab20bd3b4ee` | Correction | Structured JSON array deduplication key and tuple auth identity (`['AUTH', token]` vs `['ANON']`), eliminating prefix collisions (`foo` vs `AUTH:foo`) and delimiter collisions. |
 | `121a9bdf2b1e21bfabb734d6a230f1f5d9956ad6` | Correction | Authorization scheme preservation in request identity (`['AUTH', effectiveAuth]`), ensuring `Bearer foo`, raw `foo`, and `Basic foo` dispatch distinct fetches while canonical casing/whitespace coalesce cleanly. |
 | `a81945a0cb9c0300bfcf4dff74902072e0f93dfd` | Test/Doc | Added Test 5.46 verifying extracted 401 token lifecycle and startup probe isolation; updated documentation. |
-| `118a4498e7a7f851fdd49c31b323009798c825f2` | Docs | Initial Phase 3B.3 report qualification and correction. |
+| `118a4498e7a7f851fdd49c31b323009798c825f2` | Docs | Previous Phase 3B.3 report qualification and correction commit. |
 
 ---
 
@@ -217,13 +217,16 @@ Global badge counts in `App.jsx` remain perfectly synchronized:
 
 ### 9.1 Test Execution Table
 
-| Execution | Exact Command | Passed | Failed | Skipped | Exit Code | Explanation |
-| :--- | :--- | ---: | ---: | ---: | ---: | :--- |
-| **Customer App Unit & Integration Suite** | `npm test --prefix customer-app` | 141 | 0 | 0 | **0** | **PASSED:** All 12 customer-app suites (141 tests) pass cleanly in ~15.9s. Covers Responsiveness (Phase 1), Virtualization (Phase 2), Startup & 401 Coordination (Phase 3B.2), In-Flight GET Deduplication (Suite 5: 46 tests), and Cart/Home Ownership (Suite 6: 13 tests). |
-| **Root Repository Parallel Suite** | `npm test` | 335 | 0 | 0 | **0** | **PASSED:** All 14 suites in root ecosystem pass in parallel in 16.1s (exit code 0). Remote Supabase DB responded within connection pool timeout. |
-| **Root Repository Sequential Suite (Clean Run)** | `node --test --test-concurrency=1 "tests/**/*.test.js"` | 335 | 0 | 0 | **0** | **PASSED:** Executed sequentially across all 14 suites in 74.2s (Task 3543, exit code 0). All unit, integration, and PostgreSQL suites passed. |
-| **Root Repository Sequential Suite (Historical DB Latency)** | `node --test --test-concurrency=1 "tests/**/*.test.js"` | 329 | 6 | 0 | **1** | **FAILED (Infrastructure):** Executed in Task 3394 (79.3s) and Task 3425 (162.5s). Exited with code 1 due to remote Supabase PostgreSQL connection pool timeout (5000ms checkout timeout in `lib/db/pool.js:127`). Failing tests: `tests/integration/postgres-subscription-lifecycle.test.js` (`1. Initial purchase...` failed with `Connection terminated due to connection timeout`, cascading to 5 subtests and suite failure) and `tests/integration/postgres-bill-concurrency-and-scoping.test.js` (`timeout exceeded when trying to connect`). Customer app suites (141/141) passed 100%. |
-| **Root Repository Parallel Run (Historical Network Degradation)** | `npm test` | 321 | 14 | 0 | **1** | **FAILED (Infrastructure):** Executed in Task 3450 (94.0s). Exited with code 1 when remote Supabase network latency caused connection checkout timeouts across both PostgreSQL integration test suites. |
+Every test execution is recorded separately in the table below, distinguishing successful runs from historical infrastructure-bound runs:
+
+| Task ID | Exact command | Mode | Duration | Passed | Failed | Skipped | Exit code | Failing tests/files | Failure classification |
+| :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | :--- |
+| **Task 3621** | `npm test --prefix customer-app` | Parallel | 15.9s (15919ms) | 141 | 0 | 0 | **0** | None (all 12 suites passed) | N/A (Successful execution; 100% local, zero external network dependencies) |
+| **Task 3626** | `npm test` | Parallel | 16.1s (16099ms) | 335 | 0 | 0 | **0** | None (all 14 suites passed) | N/A (Successful execution; remote Supabase PostgreSQL responded within pool timeout) |
+| **Task 3543** | `node --test --test-concurrency=1 "tests/**/*.test.js"` | Sequential | 74.2s (74233ms) | 335 | 0 | 0 | **0** | None (all 14 suites passed) | N/A (Successful execution; remote Supabase PostgreSQL connection was responsive throughout) |
+| **Task 3394** | `node --test --test-concurrency=1 "tests/**/*.test.js"` | Sequential | 79.3s (79293ms) | 329 | 6 | 0 | **1** | File: `tests/integration/postgres-subscription-lifecycle.test.js`<br>Subtests (5):<br>1. `1. Initial purchase atomically records subscription, purchase ledger, and payment with subscription_id` (Error: `'Connection terminated due to connection timeout'`)<br>2. `2. Replaying the verified payment returns the exact subscription with ZERO duplicate credit or ledger writes` (Error: `Cannot read properties of undefined (reading 'credit_balance')`)<br>3. `3. Unlinked legacy payment (subscription_id is NULL) fails closed with PAYMENT_SUBSCRIPTION_UNPROVABLE`<br>4. `4. Cross-customer payment replay is rejected with PAYMENT_CUSTOMER_MISMATCH`<br>5. `5. Plan mismatch replay is rejected with PAYMENT_PLAN_MISMATCH` (Error: `'Missing expected rejection.'`)<br>Suite (1):<br>`PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)` (Error: `'5 subtests failed'`) | Confirmed Infrastructure-Related (Remote Supabase PostgreSQL connection timeout: initial subtest failed to acquire connection within 5000ms checkout timeout in `lib/db/pool.js:127`, cascading failures to dependent test assertions. Customer-app tests passed 100%.) |
+| **Task 3425** | `node --test --test-concurrency=1 "tests/**/*.test.js"` | Sequential | 162.5s (162527ms) | 329 | 6 | 0 | **1** | File 1: `tests/integration/postgres-bill-concurrency-and-scoping.test.js`<br>Subtests (3):<br>1. `1. Missing worker store identity is rejected with STORE_MISMATCH (403)`<br>2. `2. Missing bill store identity is rejected with STORE_MISMATCH (403)`<br>3. `3. Cross-store checkout attempt is rejected with STORE_MISMATCH (403)`<br>Suite (1):<br>`PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite` (Error: `'3 subtests failed'`)<br>File 2: `tests/integration/postgres-subscription-lifecycle.test.js`<br>Subtest (1):<br>1. `7. Concurrency: concurrent first-time purchases commit exactly one credit, subscription, payment, and ledger entry` (Error: `'timeout exceeded when trying to connect'`)<br>Suite (1):<br>`PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)` (Error: `'1 subtest failed'`) | Confirmed Infrastructure-Related (Remote Supabase PostgreSQL connection pool checkout timeout during prolonged sequential execution: `'timeout exceeded when trying to connect'` in `lib/db/pool.js:127`.) |
+| **Task 3450** | `npm test` | Parallel | 94.0s (93967ms) | 321 | 14 | 0 | **1** | File 1: `tests/integration/postgres-bill-concurrency-and-scoping.test.js`<br>Subtests (5):<br>1. `1. Missing worker store identity is rejected with STORE_MISMATCH (403)`<br>2. `2. Missing bill store identity is rejected with STORE_MISMATCH (403)`<br>3. `3. Cross-store checkout attempt is rejected with STORE_MISMATCH (403)`<br>4. `4. Concurrent checkout race on distinct bills with same bill number serializes and rejects duplicate with 409`<br>5. `5. Worker database store reassignment prevents old token from authorizing previous store` (Error: `'Connection terminated due to connection timeout'`)<br>Suite (1):<br>`PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite` (Error: `'5 subtests failed'`)<br>File 2: `tests/integration/postgres-subscription-lifecycle.test.js`<br>Subtests (7):<br>1. `1. Initial purchase atomically records subscription, purchase ledger, and payment with subscription_id` (Error: `'Connection terminated due to connection timeout'`)<br>2. `2. Replaying the verified payment returns the exact subscription with ZERO duplicate credit or ledger writes` (Error: `Cannot read properties of undefined (reading 'credit_balance')`)<br>3. `3. Unlinked legacy payment (subscription_id is NULL) fails closed with PAYMENT_SUBSCRIPTION_UNPROVABLE`<br>4. `4. Cross-customer payment replay is rejected with PAYMENT_CUSTOMER_MISMATCH`<br>5. `5. Plan mismatch replay is rejected with PAYMENT_PLAN_MISMATCH`<br>6. `6. Rollback: deliberate failure during payment insertion rolls back subscription, ledger, and payment`<br>7. `7. Concurrency: concurrent first-time purchases commit exactly one credit, subscription, payment, and ledger entry` (Error: `'Connection terminated due to connection timeout'`)<br>Suite (1):<br>`PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)` (Error: `'7 subtests failed'`) | Confirmed Infrastructure-Related (Transient network latency degradation to remote Supabase pooler causing multiple connection checkout timeouts: `'Connection terminated due to connection timeout'` in `lib/db/pool.js:127`.) |
 
 ---
 
@@ -350,23 +353,44 @@ These tests establish live network connections to a remote PostgreSQL database h
 connectionTimeoutMillis: 5000
 ```
 
-### 13.2 Documented Failed Executions
-During Phase 3B.3 verification, sequential test runs (`node --test --test-concurrency=1 "tests/**/*.test.js"`) and parallel runs (`npm test`) were executed multiple times to assess stability:
-1. **Task 3394 (`node --test --test-concurrency=1 "tests/**/*.test.js"`):**
-   - Duration: 79.3s
+### 13.2 Documented Executions Breakdown
+During Phase 3B.3 verification, sequential test runs (`node --test --test-concurrency=1 "tests/**/*.test.js"`), parallel root runs (`npm test`), and customer-app runs (`npm test --prefix customer-app`) were executed across multiple verification cycles:
+1. **Task 3621 (`npm test --prefix customer-app`):**
+   - Mode: Parallel (Customer App)
+   - Duration: 15.9s (15919ms)
+   - Exit Code: **0**
+   - Result: 141 passed, 0 failed, 0 skipped.
+   - Outcome: 100% clean pass across all 12 customer-app suites. Local execution without external network dependencies.
+2. **Task 3626 (`npm test`):**
+   - Mode: Parallel (Root Ecosystem)
+   - Duration: 16.1s (16099ms)
+   - Exit Code: **0**
+   - Result: 335 passed, 0 failed, 0 skipped.
+   - Outcome: 100% clean pass across all 14 root suites. Remote Supabase PostgreSQL responded within pool checkout timeout.
+3. **Task 3543 (`node --test --test-concurrency=1 "tests/**/*.test.js"`):**
+   - Mode: Sequential (Root Ecosystem)
+   - Duration: 74.2s (74233ms)
+   - Exit Code: **0**
+   - Result: 335 passed, 0 failed, 0 skipped.
+   - Outcome: 100% clean pass sequentially. Remote database connection was responsive throughout.
+4. **Task 3394 (`node --test --test-concurrency=1 "tests/**/*.test.js"`):**
+   - Mode: Sequential (Root Ecosystem)
+   - Duration: 79.3s (79293ms)
    - Exit Code: **1**
-   - Result: 329 passed, 6 failed (0 skipped).
-   - Root Cause: Remote Supabase database connection timeout in `tests/integration/postgres-subscription-lifecycle.test.js`. The initial test `1. Initial purchase...` threw `'Connection terminated due to connection timeout'`, cascading to 5 subtests and 1 suite failure.
-2. **Task 3425 (`node --test --test-concurrency=1 "tests/**/*.test.js"`):**
-   - Duration: 162.5s
+   - Result: 329 passed, 6 failed, 0 skipped.
+   - Root Cause: Remote Supabase database connection timeout in `tests/integration/postgres-subscription-lifecycle.test.js`. The initial test `1. Initial purchase...` threw `'Connection terminated due to connection timeout'`, cascading to 5 subtests and 1 suite failure. Customer-app test suites passed 100%.
+5. **Task 3425 (`node --test --test-concurrency=1 "tests/**/*.test.js"`):**
+   - Mode: Sequential (Root Ecosystem)
+   - Duration: 162.5s (162527ms)
    - Exit Code: **1**
-   - Result: 329 passed, 6 failed (0 skipped).
-   - Root Cause: Sustained sequential execution exceeded the remote connection checkout threshold (`timeout exceeded when trying to connect`), failing tests in `tests/integration/postgres-bill-concurrency-and-scoping.test.js` and `tests/integration/postgres-subscription-lifecycle.test.js`.
-3. **Task 3450 (`npm test`):**
-   - Duration: 94.0s
+   - Result: 329 passed, 6 failed, 0 skipped.
+   - Root Cause: Sustained sequential execution (>160s) exceeded the remote connection checkout threshold (`timeout exceeded when trying to connect`), failing tests in `tests/integration/postgres-bill-concurrency-and-scoping.test.js` and `tests/integration/postgres-subscription-lifecycle.test.js`.
+6. **Task 3450 (`npm test`):**
+   - Mode: Parallel (Root Ecosystem)
+   - Duration: 94.0s (93967ms)
    - Exit Code: **1**
-   - Result: 321 passed, 14 failed (0 skipped).
-   - Root Cause: Temporary network latency degradation to remote Supabase pooler causing connection checkout failures across both PostgreSQL suites.
+   - Result: 321 passed, 14 failed, 0 skipped.
+   - Root Cause: Temporary network latency degradation to remote Supabase pooler causing connection checkout failures across both PostgreSQL integration test suites.
 
 ### 13.3 Customer App Isolation
 All customer-app-specific tests (`npm test --prefix customer-app`) are 100% local, have zero external network or database dependencies, and consistently achieve a **100% pass rate (141/141 passed, exit code 0)** in under 16 seconds. When the remote Supabase database is reachable within the 5000ms pool timeout, the root test suite also passes 100% (335/335 passed, exit code 0, as demonstrated in Task 3543 and Task 3626).
