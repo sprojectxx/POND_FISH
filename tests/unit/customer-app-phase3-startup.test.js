@@ -74,6 +74,9 @@
  *   - 5.40: Production Request Isolation: Authenticated and anonymous requests (and token named ANON) never coalesce
  *   - 5.41: Production Request Collision Safety: Delimiter-containing URLs and tokens do not cause request collisions
  *   - 5.42: Production Request Query Strings: Different query strings remain distinct, identical query strings coalesce
+ *   - 5.43: Production Request Scheme Isolation: Bearer foo versus raw foo versus Basic foo dispatch independent fetches
+ *   - 5.44: Production Request Scheme Coalescing: Identical schemes coalesce; case and whitespace variations normalize
+ *   - 5.45: Production Request Keystore vs Explicit Authorization: Wire values compare accurately without cross-scheme coalescing
  * Suite 6: [Production Integration & Static Checks] Cart & Home Data Ownership and Invariants
  *   - 6.1: Navigating to CART does not trigger fetchCartSummary from App shell
  *   - 6.2: App shell handleCartUpdated updates cartSummary and item count from mutations
@@ -87,6 +90,7 @@
  *   - 6.10: [Static Source Check] api.js implements identity-safe deletion and collision-safe keys
  *   - 6.11: [Static Source Check] api.js implements case-insensitive Authorization header normalization
  *   - 6.12: [Static Source Check] api.js uses structured JSON array for deduplication key without delimiter concatenation
+ *   - 6.13: [Static Source Check] api.js preserves authorization scheme in request deduplication identity
  */
 
 const { test, describe } = require('node:test');
@@ -1449,7 +1453,7 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.equal(keyH1, keyH2, 'Headers must sort case-insensitively and normalize uppercase/lowercase Authorization');
       const parsedH1 = JSON.parse(keyH1);
       assert.deepEqual(parsedH1[5], [["a-index","bottom"],["z-index","top"]]);
-      assert.deepEqual(parsedH1[2], ['AUTH', 'abc']);
+      assert.deepEqual(parsedH1[2], ['AUTH', 'Bearer abc']);
 
       // Key without Authorization header represents anonymous request and must NOT collide with authenticated request
       const keyAnon = buildDeduplicationKey({
@@ -2245,6 +2249,145 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.ok(fetchedUrls.some((u) => u.includes('category=12')));
       assert.ok(fetchedUrls.some((u) => u.includes('category=1') && !u.includes('page')));
     });
+
+    test('5.43: Production Request Scheme Isolation: Bearer foo versus raw foo versus Basic foo dispatch independent fetches', async () => {
+      let fetchCount = 0;
+      const dispatchedHeaders = [];
+      const mockFetch = async (url, opts) => {
+        const fetchIndex = ++fetchCount;
+        dispatchedHeaders.push(opts.headers?.Authorization);
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { fetchIndex, auth: opts.headers?.Authorization } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'unused' }) },
+        mockFetch
+      );
+
+      // Concurrent requests with identical token 'foo' but different schemes / raw formats
+      const pBearer = request('/customer/cart', { headers: { Authorization: 'Bearer foo' } });
+      const pRaw = request('/customer/cart', { headers: { Authorization: 'foo' } });
+      const pBasic = request('/customer/cart', { headers: { Authorization: 'Basic foo' } });
+
+      const [rBearer, rRaw, rBasic] = await Promise.all([pBearer, pRaw, pBasic]);
+
+      assert.equal(fetchCount, 3, 'Bearer foo, raw foo, and Basic foo must dispatch 3 independent fetches');
+      assert.notEqual(rBearer.data.fetchIndex, rRaw.data.fetchIndex);
+      assert.notEqual(rRaw.data.fetchIndex, rBasic.data.fetchIndex);
+      assert.notEqual(rBearer.data.fetchIndex, rBasic.data.fetchIndex);
+
+      // Verify the exact Authorization headers received by mockFetch
+      assert.equal(rBearer.data.auth, 'Bearer foo');
+      assert.equal(rRaw.data.auth, 'foo');
+      assert.equal(rBasic.data.auth, 'Basic foo');
+
+      assert.equal(dispatchedHeaders.length, 3);
+      assert.ok(dispatchedHeaders.includes('Bearer foo'));
+      assert.ok(dispatchedHeaders.includes('foo'));
+      assert.ok(dispatchedHeaders.includes('Basic foo'));
+    });
+
+    test('5.44: Production Request Scheme Coalescing: Identical schemes coalesce; case and whitespace variations normalize to canonical wire header', async () => {
+      let fetchCount = 0;
+      const dispatchedHeaders = [];
+      const mockFetch = async (url, opts) => {
+        fetchCount++;
+        dispatchedHeaders.push(opts.headers?.Authorization);
+        await new Promise((r) => setTimeout(r, 25));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { shared: true, items: ['cart-1'] } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'unused' }) },
+        mockFetch
+      );
+
+      // Concurrent requests with same scheme, whitespace variations, and header-name/scheme casing variations
+      const p1 = request('/customer/cart', { headers: { 'Authorization': '   Bearer    token-match-xyz   ' } });
+      const p2 = request('/customer/cart', { headers: { 'authorization': 'bearer token-match-xyz' } });
+      const p3 = request('/customer/cart', { headers: { 'AUTHORIZATION': 'Bearer token-match-xyz' } });
+
+      const [res1, res2, res3] = await Promise.all([p1, p2, p3]);
+
+      assert.equal(fetchCount, 1, 'Equivalent Authorization schemes and casing must coalesce into a single fetch');
+      assert.deepEqual(res1.data, res2.data);
+      assert.deepEqual(res2.data, res3.data);
+
+      assert.equal(dispatchedHeaders.length, 1);
+      assert.equal(dispatchedHeaders[0], 'Bearer token-match-xyz');
+    });
+
+    test('5.45: Production Request Keystore vs Explicit Authorization: Wire values compare accurately without cross-scheme coalescing', async () => {
+      let fetchCount = 0;
+      const dispatchedHeaders = [];
+      const mockFetch = async (url, opts) => {
+        const fetchIndex = ++fetchCount;
+        dispatchedHeaders.push(opts.headers?.Authorization);
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { fetchIndex, auth: opts.headers?.Authorization } }),
+        };
+      };
+
+      const storedToken = 'active-session-secret';
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: storedToken }) },
+        mockFetch
+      );
+
+      // Caller 1 uses Keystore stored token (will send Bearer active-session-secret)
+      const pKeystore = request('/customer/cart');
+
+      // Caller 2 explicitly provides matching Bearer token (wire header identical -> coalesces with Caller 1)
+      const pExplicitMatching = request('/customer/cart', {
+        headers: { authorization: `Bearer ${storedToken}` },
+      });
+
+      // Caller 3 explicitly provides raw token without Bearer scheme (wire header different -> must NOT coalesce)
+      const pExplicitRaw = request('/customer/cart', {
+        headers: { authorization: storedToken },
+      });
+
+      // Caller 4 explicitly provides Basic scheme (wire header different -> must NOT coalesce)
+      const pExplicitBasic = request('/customer/cart', {
+        headers: { authorization: `Basic ${storedToken}` },
+      });
+
+      const [rKeystore, rMatching, rRaw, rBasic] = await Promise.all([
+        pKeystore,
+        pExplicitMatching,
+        pExplicitRaw,
+        pExplicitBasic,
+      ]);
+
+      // pKeystore and pExplicitMatching coalesced into 1 fetch; pExplicitRaw and pExplicitBasic made separate fetches
+      assert.equal(fetchCount, 3, 'Keystore and matching explicit Bearer coalesce, while raw and Basic dispatch independently');
+      assert.equal(rKeystore.data.fetchIndex, rMatching.data.fetchIndex, 'Matching explicit Bearer must share Keystore fetch');
+      assert.notEqual(rKeystore.data.fetchIndex, rRaw.data.fetchIndex, 'Raw token must not coalesce with Keystore Bearer token');
+      assert.notEqual(rKeystore.data.fetchIndex, rBasic.data.fetchIndex, 'Basic scheme must not coalesce with Keystore Bearer token');
+
+      // Verify the exact Authorization headers sent to fetch
+      assert.equal(rKeystore.data.auth, `Bearer ${storedToken}`);
+      assert.equal(rMatching.data.auth, `Bearer ${storedToken}`);
+      assert.equal(rRaw.data.auth, storedToken);
+      assert.equal(rBasic.data.auth, `Basic ${storedToken}`);
+
+      assert.equal(dispatchedHeaders.length, 3);
+      assert.ok(dispatchedHeaders.includes(`Bearer ${storedToken}`));
+      assert.ok(dispatchedHeaders.includes(storedToken));
+      assert.ok(dispatchedHeaders.includes(`Basic ${storedToken}`));
+    });
   });
 
   // =========================================================================
@@ -2484,12 +2627,12 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
 
     test('6.12: [Static Source Check] api.js uses structured JSON array for deduplication key without delimiter concatenation or prefix matching', () => {
       assert.ok(
-        apiCode.includes('authIdentity = effectiveToken !== null'),
-        'api.js must check effectiveToken !== null without prefix matching'
+        apiCode.includes('authIdentity = effectiveAuth !== null'),
+        'api.js must check effectiveAuth !== null without prefix matching'
       );
       assert.ok(
-        apiCode.includes("['AUTH', effectiveToken]"),
-        'api.js must represent authenticated identity as [AUTH, token]'
+        apiCode.includes("['AUTH', effectiveAuth]"),
+        'api.js must represent authenticated identity as [AUTH, effectiveAuth]'
       );
       assert.ok(
         apiCode.includes("['ANON']"),
@@ -2502,6 +2645,21 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.ok(
         !apiCode.includes("parts.join(':')"),
         'api.js must NOT use parts.join(:) delimiter concatenation'
+      );
+    });
+
+    test('6.13: [Static Source Check] api.js preserves authorization scheme in request deduplication identity', () => {
+      assert.ok(
+        apiCode.includes('authInfo.rawValue'),
+        'buildDeduplicationKey must inspect authInfo.rawValue to preserve full authorization header'
+      );
+      assert.ok(
+        apiCode.includes('effectiveAuth !== null'),
+        'api.js must check effectiveAuth !== null'
+      );
+      assert.ok(
+        apiCode.includes("['AUTH', effectiveAuth]"),
+        'api.js must represent authIdentity as [AUTH, effectiveAuth]'
       );
     });
   });

@@ -149,17 +149,19 @@ function extractAndNormalizeAuthorization(headers) {
   const match = trimmed.match(/^Bearer\s+(.+)$/i);
   const token = match ? match[1].trim() : trimmed;
 
-  // Set single canonical Authorization header
-  headers.Authorization = trimmed;
+  // Set single canonical Authorization header, normalizing Bearer scheme casing
+  const canonicalAuth = match ? `Bearer ${token}` : trimmed;
+  headers.Authorization = canonicalAuth;
 
-  return { hasAuth: true, token, rawValue: trimmed, isSafe: true };
+  return { hasAuth: true, token, rawValue: canonicalAuth, isSafe: true };
 }
 
 /**
  * Builds an option-aware, collision-safe deduplication identity key for in-flight GET requests.
  * Uses a structured JSON array [method, url, authIdentity, skipUnauthorizedHandler, effectiveTimeoutMs, headers, semanticOptions]
  * serialized via JSON.stringify to prevent delimiter and prefix collisions.
- * Auth identity is represented unambiguously as ['AUTH', token] or ['ANON'].
+ * Auth identity represents the exact effective normalized Authorization header (including scheme)
+ * as ['AUTH', effectiveAuth] or ['ANON'].
  * Never logs credentials or sensitive headers.
  */
 function buildDeduplicationKey({
@@ -171,29 +173,31 @@ function buildDeduplicationKey({
   semanticOptions = null,
   fetchOptions = null,
 }) {
-  let effectiveToken = null;
-  if (requestToken !== undefined && requestToken !== null) {
-    const trimmed = String(requestToken).trim();
-    if (trimmed.length === 0) {
-      return null;
-    }
-    effectiveToken = trimmed;
-  }
+  let effectiveAuth = null;
 
-  // If requestToken was not explicitly passed, inspect headers case-insensitively
-  if (!effectiveToken && headers && typeof headers === 'object') {
+  // Inspect headers case-insensitively for Authorization header
+  if (headers && typeof headers === 'object') {
     try {
       const authInfo = extractAndNormalizeAuthorization({ ...headers });
       if (!authInfo.isSafe) {
         return null;
       }
-      if (authInfo.hasAuth && authInfo.token) {
-        effectiveToken = authInfo.token;
+      if (authInfo.hasAuth && authInfo.rawValue) {
+        effectiveAuth = authInfo.rawValue;
       }
     } catch (_) {
       // Conflicting or ambiguous Authorization headers - cannot represent safely
       return null;
     }
+  }
+
+  // If headers did not contain Authorization, fallback to requestToken if explicitly passed
+  if (!effectiveAuth && requestToken !== undefined && requestToken !== null) {
+    const trimmed = String(requestToken).trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    effectiveAuth = trimmed;
   }
 
   const normalizedHeaders = [];
@@ -218,8 +222,8 @@ function buildDeduplicationKey({
     semanticList = extractSemanticFetchOptions(fetchOptions);
   }
 
-  const authIdentity = effectiveToken !== null
-    ? ['AUTH', effectiveToken]
+  const authIdentity = effectiveAuth !== null
+    ? ['AUTH', effectiveAuth]
     : ['ANON'];
 
   return JSON.stringify([
