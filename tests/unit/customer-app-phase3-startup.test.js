@@ -69,6 +69,11 @@
  *   - 5.35: Custom lowercase Authorization header does not coalesce with Keystore stored token
  *   - 5.36: Unsafe or unrepresentable custom Authorization safely bypasses deduplication
  *   - 5.37: Existing getProfile explicit token behavior and 401 callback ownership preserved
+ *   - 5.38: Production Request Isolation: Two concurrent requests with tokens foo and AUTH:foo dispatch two independent fetches
+ *   - 5.39: Production Request Coalescing: Two concurrent requests using the same token coalesce into one fetch
+ *   - 5.40: Production Request Isolation: Authenticated and anonymous requests (and token named ANON) never coalesce
+ *   - 5.41: Production Request Collision Safety: Delimiter-containing URLs and tokens do not cause request collisions
+ *   - 5.42: Production Request Query Strings: Different query strings remain distinct, identical query strings coalesce
  * Suite 6: [Production Integration & Static Checks] Cart & Home Data Ownership and Invariants
  *   - 6.1: Navigating to CART does not trigger fetchCartSummary from App shell
  *   - 6.2: App shell handleCartUpdated updates cartSummary and item count from mutations
@@ -81,6 +86,7 @@
  *   - 6.9: [Static Source Check] api.js implements option-aware buildDeduplicationKey
  *   - 6.10: [Static Source Check] api.js implements identity-safe deletion and collision-safe keys
  *   - 6.11: [Static Source Check] api.js implements case-insensitive Authorization header normalization
+ *   - 6.12: [Static Source Check] api.js uses structured JSON array for deduplication key without delimiter concatenation
  */
 
 const { test, describe } = require('node:test');
@@ -1422,10 +1428,13 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       });
 
       assert.notEqual(keyA, keyB, 'Keys must differ based on skipUnauthorizedHandler and timeout');
-      assert.ok(keyA.includes('skip401=1'));
-      assert.ok(keyA.includes('to=5000'));
-      assert.ok(keyB.includes('skip401=0'));
-      assert.ok(keyB.includes('to=15000'));
+      const parsedA = JSON.parse(keyA);
+      const parsedB = JSON.parse(keyB);
+      assert.equal(parsedA[3], true, 'Key A must capture skipUnauthorizedHandler=true');
+      assert.equal(parsedA[4], 5000, 'Key A must capture effectiveTimeoutMs=5000');
+      assert.equal(parsedB[3], false, 'Key B must capture skipUnauthorizedHandler=false');
+      assert.equal(parsedB[4], 15000, 'Key B must capture effectiveTimeoutMs=15000');
+      assert.deepEqual(parsedA[2], ['AUTH', 'token-123']);
 
       // Header sorting, case-insensitive normalization of Authorization, and exclusion of default Content-Type
       const keyH1 = buildDeduplicationKey({
@@ -1438,8 +1447,9 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       });
 
       assert.equal(keyH1, keyH2, 'Headers must sort case-insensitively and normalize uppercase/lowercase Authorization');
-      assert.ok(keyH1.includes('h=[["a-index","bottom"],["z-index","top"]]'));
-      assert.ok(keyH1.includes('AUTH:abc'));
+      const parsedH1 = JSON.parse(keyH1);
+      assert.deepEqual(parsedH1[5], [["a-index","bottom"],["z-index","top"]]);
+      assert.deepEqual(parsedH1[2], ['AUTH', 'abc']);
 
       // Key without Authorization header represents anonymous request and must NOT collide with authenticated request
       const keyAnon = buildDeduplicationKey({
@@ -1447,6 +1457,8 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
         headers: { 'a-index': 'bottom', 'z-index': 'top' },
       });
       assert.notEqual(keyH1, keyAnon, 'Authenticated request with Bearer abc must not collide with anonymous request');
+      const parsedAnon = JSON.parse(keyAnon);
+      assert.deepEqual(parsedAnon[2], ['ANON']);
     });
 
     test('5.24: Stale entry race: old request aborting all subscribers does not delete replacement entry on settle', async () => {
@@ -1649,8 +1661,10 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
         keyMultipleHeaders,
         'Header serialization with JSON tuples must prevent delimiter collision'
       );
-      assert.ok(keySingleWithDelimiters.includes('h=[["x-param","a=1&b=2"]]'));
-      assert.ok(keyMultipleHeaders.includes('h=[["b","2"],["x-param","a=1"]]'));
+      const parsedSingle = JSON.parse(keySingleWithDelimiters);
+      const parsedMultiple = JSON.parse(keyMultipleHeaders);
+      assert.deepEqual(parsedSingle[5], [["x-param","a=1&b=2"]]);
+      assert.deepEqual(parsedMultiple[5], [["b","2"],["x-param","a=1"]]);
 
       // Also verify via real requests that they execute separate network fetches
       const fetchCalls = [];
@@ -1700,7 +1714,8 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       });
 
       assert.equal(keyUpper, keyLower, 'Header keys must normalize case-insensitively');
-      assert.ok(keyUpper.includes('h=[["accept-language","en-US"],["x-cache-control","max-age=300"]]'));
+      const parsedUpper = JSON.parse(keyUpper);
+      assert.deepEqual(parsedUpper[5], [["accept-language","en-US"],["x-cache-control","max-age=300"]]);
     });
 
     test('5.29: Semantic fetch options: differing credentials, cache, or mode produce distinct keys', async () => {
@@ -1722,9 +1737,12 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       });
 
       assert.notEqual(keyCache1, keyCache2, 'Different cache options must produce distinct keys');
-      assert.ok(keyCache1.includes('opts=[["cache","no-store"]]'));
-      assert.ok(keyCache2.includes('opts=[["cache","reload"]]'));
-      assert.ok(keyCreds.includes('opts=[["credentials","include"]]'));
+      const parsedCache1 = JSON.parse(keyCache1);
+      const parsedCache2 = JSON.parse(keyCache2);
+      const parsedCreds = JSON.parse(keyCreds);
+      assert.deepEqual(parsedCache1[6], [["cache","no-store"]]);
+      assert.deepEqual(parsedCache2[6], [["cache","reload"]]);
+      assert.deepEqual(parsedCreds[6], [["credentials","include"]]);
 
       let fetchCount = 0;
       const mockFetch = async () => {
@@ -2024,6 +2042,209 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.equal(keystoreCallCount, 1, 'getProfile(null) must retrieve credentials from Keystore');
       assert.deepEqual(res.data, { name: 'Customer' });
     });
+
+    test('5.38: Production Request Isolation: Two concurrent requests with tokens foo and AUTH:foo dispatch two independent fetches', async () => {
+      let fetchCount = 0;
+      const dispatchedHeaders = [];
+      const mockFetch = async (url, opts) => {
+        const fetchIndex = ++fetchCount;
+        dispatchedHeaders.push(opts.headers?.Authorization);
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { fetchIndex } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'unused' }) },
+        mockFetch
+      );
+
+      // Two concurrent requests: token 'foo' vs token 'AUTH:foo'
+      const p1 = request('/customer/cart', { headers: { Authorization: 'Bearer foo' } });
+      const p2 = request('/customer/cart', { headers: { Authorization: 'Bearer AUTH:foo' } });
+
+      const [res1, res2] = await Promise.all([p1, p2]);
+
+      assert.equal(fetchCount, 2, 'Concurrent requests using tokens foo and AUTH:foo must dispatch two independent fetches');
+      assert.notEqual(res1.data.fetchIndex, res2.data.fetchIndex, 'Responses must come from distinct fetches');
+
+      // Verify the exact Authorization headers sent to fetch
+      assert.equal(dispatchedHeaders.length, 2);
+      assert.ok(dispatchedHeaders.includes('Bearer foo'), 'fetch must have received Bearer foo');
+      assert.ok(dispatchedHeaders.includes('Bearer AUTH:foo'), 'fetch must have received Bearer AUTH:foo');
+    });
+
+    test('5.39: Production Request Coalescing: Two concurrent requests using the same token coalesce into one fetch', async () => {
+      let fetchCount = 0;
+      const dispatchedHeaders = [];
+      const mockFetch = async (url, opts) => {
+        fetchCount++;
+        dispatchedHeaders.push(opts.headers?.Authorization);
+        await new Promise((r) => setTimeout(r, 25));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { shared: true, items: [1, 2] } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'unused' }) },
+        mockFetch
+      );
+
+      // Two concurrent requests using the exact same token
+      const p1 = request('/customer/cart', { headers: { Authorization: 'Bearer shared-token-xyz' } });
+      const p2 = request('/customer/cart', { headers: { Authorization: 'Bearer shared-token-xyz' } });
+
+      const [res1, res2] = await Promise.all([p1, p2]);
+
+      assert.equal(fetchCount, 1, 'Two concurrent requests using the same token must coalesce into one fetch');
+      assert.deepEqual(res1.data, res2.data, 'Both callers must receive the identical response data');
+      assert.equal(dispatchedHeaders.length, 1);
+      assert.equal(dispatchedHeaders[0], 'Bearer shared-token-xyz');
+    });
+
+    test('5.40: Production Request Isolation: Authenticated and anonymous requests never coalesce (including token named ANON)', async () => {
+      let fetchCount = 0;
+      const dispatchedCalls = [];
+      const mockFetch = async (url, opts) => {
+        const fetchId = ++fetchCount;
+        dispatchedCalls.push({
+          url,
+          auth: opts.headers?.Authorization,
+        });
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { fetchId } }),
+        };
+      };
+
+      // Mock storage returns no stored token so unauthenticated requests remain genuinely anonymous
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: null }) },
+        mockFetch
+      );
+
+      // 1. Authenticated request with standard token
+      const pAuth = request('/customer/fish', { headers: { Authorization: 'Bearer user-token-123' } });
+      // 2. Anonymous request (no token in headers or storage)
+      const pAnon = request('/customer/fish');
+      // 3. Authenticated request with token literally named 'ANON'
+      const pTokenNamedAnon = request('/customer/fish', { headers: { Authorization: 'Bearer ANON' } });
+
+      const [rAuth, rAnon, rTokenAnon] = await Promise.all([pAuth, pAnon, pTokenNamedAnon]);
+
+      assert.equal(fetchCount, 3, 'Authenticated, anonymous, and token-named-ANON must dispatch 3 independent fetches');
+      assert.notEqual(rAuth.data.fetchId, rAnon.data.fetchId);
+      assert.notEqual(rAnon.data.fetchId, rTokenAnon.data.fetchId);
+      assert.notEqual(rAuth.data.fetchId, rTokenAnon.data.fetchId);
+
+      // Verify the actual Authorization headers dispatched to fetch
+      const authHeader = dispatchedCalls.find((c) => c.auth === 'Bearer user-token-123');
+      const anonHeader = dispatchedCalls.find((c) => c.auth === undefined);
+      const tokenAnonHeader = dispatchedCalls.find((c) => c.auth === 'Bearer ANON');
+
+      assert.ok(authHeader, 'Authenticated request must dispatch with Bearer user-token-123');
+      assert.ok(anonHeader, 'Anonymous request must dispatch with no Authorization header');
+      assert.ok(tokenAnonHeader, 'Token named ANON must dispatch with Bearer ANON');
+    });
+
+    test('5.41: Production Request Collision Safety: Delimiter-containing URLs and tokens do not cause request collisions', async () => {
+      let fetchCount = 0;
+      const dispatchedCalls = [];
+      const mockFetch = async (url, opts) => {
+        const callIndex = ++fetchCount;
+        dispatchedCalls.push({
+          url,
+          auth: opts.headers?.Authorization,
+        });
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { callIndex } }),
+        };
+      };
+
+      const { request, buildDeduplicationKey } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'unused' }) },
+        mockFetch
+      );
+
+      // URLs and tokens containing colon, comma, and quote delimiters
+      // Request A1: url '/customer/item:1', token 'part2'
+      const pA1 = request('/customer/item:1', { headers: { Authorization: 'Bearer part2' } });
+      // Request A2: url '/customer/item', token '1:part2' (would collide if key joined with :)
+      const pA2 = request('/customer/item', { headers: { Authorization: 'Bearer 1:part2' } });
+
+      // Request B1: url '/customer/list/a,b', token 'c'
+      const pB1 = request('/customer/list/a,b', { headers: { Authorization: 'Bearer c' } });
+      // Request B2: url '/customer/list/a', token 'b,c' (would collide if comma-delimited)
+      const pB2 = request('/customer/list/a', { headers: { Authorization: 'Bearer b,c' } });
+
+      // Request C1: duplicate of A1 (must coalesce with A1)
+      const pA1Dup = request('/customer/item:1', { headers: { Authorization: 'Bearer part2' } });
+
+      const [rA1, rA2, rB1, rB2, rA1Dup] = await Promise.all([pA1, pA2, pB1, pB2, pA1Dup]);
+
+      assert.equal(fetchCount, 4, 'Delimiter-containing requests must dispatch 4 independent fetches (A1 duplicate coalesced)');
+      assert.equal(rA1.data.callIndex, rA1Dup.data.callIndex, 'Duplicate request with delimiters must coalesce with original');
+      assert.notEqual(rA1.data.callIndex, rA2.data.callIndex, 'Colon-separated tokens must not collide with colon in URL');
+      assert.notEqual(rB1.data.callIndex, rB2.data.callIndex, 'Comma-separated tokens must not collide with comma in URL');
+
+      // Verify the keys themselves are distinct structured arrays
+      const keyA1 = buildDeduplicationKey({ url: '/customer/item:1', requestToken: 'part2' });
+      const keyA2 = buildDeduplicationKey({ url: '/customer/item', requestToken: '1:part2' });
+      assert.notEqual(keyA1, keyA2, 'Structured keys for A1 and A2 must not collide');
+
+      const keyB1 = buildDeduplicationKey({ url: '/customer/list/a,b', requestToken: 'c' });
+      const keyB2 = buildDeduplicationKey({ url: '/customer/list/a', requestToken: 'b,c' });
+      assert.notEqual(keyB1, keyB2, 'Structured keys for B1 and B2 must not collide');
+    });
+
+    test('5.42: Production Request Query Strings: Different query strings remain distinct, identical query strings coalesce', async () => {
+      let fetchCount = 0;
+      const fetchedUrls = [];
+      const mockFetch = async (url) => {
+        fetchCount++;
+        fetchedUrls.push(url);
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { url, count: fetchCount } }),
+        };
+      };
+
+      const { request } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-token' }) },
+        mockFetch
+      );
+
+      // Concurrent requests with various query strings
+      const p1 = request('/customer/fish?category=1&page=1');
+      const p2 = request('/customer/fish?category=1&page=1'); // duplicate of p1 -> must coalesce
+      const p3 = request('/customer/fish?category=1&page=2'); // different page
+      const p4 = request('/customer/fish?category=12');       // prefix collision test
+      const p5 = request('/customer/fish?category=1');        // no page param
+
+      const [r1, r2, r3, r4, r5] = await Promise.all([p1, p2, p3, p4, p5]);
+
+      assert.equal(fetchCount, 4, 'Distinct query strings must make 4 fetches; identical query strings must coalesce');
+      assert.equal(r1.data.count, r2.data.count, 'Identical query strings must share single network response');
+      assert.deepEqual(r1.data, r2.data);
+
+      assert.ok(fetchedUrls.some((u) => u.includes('category=1&page=1')));
+      assert.ok(fetchedUrls.some((u) => u.includes('category=1&page=2')));
+      assert.ok(fetchedUrls.some((u) => u.includes('category=12')));
+      assert.ok(fetchedUrls.some((u) => u.includes('category=1') && !u.includes('page')));
+    });
   });
 
   // =========================================================================
@@ -2258,6 +2479,29 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.ok(
         apiCode.includes('API_INVALID_HEADERS'),
         'api.js must reject conflicting authorization headers with API_INVALID_HEADERS'
+      );
+    });
+
+    test('6.12: [Static Source Check] api.js uses structured JSON array for deduplication key without delimiter concatenation or prefix matching', () => {
+      assert.ok(
+        apiCode.includes('authIdentity = effectiveToken !== null'),
+        'api.js must check effectiveToken !== null without prefix matching'
+      );
+      assert.ok(
+        apiCode.includes("['AUTH', effectiveToken]"),
+        'api.js must represent authenticated identity as [AUTH, token]'
+      );
+      assert.ok(
+        apiCode.includes("['ANON']"),
+        'api.js must represent anonymous identity as [ANON]'
+      );
+      assert.ok(
+        !apiCode.includes(".startsWith('AUTH:')"),
+        'api.js must NOT use startsWith(AUTH:) prefix detection'
+      );
+      assert.ok(
+        !apiCode.includes("parts.join(':')"),
+        'api.js must NOT use parts.join(:) delimiter concatenation'
       );
     });
   });

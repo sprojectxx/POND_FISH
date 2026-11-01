@@ -157,9 +157,9 @@ function extractAndNormalizeAuthorization(headers) {
 
 /**
  * Builds an option-aware, collision-safe deduplication identity key for in-flight GET requests.
- * Uses a deterministically sorted array of [name, value] tuples serialized via JSON.stringify
- * to prevent delimiter collisions. Incorporates URL, authenticated token identity,
- * skipUnauthorizedHandler, effectiveTimeoutMs, and supported semantic fetch options.
+ * Uses a structured JSON array [method, url, authIdentity, skipUnauthorizedHandler, effectiveTimeoutMs, headers, semanticOptions]
+ * serialized via JSON.stringify to prevent delimiter and prefix collisions.
+ * Auth identity is represented unambiguously as ['AUTH', token] or ['ANON'].
  * Never logs credentials or sensitive headers.
  */
 function buildDeduplicationKey({
@@ -171,7 +171,14 @@ function buildDeduplicationKey({
   semanticOptions = null,
   fetchOptions = null,
 }) {
-  let effectiveToken = requestToken !== undefined && requestToken !== null ? String(requestToken).trim() : null;
+  let effectiveToken = null;
+  if (requestToken !== undefined && requestToken !== null) {
+    const trimmed = String(requestToken).trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    effectiveToken = trimmed;
+  }
 
   // If requestToken was not explicitly passed, inspect headers case-insensitively
   if (!effectiveToken && headers && typeof headers === 'object') {
@@ -191,7 +198,10 @@ function buildDeduplicationKey({
 
   const normalizedHeaders = [];
   if (headers && typeof headers === 'object') {
-    const keys = Object.keys(headers).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    const keys = Object.keys(headers).sort((a, b) => {
+      const cmp = a.toLowerCase().localeCompare(b.toLowerCase());
+      return cmp !== 0 ? cmp : a.localeCompare(b);
+    });
     for (const k of keys) {
       const lower = k.toLowerCase();
       // Exclude Authorization (captured by authIdentity) and default Content-Type
@@ -201,36 +211,30 @@ function buildDeduplicationKey({
     }
   }
 
-  let semanticList = semanticOptions;
-  if (!semanticList && fetchOptions && typeof fetchOptions === 'object') {
+  let semanticList = [];
+  if (Array.isArray(semanticOptions)) {
+    semanticList = [...semanticOptions].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  } else if (fetchOptions && typeof fetchOptions === 'object') {
     semanticList = extractSemanticFetchOptions(fetchOptions);
   }
 
-  const authIdentity = effectiveToken
-    ? (effectiveToken.startsWith('AUTH:') ? effectiveToken : `AUTH:${effectiveToken}`)
-    : 'ANON';
+  const authIdentity = effectiveToken !== null
+    ? ['AUTH', effectiveToken]
+    : ['ANON'];
 
-  const parts = [
+  return JSON.stringify([
     'GET',
     url,
     authIdentity,
-    `skip401=${skipUnauthorizedHandler ? '1' : '0'}`,
-    `to=${effectiveTimeoutMs}`,
-  ];
-
-  if (normalizedHeaders.length > 0) {
-    parts.push(`h=${JSON.stringify(normalizedHeaders)}`);
-  }
-
-  if (semanticList && semanticList.length > 0) {
-    parts.push(`opts=${JSON.stringify(semanticList)}`);
-  }
-
-  return parts.join(':');
+    Boolean(skipUnauthorizedHandler),
+    effectiveTimeoutMs,
+    normalizedHeaders,
+    semanticList,
+  ]);
 }
 
 // Registry of active in-flight GET requests for safe request deduplication
-// Key: "GET:<url>:<token|ANON>:skip401=<0|1>:to=<ms>[:h=<json>][:opts=<json>]"
+// Key: JSON.stringify(['GET', url, authIdentity, skipUnauthorizedHandler, effectiveTimeoutMs, headers, semanticOptions])
 // Value: {
 //   key: string,
 //   subscribers: Set<{ resolve, reject, signal, cleanup }>,
