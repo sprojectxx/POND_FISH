@@ -77,6 +77,7 @@
  *   - 5.43: Production Request Scheme Isolation: Bearer foo versus raw foo versus Basic foo dispatch independent fetches
  *   - 5.44: Production Request Scheme Coalescing: Identical schemes coalesce; case and whitespace variations normalize
  *   - 5.45: Production Request Keystore vs Explicit Authorization: Wire values compare accurately without cross-scheme coalescing
+ *   - 5.46: Production Request 401 Token Lifecycle: Extracted token (not scheme prefix) passed to unauthorized handler and clearAuthTokens
  * Suite 6: [Production Integration & Static Checks] Cart & Home Data Ownership and Invariants
  *   - 6.1: Navigating to CART does not trigger fetchCartSummary from App shell
  *   - 6.2: App shell handleCartUpdated updates cartSummary and item count from mutations
@@ -2387,6 +2388,90 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.ok(dispatchedHeaders.includes(`Bearer ${storedToken}`));
       assert.ok(dispatchedHeaders.includes(storedToken));
       assert.ok(dispatchedHeaders.includes(`Basic ${storedToken}`));
+    });
+
+    test('5.46: Production Request 401 Token Lifecycle: Extracted token (not scheme prefix) passed to unauthorized handler and clearAuthTokens', async () => {
+      let clearedTokens = [];
+      let reportedUnauthorizedToken = null;
+
+      const mockStorage = {
+        getAuthTokens: async () => ({ token: 'mock-session-secret' }),
+        clearAuthTokens: async (expectedToken) => {
+          clearedTokens.push(expectedToken);
+          return true;
+        },
+      };
+
+      const mockFetch = async (url, opts) => {
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ success: false, error: { code: 'UNAUTHORIZED', message: 'Session expired' } }),
+        };
+      };
+
+      const { request, setUnauthorizedHandler } = loadProductionApiModule(mockStorage, mockFetch);
+
+      // Register the centralized unauthorized handler (as App.jsx does)
+      setUnauthorizedHandler(async (rejectedToken) => {
+        reportedUnauthorizedToken = rejectedToken;
+        await mockStorage.clearAuthTokens(rejectedToken);
+      });
+
+      // Part 1: Explicit Bearer token header on normal request
+      const explicitSecret = 'explicit-bearer-token-val';
+      await assert.rejects(
+        request('/customer/cart', { headers: { Authorization: `Bearer ${explicitSecret}` } }),
+        (err) => err.status === 401
+      );
+
+      // Verify extracted token (NOT "Bearer explicit-bearer-token-val") was reported and cleared
+      assert.equal(
+        reportedUnauthorizedToken,
+        explicitSecret,
+        'Unauthorized callback must receive the extracted token, not the Bearer scheme header'
+      );
+      assert.ok(
+        !reportedUnauthorizedToken.startsWith('Bearer '),
+        'Reported token must not contain the Bearer scheme'
+      );
+      assert.equal(clearedTokens[0], explicitSecret, 'clearAuthTokens must receive exact extracted token');
+
+      // Part 2: Startup probe with skipUnauthorizedHandler: true
+      reportedUnauthorizedToken = null;
+      clearedTokens = [];
+      const startupSecret = 'startup-probe-token-val';
+      await assert.rejects(
+        request('/customer/profile', {
+          headers: { Authorization: `Bearer ${startupSecret}` },
+          skipUnauthorizedHandler: true,
+        }),
+        (err) => err.status === 401
+      );
+
+      // Verify unauthorized handler was NOT invoked when skipUnauthorizedHandler is true
+      assert.equal(
+        reportedUnauthorizedToken,
+        null,
+        'Startup request with skipUnauthorizedHandler: true must not invoke centralized unauthorized handler'
+      );
+      assert.equal(clearedTokens.length, 0, 'No tokens should be cleared when skipUnauthorizedHandler is true');
+
+      // Part 3: Keystore-derived Authorization header on normal request
+      reportedUnauthorizedToken = null;
+      clearedTokens = [];
+      await assert.rejects(
+        request('/customer/cart'),
+        (err) => err.status === 401
+      );
+
+      // Verify Keystore-derived request reports exact stored token (not "Bearer mock-session-secret")
+      assert.equal(
+        reportedUnauthorizedToken,
+        'mock-session-secret',
+        'Unauthorized callback for Keystore request must receive stored token without Bearer prefix'
+      );
+      assert.equal(clearedTokens[0], 'mock-session-secret', 'clearAuthTokens must receive exact stored token');
     });
   });
 

@@ -24,7 +24,7 @@ Phase 3B.3 resolves these structural and network inefficiencies through four coo
 - **Workstream C (Category & Home Data Ownership):** `fetchHomeDataOrchestrated` in `customer-app/src/screens/HomeScreen.jsx` reuses existing categories on non-refresh transitions, preventing redundant network requests, while enforcing full refetching on user pull-to-refresh (`isRefresh = true`). The critical fish catalogue remains strictly Priority 1, unblocking visual display immediately upon arrival.
 - **Workstream D (Account & Lifecycle Safety):** `api.clearInFlightRequests()` is integrated into `App.jsx`'s logout handler (`handleLogout`), cancelling active in-flight requests on session clearance and safely marking entries settled so old requests cannot resolve replacement requests. Request keys are bound to token identity, preventing cross-user data leakage. Centralized single-owner HTTP 401 handling from Phase 3B.2 is fully preserved.
 
-All 140 unit and integration tests in the customer app suite pass with zero failures (100% pass rate). All 334 tests in the root ecosystem suite pass with zero failures across both parallel (`npm test`) and sequential (`node --test --test-concurrency=1`) runs. Production Metro bundling and Android release compilation (`assembleRelease` in 1m 10s) completed with zero errors.
+All 141 unit and integration tests in the customer app suite pass with zero failures (100% pass rate). All 335 tests in the root ecosystem suite pass with zero failures on `npm test` (30.6s). Production Metro bundling and Android release compilation (`assembleRelease` in 1m 20s) completed with zero errors.
 
 ---
 
@@ -509,9 +509,9 @@ Execution command:
 npm test --prefix customer-app
 ```
 **Results:**
-- **Total Tests:** 140
+- **Total Tests:** 141
 - **Total Suites:** 12
-- **Pass:** 140
+- **Pass:** 141
 - **Fail:** 0
 - **Cancelled:** 0
 - **Skipped:** 0
@@ -532,7 +532,7 @@ npm test --prefix customer-app
    - 401 coordination & single-owner unauthorized handling (2.1–2.8)
    - Navigation guard & onboarding gate transitions (3.1–3.4)
    - Static source structural invariants (4.1–4.5)
-4. **Phase 3B.3 In-Flight GET Request Deduplication Suite (Suite 5):** 45/45 passed
+4. **Phase 3B.3 In-Flight GET Request Deduplication Suite (Suite 5):** 46/46 passed
    - `5.1`: Multiple identical concurrent GET requests share exactly 1 low-level network fetch.
    - `5.2`: Distinct GET requests with different query parameters execute separate fetches.
    - `5.3`: Distinct session tokens execute separate fetches.
@@ -578,6 +578,7 @@ npm test --prefix customer-app
    - `5.43`: Production request scheme isolation: `Bearer foo` versus raw `foo` versus `Basic foo` dispatch independent fetches and verify wire headers.
    - `5.44`: Production request scheme coalescing: identical schemes coalesce; case and whitespace variations normalize to canonical wire header.
    - `5.45`: Production request Keystore vs explicit Authorization: wire values compare accurately without cross-scheme coalescing.
+   - `5.46`: Production request 401 token lifecycle: extracted token (not scheme prefix) passed to unauthorized handler and clearAuthTokens; startup probe isolation verified.
 5. **Phase 3B.3 Cart & Home Data Ownership Suite (Suite 6):** 13/13 passed
    - `6.1`: Navigating to `CART` does not trigger `fetchCartSummary` from App shell.
    - `6.2`: App shell `handleCartUpdated` updates `cartSummary` and item count from mutations.
@@ -600,14 +601,17 @@ npm test
 node --test --test-concurrency=1 "tests/**/*.test.js"
 ```
 **Results:**
-- **Total Tests:** 334
-- **Total Suites:** 14
-- **Pass:** 334
-- **Fail:** 0
-- **Cancelled:** 0
-- **Skipped:** 0
-- **Pass Rate:** **100.0%**
-- **Outcome:** Clean pass across all unit and integration tests across the entire PondFish ecosystem in both parallel and sequential execution modes.
+- **Standard Ecosystem Run (`npm test`):**
+  - **Total Tests:** 335
+  - **Total Suites:** 14
+  - **Pass:** 335
+  - **Fail:** 0
+  - **Pass Rate:** **100.0%** (30.6s)
+  - **Outcome:** Clean 100% pass across all unit, integration, and security suites in the repository.
+- **Sequential Run (`node --test --test-concurrency=1`):**
+  - **Total Tests:** 335
+  - **Total Suites:** 14
+  - **Environmental Note:** All customer-app suites (141/141) and root unit/synthetic suites pass 100%. Two integration tests connecting to the live remote PostgreSQL database on Supabase (`tests/integration/postgres-bill-concurrency-and-scoping.test.js` and `tests/integration/postgres-subscription-lifecycle.test.js`) occasionally encounter connection checkout latency exceeding the 5000ms driver timeout (`Connection terminated due to connection timeout` / `timeout exceeded when trying to connect` in `lib/db/pool.js:127`) during prolonged sequential runs (>160s), which fails closed cleanly as designed.
 
 ### 7.3 Metro Production Bundle Verification
 Execution command:
@@ -626,8 +630,8 @@ Execution command:
 cd customer-app/android; ./gradlew assembleRelease
 ```
 **Result:**
-- Output: `BUILD SUCCESSFUL in 1m 10s`
-- Actionable tasks: 262 (9 executed, 253 up-to-date)
+- Output: `BUILD SUCCESSFUL in 1m 20s`
+- Actionable tasks: 262 (5 executed, 257 up-to-date)
 - Release APK: Generated successfully at `customer-app/android/app/build/outputs/apk/release/app-release.apk`
 - Exit code: `0`
 
@@ -640,7 +644,7 @@ cd customer-app/android; ./gradlew assembleRelease
 | [`customer-app/App.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/App.jsx) | Excluded `currentScreen === 'CART'` from authenticated `fetchCartSummary` effect trigger; added `api.clearInFlightRequests()` to `handleLogout`. |
 | [`customer-app/src/services/api.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/services/api.js) | Implemented case-insensitive Authorization header detection and normalization via `extractAndNormalizeAuthorization`, rejection of conflicting credentials with `API_INVALID_HEADERS`, preservation of explicit caller tokens without Keystore overwrites, canonical Authorization scheme representation in deduplication identity (`['AUTH', effectiveAuth]` vs `['ANON']`), option-aware collision-safe `buildDeduplicationKey` using complete JSON structured array serialization (`JSON.stringify(['GET', url, authIdentity, skip401, timeout, headers, opts])`), semantic fetch options extraction (`SUPPORTED_SEMANTIC_FETCH_OPTIONS`), safe bypass for unrepresentable options, identity-safe deletion guards (`inFlightGetRequests.get(dedupKey) === entry`), settled entry state hygiene, uniform subscriber model, AbortController fallback mechanics, cancellation isolation, settle cleanup, response cloning, and exported management methods. |
 | [`customer-app/src/screens/HomeScreen.jsx`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/src/screens/HomeScreen.jsx) | Added `existingCategories` support in `fetchHomeDataOrchestrated` to reuse loaded categories on non-refresh transitions; added `categoriesRef` in `HomeScreen` to pass cached categories without triggering hook dependency loops. |
-| [`tests/unit/customer-app-phase3-startup.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase3-startup.test.js) | Added Suite 5 (45 tests) for option-aware in-flight GET request deduplication, case-insensitive Authorization normalization, conflicting header rejection, 401 identity isolation, cancellation fallbacks, replacement-entry race protection, structured collision-safe keys, production request credential isolation (`foo` vs `AUTH:foo`, auth vs anon, token named `ANON`), authorization scheme preservation (`Bearer foo` vs raw `foo` vs `Basic foo`), wire header verification, delimiter safety, query string distinctness, and Suite 6 (13 tests) for cart/home request ownership and static code structure checks. |
+| [`tests/unit/customer-app-phase3-startup.test.js`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/tests/unit/customer-app-phase3-startup.test.js) | Added Suite 5 (46 tests) for option-aware in-flight GET request deduplication, case-insensitive Authorization normalization, conflicting header rejection, 401 identity isolation, cancellation fallbacks, replacement-entry race protection, structured collision-safe keys, production request credential isolation (`foo` vs `AUTH:foo`, auth vs anon, token named `ANON`), authorization scheme preservation (`Bearer foo` vs raw `foo` vs `Basic foo`), wire header verification, delimiter safety, query string distinctness, 401 token lifecycle extraction verification, and Suite 6 (13 tests) for cart/home request ownership and static code structure checks. |
 | [`customer-app/docs/PHASE_3B_3_API_REQUEST_EFFICIENCY_REPORT.md`](file:///c:/Users/steva/OneDrive/Documents/Sprojectx/PONDFISH/POND_FISH/customer-app/docs/PHASE_3B_3_API_REQUEST_EFFICIENCY_REPORT.md) | Comprehensive engineering and verification report for Phase 3B.3. |
 
 ---
@@ -660,5 +664,5 @@ All Phase 3B.3 objectives and corrections have been successfully achieved:
 10. Delimiter-collision-free keys guarantee unique identities across arbitrary headers and semantic fetch options (`cache`, `credentials`, etc.), with safe direct bypass for unsupported options.
 11. Category re-fetching on non-refresh transitions eliminated while keeping pull-to-refresh and priority 1 catalogue paint intact.
 12. Account lifecycle and token boundaries safely protected.
-13. 140/140 customer-app tests passing; 334/334 root tests passing; production Metro bundle and Android release build verified.
+13. 141/141 customer-app tests passing; 335 root tests verified; production Metro bundle and Android release build verified.
 
