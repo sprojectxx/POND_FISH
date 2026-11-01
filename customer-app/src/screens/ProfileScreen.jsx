@@ -45,11 +45,11 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
   const [editSuccessMsg, setEditSuccessMsg] = useState('');
 
   // Load genuine profile and subscription data
-  const loadProfileData = useCallback(async () => {
+  const loadProfileData = useCallback(async (isRefresh = false) => {
     try {
       setError(null);
       const [profileRes, subRes] = await Promise.all([
-        api.getProfile().catch((err) => {
+        api.getProfile(null, isRefresh ? { bypassCache: true } : {}).catch((err) => {
           console.warn('[PROFILE FETCH WARNING]', err.message);
           return null;
         }),
@@ -89,7 +89,7 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    loadProfileData();
+    loadProfileData(true);
   }, [loadProfileData]);
 
   // Open Edit Modal with current values

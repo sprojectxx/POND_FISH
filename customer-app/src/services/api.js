@@ -45,6 +45,7 @@ const KNOWN_REQUEST_OPTIONS = new Set([
   'timeout',
   'signal',
   'bypassDedup',
+  'bypassCache',
   'skipUnauthorizedHandler',
   ...SUPPORTED_SEMANTIC_FETCH_OPTIONS,
 ]);
@@ -248,6 +249,7 @@ function buildDeduplicationKey({
 const inFlightGetRequests = new Map();
 
 function clearInFlightRequests() {
+  clearResponseCache();
   for (const [key, entry] of inFlightGetRequests.entries()) {
     entry.isSettled = true;
     try {
@@ -282,6 +284,117 @@ function cloneResponse(val) {
   } catch (_) {
     return val;
   }
+}
+
+/**
+ * Phase 3B.4 Safe API Response Caching Policy Configuration
+ * Whitelist-based: only explicitly verified, non-transactional endpoints are cacheable.
+ * Business-critical endpoints (inventory, availability, prices, cart, subscription balance/quota,
+ * bookings, GPS tracking, transactions) are strictly excluded and never cached.
+ */
+const CACHEABLE_ENDPOINTS = {
+  '/api/v1/customer/categories': {
+    ttlMs: 5 * 60 * 1000, // 5 minutes
+    isSessionScoped: false,
+    maxEntries: 10,
+  },
+  '/api/v1/customer/subscription/plans': {
+    ttlMs: 5 * 60 * 1000, // 5 minutes
+    isSessionScoped: false,
+    maxEntries: 10,
+  },
+  '/api/v1/customer/profile': {
+    ttlMs: 2 * 60 * 1000, // 2 minutes
+    isSessionScoped: true, // Strictly customer-session isolated
+    maxEntries: 5,
+  },
+};
+
+const MAX_TOTAL_CACHE_ENTRIES = 25;
+const responseCache = new Map();
+const cacheStats = {
+  hits: 0,
+  misses: 0,
+  expirations: 0,
+  evictions: 0,
+  invalidations: 0,
+};
+
+function buildCacheKey({ baseEndpoint, url, requestToken, isSessionScoped }) {
+  const sessionIdentity = isSessionScoped
+    ? (requestToken ? ['AUTH', String(requestToken).trim()] : ['ANON'])
+    : ['SHARED'];
+  return JSON.stringify(['CACHE', baseEndpoint, url, sessionIdentity]);
+}
+
+function getFromResponseCache(cacheKey) {
+  if (!responseCache.has(cacheKey)) {
+    return null;
+  }
+  const entry = responseCache.get(cacheKey);
+  const now = Date.now();
+  if (now - entry.timestamp > entry.ttlMs) {
+    responseCache.delete(cacheKey);
+    cacheStats.expirations++;
+    return null;
+  }
+  // Refresh LRU order on access
+  responseCache.delete(cacheKey);
+  responseCache.set(cacheKey, entry);
+  return entry;
+}
+
+function saveToResponseCache(cacheKey, entry) {
+  // Evict oldest entry if maximum bound reached
+  if (responseCache.size >= MAX_TOTAL_CACHE_ENTRIES && !responseCache.has(cacheKey)) {
+    const oldestKey = responseCache.keys().next().value;
+    if (oldestKey) {
+      responseCache.delete(oldestKey);
+      cacheStats.evictions++;
+    }
+  }
+  responseCache.set(cacheKey, entry);
+}
+
+function clearResponseCache() {
+  responseCache.clear();
+  cacheStats.invalidations++;
+}
+
+function invalidateResponseCache(target) {
+  if (!target) {
+    clearResponseCache();
+    return;
+  }
+  let count = 0;
+  for (const [key, entry] of Array.from(responseCache.entries())) {
+    if (entry.baseEndpoint === target || key.includes(target)) {
+      responseCache.delete(key);
+      count++;
+    }
+  }
+  if (count > 0) {
+    cacheStats.invalidations += count;
+  }
+}
+
+function getResponseCacheStats() {
+  return {
+    hits: cacheStats.hits,
+    misses: cacheStats.misses,
+    expirations: cacheStats.expirations,
+    evictions: cacheStats.evictions,
+    invalidations: cacheStats.invalidations,
+    size: responseCache.size,
+  };
+}
+
+function resetResponseCacheStats() {
+  cacheStats.hits = 0;
+  cacheStats.misses = 0;
+  cacheStats.expirations = 0;
+  cacheStats.evictions = 0;
+  cacheStats.invalidations = 0;
 }
 
 /**
@@ -443,6 +556,7 @@ async function executeNetworkRequest({
     const isAuthEndpoint = !endpoint.includes('/auth/send-otp') && !endpoint.includes('/auth/verify-otp');
     const shouldNotifyUnauthorized = isAuthEndpoint && !options.skipUnauthorizedHandler;
     if (response.status === 401 && shouldNotifyUnauthorized) {
+      clearResponseCache();
       const now = Date.now();
       const isDuplicate = requestToken === lastRejectedToken && (now - lastRejectedTime < 1500);
 
@@ -543,6 +657,41 @@ function request(endpoint, options = {}) {
       throw abortErr;
     }
 
+    // Phase 3B.4 Safe Response Cache Evaluation
+    const baseEndpoint = endpoint.split('?')[0];
+    const cachePolicy = isGet ? CACHEABLE_ENDPOINTS[baseEndpoint] : null;
+    const shouldReadCache = Boolean(
+      isGet &&
+      !options.bypassCache &&
+      !options.skipUnauthorizedHandler &&
+      cachePolicy &&
+      isAuthSafe
+    );
+    const shouldWriteCache = Boolean(
+      isGet &&
+      !options.skipUnauthorizedHandler &&
+      cachePolicy &&
+      isAuthSafe
+    );
+
+    const cacheKey = (shouldReadCache || shouldWriteCache)
+      ? buildCacheKey({
+          baseEndpoint,
+          url,
+          requestToken,
+          isSessionScoped: cachePolicy.isSessionScoped,
+        })
+      : null;
+
+    if (shouldReadCache && cacheKey) {
+      const cached = getFromResponseCache(cacheKey);
+      if (cached) {
+        cacheStats.hits++;
+        return cloneResponse(cached.data);
+      }
+      cacheStats.misses++;
+    }
+
     // In-flight GET deduplication evaluation
     // Deduplicate strictly for GET requests with valid, supported options and safe authorization
     const isDeduplicatable = isAuthSafe && evaluateDeduplicatable(isGet, options);
@@ -575,7 +724,7 @@ function request(endpoint, options = {}) {
       }
 
       try {
-        return await executeNetworkRequest({
+        const netRes = await executeNetworkRequest({
           url,
           endpoint,
           method,
@@ -586,6 +735,17 @@ function request(endpoint, options = {}) {
           controller,
           callerSignal: controller ? null : (options.signal || null),
         });
+        if (shouldWriteCache && cacheKey && netRes && netRes.success !== false) {
+          saveToResponseCache(cacheKey, {
+            data: cloneResponse(netRes),
+            timestamp: Date.now(),
+            ttlMs: cachePolicy.ttlMs,
+            baseEndpoint,
+            sessionScoped: cachePolicy.isSessionScoped,
+            requestToken: cachePolicy.isSessionScoped ? requestToken : null,
+          });
+        }
+        return netRes;
       } finally {
         if (callerAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
           options.signal.removeEventListener('abort', callerAbortListener);
@@ -627,6 +787,17 @@ function request(endpoint, options = {}) {
             controller,
             callerSignal: null, // Shared network request MUST NOT inherit initiating subscriber's signal
           });
+
+          if (shouldWriteCache && cacheKey && json && json.success !== false) {
+            saveToResponseCache(cacheKey, {
+              data: cloneResponse(json),
+              timestamp: Date.now(),
+              ttlMs: cachePolicy.ttlMs,
+              baseEndpoint,
+              sessionScoped: cachePolicy.isSessionScoped,
+              requestToken: cachePolicy.isSessionScoped ? requestToken : null,
+            });
+          }
 
           entry.isSettled = true;
           for (const sub of Array.from(entry.subscribers)) {
@@ -720,6 +891,17 @@ export const api = {
   setUnauthorizedHandler: (cb) => setUnauthorizedHandler(cb),
 
   /**
+   * Phase 3B.4 Safe response caching management
+   */
+  clearResponseCache,
+  invalidateResponseCache,
+  getResponseCacheStats,
+  resetResponseCacheStats,
+  getResponseCacheSize: () => responseCache.size,
+  getCachePolicy: (ep) => (ep ? CACHEABLE_ENDPOINTS[ep] || null : { ...CACHEABLE_ENDPOINTS }),
+  buildCacheKey,
+
+  /**
    * Request OTP dispatch to mobile number
    * POST /api/v1/customer/auth/send-otp
    */
@@ -768,12 +950,14 @@ export const api = {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     };
-    return request('/api/v1/customer/profile', {
+    const res = await request('/api/v1/customer/profile', {
       ...options,
       method: 'PUT',
       headers,
       body: JSON.stringify({ name, age, area }),
     });
+    invalidateResponseCache('/api/v1/customer/profile');
+    return res;
   },
 
   /**
@@ -987,11 +1171,13 @@ export const api = {
    * @param {string} planId
    */
   async purchaseSubscription(planId, options = {}) {
-    return request('/api/v1/customer/subscription/purchase', {
+    const res = await request('/api/v1/customer/subscription/purchase', {
       ...options,
       method: 'POST',
       body: JSON.stringify({ planId }),
     });
+    invalidateResponseCache('/api/v1/customer/subscription/plans');
+    return res;
   },
 
   /**
@@ -1000,7 +1186,7 @@ export const api = {
    * @param {object} params
    */
   async verifySubscriptionPayment({ planId, razorpayOrderId, razorpayPaymentId, razorpaySignature }, options = {}) {
-    return request('/api/v1/customer/subscription/verify', {
+    const res = await request('/api/v1/customer/subscription/verify', {
       ...options,
       method: 'POST',
       body: JSON.stringify({
@@ -1010,6 +1196,8 @@ export const api = {
         razorpaySignature,
       }),
     });
+    invalidateResponseCache('/api/v1/customer/subscription/plans');
+    return res;
   },
 
   /**

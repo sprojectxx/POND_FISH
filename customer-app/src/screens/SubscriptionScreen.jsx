@@ -67,12 +67,12 @@ export default function SubscriptionScreen({ onNavigate }) {
     }
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isRefresh = false) => {
     try {
       setError(null);
       const [subRes, plansRes] = await Promise.all([
         api.getSubscription(),
-        api.getSubscriptionPlans(),
+        api.getSubscriptionPlans(isRefresh ? { bypassCache: true } : {}),
       ]);
 
       const subData = subRes.data || { hasSubscription: false, subscription: null };
@@ -100,7 +100,7 @@ export default function SubscriptionScreen({ onNavigate }) {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadData();
+    loadData(true);
   };
 
   // Open Purchase Review modal

@@ -103,7 +103,7 @@ export async function fetchHomeDataOrchestrated({
         if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
         setCategories(existingCategories);
       })
-    : apiClient.getCategories({ signal })
+    : apiClient.getCategories({ signal, bypassCache: isRefresh })
         .then((res) => {
           if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
           setCategories(res.data || []);

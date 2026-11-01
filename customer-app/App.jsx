@@ -95,6 +95,7 @@ export default function App() {
         return;
       }
       api.clearInFlightRequests();
+      api.clearResponseCache();
     } catch (e) {
       console.warn('[LOGOUT] Error clearing tokens', e);
     } finally {

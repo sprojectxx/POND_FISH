@@ -2748,4 +2748,781 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       );
     });
   });
+
+  // =========================================================================
+  // SUITE 7: PHASE 3B.4 SAFE API RESPONSE CACHING & FRESHNESS VERIFICATION
+  // =========================================================================
+  describe('Suite 7: [Phase 3B.4 Production Integration & Unit Tests] Safe API Response Caching & Freshness Verification Suite', () => {
+    test('7.1: Cache hit for an approved endpoint: second sequential request returns cached data with zero network fetches', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: 'cat-1', name: 'Freshwater Fish' }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      const res1 = await productionApi.getCategories();
+      assert.equal(fetchCount, 1, 'First request must fetch from network');
+      assert.equal(productionApi.getResponseCacheStats().hits, 0);
+      assert.equal(productionApi.getResponseCacheStats().misses, 1);
+
+      const res2 = await productionApi.getCategories();
+      assert.equal(fetchCount, 1, 'Second request must be served from cache without network fetch');
+      assert.equal(productionApi.getResponseCacheStats().hits, 1);
+      assert.deepEqual(res1.data, res2.data, 'Cached response data must match network response');
+      assert.notEqual(res1, res2, 'Cached response must return a fresh cloned object to prevent state pollution');
+    });
+
+    test('7.2: Cache miss for an uncached endpoint: getFish never caches responses and always fetches fresh from network', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: 'fish-1', name: 'Rohu', price: 250 }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      await productionApi.getFish();
+      assert.equal(fetchCount, 1);
+
+      await productionApi.getFish();
+      assert.equal(fetchCount, 2, 'Uncached endpoint getFish must execute a fresh network fetch on every invocation');
+      assert.equal(productionApi.getResponseCacheStats().hits, 0, 'Uncached endpoint must not record cache hits');
+    });
+
+    test('7.3: TTL expiration: expired cache entry is safely evicted and forces fresh network fetch', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: `cat-v${fetchCount}` }] }),
+        };
+      };
+
+      const originalDateNow = Date.now;
+      let simulatedTime = 1000000;
+      Date.now = () => simulatedTime;
+
+      try {
+        const { api: productionApi } = loadProductionApiModule(
+          { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+          mockFetch
+        );
+
+        // First call at t = 1,000,000
+        const res1 = await productionApi.getCategories();
+        assert.equal(fetchCount, 1);
+        assert.deepEqual(res1.data, [{ id: 'cat-v1' }]);
+
+        // Second call at t = 1,000,000 + 100,000 (well within 5-min TTL of 300,000ms) -> Cache Hit
+        simulatedTime += 100000;
+        const res2 = await productionApi.getCategories();
+        assert.equal(fetchCount, 1, 'Request within TTL must hit cache');
+        assert.deepEqual(res2.data, [{ id: 'cat-v1' }]);
+
+        // Advance beyond 5-minute TTL (300,001ms later)
+        simulatedTime += 200001;
+        const res3 = await productionApi.getCategories();
+        assert.equal(fetchCount, 2, 'Request after TTL expiration must execute fresh network fetch');
+        assert.deepEqual(res3.data, [{ id: 'cat-v2' }]);
+        assert.equal(productionApi.getResponseCacheStats().expirations, 1);
+      } finally {
+        Date.now = originalDateNow;
+      }
+    });
+
+    test('7.4: Cache entry eviction and bounded memory behavior: cache never exceeds MAX_TOTAL_CACHE_ENTRIES bound', async () => {
+      let fetchCount = 0;
+      const mockFetch = async (url) => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { url } }),
+        };
+      };
+
+      const { api: productionApi, request: rawRequest } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      // Populate 30 distinct cache entries using valid cacheable endpoint /api/v1/customer/categories
+      for (let i = 0; i < 30; i++) {
+        await rawRequest(`/api/v1/customer/categories?query_variant=${i}`);
+      }
+
+      assert.equal(fetchCount, 30);
+      assert.ok(
+        productionApi.getResponseCacheSize() <= 25,
+        `Cache size (${productionApi.getResponseCacheSize()}) must not exceed MAX_TOTAL_CACHE_ENTRIES (25)`
+      );
+      assert.ok(
+        productionApi.getResponseCacheStats().evictions >= 5,
+        `Evictions (${productionApi.getResponseCacheStats().evictions}) must be at least 5`
+      );
+    });
+
+    test('7.5: Different endpoint identities: categories and subscription plans store distinct non-colliding cache entries', async () => {
+      let fetchCount = 0;
+      const mockFetch = async (url) => {
+        fetchCount++;
+        if (url.includes('/categories')) {
+          return { ok: true, status: 200, json: async () => ({ success: true, data: [{ id: 'cat' }] }) };
+        }
+        if (url.includes('/plans')) {
+          return { ok: true, status: 200, json: async () => ({ success: true, data: [{ id: 'plan' }] }) };
+        }
+        return { ok: false, status: 404 };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      const [cats, plans] = await Promise.all([
+        productionApi.getCategories(),
+        productionApi.getSubscriptionPlans(),
+      ]);
+      assert.equal(fetchCount, 2);
+      assert.deepEqual(cats.data, [{ id: 'cat' }]);
+      assert.deepEqual(plans.data, [{ id: 'plan' }]);
+
+      // Sequential re-reads must both hit their respective cache entries
+      const [cats2, plans2] = await Promise.all([
+        productionApi.getCategories(),
+        productionApi.getSubscriptionPlans(),
+      ]);
+      assert.equal(fetchCount, 2, 'Both distinct endpoints must hit their respective cache entries');
+      assert.deepEqual(cats2.data, [{ id: 'cat' }]);
+      assert.deepEqual(plans2.data, [{ id: 'plan' }]);
+      assert.equal(productionApi.getResponseCacheStats().hits, 2);
+    });
+
+    test('7.6: Different query parameters: same endpoint with different query strings creates distinct cache entries', async () => {
+      let fetchCount = 0;
+      const mockFetch = async (url) => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { url, count: fetchCount } }),
+        };
+      };
+
+      const { request: rawRequest, api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      const resA = await rawRequest('/api/v1/customer/categories?tag=fresh');
+      const resB = await rawRequest('/api/v1/customer/categories?tag=marine');
+      assert.equal(fetchCount, 2, 'Distinct query strings must execute distinct network fetches');
+
+      const resA2 = await rawRequest('/api/v1/customer/categories?tag=fresh');
+      assert.equal(fetchCount, 2, 'Identical query string must hit cache');
+      assert.deepEqual(resA.data, resA2.data);
+    });
+
+    test('7.7: Different authenticated sessions: profile endpoint isolates cache entries by customer token', async () => {
+      let fetchCount = 0;
+      const mockFetch = async (url, opts) => {
+        fetchCount++;
+        const auth = opts.headers?.Authorization;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { tokenUsed: auth } }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule({}, mockFetch);
+
+      const resUserA = await productionApi.getProfile('token-user-a');
+      const resUserB = await productionApi.getProfile('token-user-b');
+
+      assert.equal(fetchCount, 2, 'Requests with different tokens must execute separate network fetches');
+      assert.equal(resUserA.data.tokenUsed, 'Bearer token-user-a');
+      assert.equal(resUserB.data.tokenUsed, 'Bearer token-user-b');
+
+      // Subsequent read for User A hits User A's cache entry without fetching
+      const resUserA2 = await productionApi.getProfile('token-user-a');
+      assert.equal(fetchCount, 2, 'User A request must hit User A cached entry');
+      assert.equal(resUserA2.data.tokenUsed, 'Bearer token-user-a');
+    });
+
+    test('7.8: Logout cache clearing: clearResponseCache empties all cached entries from memory', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: 'cat' }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      await productionApi.getCategories();
+      assert.equal(fetchCount, 1);
+      assert.ok(productionApi.getResponseCacheSize() > 0);
+
+      // Trigger logout cache clearance
+      productionApi.clearResponseCache();
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'clearResponseCache must empty cache Map');
+
+      // Next call must re-fetch from network
+      await productionApi.getCategories();
+      assert.equal(fetchCount, 2, 'Post-logout request must execute fresh network fetch');
+    });
+
+    test('7.9: Account-switch isolation: new user never receives previous user cached profile', async () => {
+      let fetchCount = 0;
+      let currentStoredToken = 'user-alice-token';
+
+      const mockFetch = async (url, opts) => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: { username: opts.headers?.Authorization?.includes('alice') ? 'Alice' : 'Bob' },
+          }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: currentStoredToken }) },
+        mockFetch
+      );
+
+      // Alice logs in and fetches profile
+      const aliceProfile = await productionApi.getProfile();
+      assert.equal(aliceProfile.data.username, 'Alice');
+      assert.equal(fetchCount, 1);
+
+      // Logout occurs: storage and cache cleared
+      productionApi.clearResponseCache();
+      currentStoredToken = 'user-bob-token';
+
+      // Bob logs in and fetches profile
+      const bobProfile = await productionApi.getProfile();
+      assert.equal(bobProfile.data.username, 'Bob', 'Bob must receive Bob’s profile, never Alice’s cached profile');
+      assert.equal(fetchCount, 2);
+    });
+
+    test('7.10: HTTP 401 response is never cached and clears session cache', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ success: false, error: { code: 'UNAUTHORIZED', message: 'Session expired' } }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'expired-token' }) },
+        mockFetch
+      );
+
+      await assert.rejects(productionApi.getProfile('expired-token'), (err) => err.status === 401);
+      assert.equal(fetchCount, 1);
+      assert.equal(productionApi.getResponseCacheSize(), 0, '401 response must never be cached');
+
+      // Second attempt must still hit the network
+      await assert.rejects(productionApi.getProfile('expired-token'), (err) => err.status === 401);
+      assert.equal(fetchCount, 2, 'Subsequent call after 401 must re-attempt network');
+    });
+
+    test('7.11: Failed GET (HTTP 500) is never cached', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        if (fetchCount === 1) {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({ success: false, error: { code: 'SERVER_ERROR' } }),
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: 'recovered' }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      await assert.rejects(productionApi.getCategories(), (err) => err.status === 500);
+      assert.equal(fetchCount, 1);
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'HTTP 500 failure must never be stored in cache');
+
+      // Next call recovers and hits network
+      const res = await productionApi.getCategories();
+      assert.equal(fetchCount, 2);
+      assert.deepEqual(res.data, [{ id: 'recovered' }]);
+    });
+
+    test('7.12: Network error / rejection is never cached', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        if (fetchCount === 1) {
+          throw new Error('Connection refused');
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: 'recovered' }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      await assert.rejects(productionApi.getCategories(), (err) => err.code === 'API_NETWORK_ERROR');
+      assert.equal(fetchCount, 1);
+      assert.equal(productionApi.getResponseCacheSize(), 0, 'Network error must never be cached');
+
+      const res = await productionApi.getCategories();
+      assert.equal(fetchCount, 2);
+      assert.deepEqual(res.data, [{ id: 'recovered' }]);
+    });
+
+    test('7.13: Explicit refresh bypasses cache: bypassCache: true forces network fetch and updates cache', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ version: fetchCount }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      // Initial fetch -> version 1
+      const res1 = await productionApi.getCategories();
+      assert.equal(fetchCount, 1);
+      assert.deepEqual(res1.data, [{ version: 1 }]);
+
+      // Normal read -> hits cache (version 1)
+      const res2 = await productionApi.getCategories();
+      assert.equal(fetchCount, 1);
+      assert.deepEqual(res2.data, [{ version: 1 }]);
+
+      // Pull-to-refresh with bypassCache: true -> fetches fresh version 2
+      const res3 = await productionApi.getCategories({ bypassCache: true });
+      assert.equal(fetchCount, 2, 'bypassCache: true must force network fetch');
+      assert.deepEqual(res3.data, [{ version: 2 }]);
+
+      // Subsequent normal read -> receives fresh cached version 2
+      const res4 = await productionApi.getCategories();
+      assert.equal(fetchCount, 2, 'Subsequent request must receive updated cached data');
+      assert.deepEqual(res4.data, [{ version: 2 }]);
+    });
+
+    test('7.14: Successful mutation invalidates affected data: updateProfile purges cached profile', async () => {
+      let profileFetchCount = 0;
+      let profileName = 'Initial Name';
+
+      const mockFetch = async (url, opts) => {
+        if (opts.method === 'PUT') {
+          const body = JSON.parse(opts.body);
+          profileName = body.name;
+          return { ok: true, status: 200, json: async () => ({ success: true, data: { name: profileName } }) };
+        }
+        profileFetchCount++;
+        return { ok: true, status: 200, json: async () => ({ success: true, data: { name: profileName } }) };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      // Initial read -> cached
+      const p1 = await productionApi.getProfile();
+      assert.equal(p1.data.name, 'Initial Name');
+      assert.equal(profileFetchCount, 1);
+
+      // Second read -> hits cache
+      const p2 = await productionApi.getProfile();
+      assert.equal(profileFetchCount, 1);
+
+      // Successful profile update
+      await productionApi.updateProfile({ name: 'Updated Name', age: 30, area: 'Kochi' });
+
+      // Next read must fetch from network and return updated name
+      const p3 = await productionApi.getProfile();
+      assert.equal(profileFetchCount, 2, 'Profile read after successful mutation must fetch from network');
+      assert.equal(p3.data.name, 'Updated Name');
+    });
+
+    test('7.15: Failed mutation does not incorrectly invalidate data: failing updateProfile preserves cache', async () => {
+      let profileFetchCount = 0;
+
+      const mockFetch = async (url, opts) => {
+        if (opts.method === 'PUT') {
+          return {
+            ok: false,
+            status: 400,
+            json: async () => ({ success: false, error: { code: 'INVALID_NAME', message: 'Name too short' } }),
+          };
+        }
+        profileFetchCount++;
+        return { ok: true, status: 200, json: async () => ({ success: true, data: { name: 'Valid Profile' } }) };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      // Read and populate cache
+      await productionApi.getProfile();
+      assert.equal(profileFetchCount, 1);
+
+      // Failed update
+      await assert.rejects(
+        productionApi.updateProfile({ name: 'x' }),
+        (err) => err.code === 'INVALID_NAME'
+      );
+
+      // Next read must STILL hit the cache because the mutation failed
+      const pCached = await productionApi.getProfile();
+      assert.equal(profileFetchCount, 1, 'Failed mutation must NOT invalidate cached profile');
+      assert.equal(pCached.data.name, 'Valid Profile');
+      assert.equal(productionApi.getResponseCacheStats().hits, 1);
+    });
+
+    test('7.16: Concurrent GET requests remain compatible with Phase 3B.3 deduplication and populate cache once', async () => {
+      let fetchCount = 0;
+      const mockFetch = async () => {
+        fetchCount++;
+        await new Promise((r) => setTimeout(r, 30));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: [{ id: 'cat-shared' }] }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      // 3 concurrent requests on empty cache
+      const [r1, r2, r3] = await Promise.all([
+        productionApi.getCategories(),
+        productionApi.getCategories(),
+        productionApi.getCategories(),
+      ]);
+
+      assert.equal(fetchCount, 1, 'Concurrent requests on empty cache must deduplicate into 1 network fetch');
+      assert.deepEqual(r1.data, [{ id: 'cat-shared' }]);
+      assert.deepEqual(r2.data, [{ id: 'cat-shared' }]);
+      assert.deepEqual(r3.data, [{ id: 'cat-shared' }]);
+
+      // 4th request moments later: must hit response cache
+      const r4 = await productionApi.getCategories();
+      assert.equal(fetchCount, 1, 'Subsequent request must hit response cache with zero network fetches');
+      assert.deepEqual(r4.data, [{ id: 'cat-shared' }]);
+      assert.equal(productionApi.getResponseCacheStats().hits, 1);
+    });
+
+    test('7.17: Business-critical endpoints never return cached authoritative data', async () => {
+      let fetchCount = 0;
+      const mockFetch = async (url) => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { url, count: fetchCount } }),
+        };
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      // The 6 critical endpoints called twice sequentially
+      await productionApi.getFish();
+      await productionApi.getFish();
+
+      await productionApi.getCart();
+      await productionApi.getCart();
+
+      await productionApi.getSubscription();
+      await productionApi.getSubscription();
+
+      await productionApi.getBookings();
+      await productionApi.getBookings();
+
+      await productionApi.getCustomerLiveTracking();
+      await productionApi.getCustomerLiveTracking();
+
+      await productionApi.getCustomerTransactions();
+      await productionApi.getCustomerTransactions();
+
+      assert.equal(
+        fetchCount,
+        12,
+        'All 12 calls to business-critical endpoints must execute network fetches (0 cache hits)'
+      );
+      assert.equal(
+        productionApi.getResponseCacheStats().hits,
+        0,
+        'Zero cache hits must be recorded for business-critical endpoints'
+      );
+    });
+
+    test('7.18: Older responses cannot overwrite newer data in HomeScreen orchestrator', async () => {
+      const fetchHomeDataOrchestrated = loadHomeScreenOrchestrator();
+
+      let fishCatalogueVersions = [];
+      const isMountedRef = { current: true };
+      const requestSeqRef = { current: 0 };
+      const abortControllerRef = { current: null };
+
+      // Request 1: slow network response (60ms) with version 1
+      const slowApi = {
+        getFish: async () => {
+          await new Promise((r) => setTimeout(r, 60));
+          return { data: [{ id: 'fish-v1' }] };
+        },
+        getCategories: async () => ({ data: [] }),
+        getSubscription: async () => ({ data: null }),
+        getCustomerLiveTracking: async () => ({ data: null }),
+        getProfile: async () => ({ data: null }),
+      };
+
+      // Request 2: fast network response (10ms) with version 2
+      const fastApi = {
+        getFish: async () => {
+          await new Promise((r) => setTimeout(r, 10));
+          return { data: [{ id: 'fish-v2' }] };
+        },
+        getCategories: async () => ({ data: [] }),
+        getSubscription: async () => ({ data: null }),
+        getCustomerLiveTracking: async () => ({ data: null }),
+        getProfile: async () => ({ data: null }),
+      };
+
+      const p1 = fetchHomeDataOrchestrated({
+        apiClient: slowApi,
+        setFishList: (list) => { fishCatalogueVersions.push(list); },
+        setCategories: () => {},
+        setSubData: () => {},
+        setTrackingData: () => {},
+        setCustomer: () => {},
+        setLoading: () => {},
+        setRefreshing: () => {},
+        setError: () => {},
+        abortControllerRef,
+        isMountedRef,
+        requestSeqRef,
+        isRefresh: false,
+      });
+
+      // Immediate second request (e.g. filter change or refresh)
+      const p2 = fetchHomeDataOrchestrated({
+        apiClient: fastApi,
+        setFishList: (list) => { fishCatalogueVersions.push(list); },
+        setCategories: () => {},
+        setSubData: () => {},
+        setTrackingData: () => {},
+        setCustomer: () => {},
+        setLoading: () => {},
+        setRefreshing: () => {},
+        setError: () => {},
+        abortControllerRef,
+        isMountedRef,
+        requestSeqRef,
+        isRefresh: false,
+      });
+
+      await Promise.all([p1, p2]);
+
+      // Only version 2 should be in state; slow version 1 must be ignored
+      assert.equal(fishCatalogueVersions.length, 1);
+      assert.deepEqual(fishCatalogueVersions[0], [{ id: 'fish-v2' }]);
+    });
+
+    test('7.19: App navigation and screen revisits preserve freshness requirements', async () => {
+      let fishFetches = 0;
+      let catFetches = 0;
+
+      const mockApiClient = {
+        getFish: async () => {
+          fishFetches++;
+          return { data: [{ id: `fish-${fishFetches}` }] };
+        },
+        getCategories: async () => {
+          catFetches++;
+          return { data: [{ id: 'cats' }] };
+        },
+        getSubscription: async () => ({ data: null }),
+        getCustomerLiveTracking: async () => ({ data: null }),
+        getProfile: async () => ({ data: null }),
+      };
+
+      const fetchHomeDataOrchestrated = loadHomeScreenOrchestrator();
+
+      // Visit 1: Initial Home visit
+      await fetchHomeDataOrchestrated({
+        apiClient: mockApiClient,
+        setFishList: () => {},
+        setCategories: () => {},
+        setSubData: () => {},
+        setTrackingData: () => {},
+        setCustomer: () => {},
+        setLoading: () => {},
+        setRefreshing: () => {},
+        setError: () => {},
+        abortControllerRef: { current: null },
+        isMountedRef: { current: true },
+        requestSeqRef: { current: 0 },
+        isRefresh: false,
+      });
+
+      assert.equal(fishFetches, 1, 'Initial visit must fetch fresh fish catalogue');
+      assert.equal(catFetches, 1, 'Initial visit must fetch categories');
+
+      // Visit 2: Revisit Home from Cart or Profile (with existingCategories passed)
+      await fetchHomeDataOrchestrated({
+        apiClient: mockApiClient,
+        setFishList: () => {},
+        setCategories: () => {},
+        setSubData: () => {},
+        setTrackingData: () => {},
+        setCustomer: () => {},
+        setLoading: () => {},
+        setRefreshing: () => {},
+        setError: () => {},
+        abortControllerRef: { current: null },
+        isMountedRef: { current: true },
+        requestSeqRef: { current: 0 },
+        isRefresh: false,
+        existingCategories: [{ id: 'cats' }],
+      });
+
+      assert.equal(fishFetches, 2, 'Revisiting Home MUST always fetch fresh fish catalogue for live stock/prices');
+      assert.equal(catFetches, 1, 'Revisiting Home reuses categories without network round-trip');
+    });
+
+    test('7.20: Existing request cancellation behavior remains correct during cache miss', async () => {
+      const controller = new AbortController();
+      const mockFetch = async (url, opts) => {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            resolve({ ok: true, status: 200, json: async () => ({ success: true, data: [] }) });
+          }, 100);
+          if (opts.signal) {
+            opts.signal.addEventListener('abort', () => {
+              clearTimeout(timer);
+              const err = new Error('Aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          }
+        });
+      };
+
+      const { api: productionApi } = loadProductionApiModule(
+        { getAuthTokens: async () => ({ token: 'mock-user-token' }) },
+        mockFetch
+      );
+
+      const reqPromise = productionApi.getCategories({ signal: controller.signal });
+      controller.abort('User navigated away');
+
+      await assert.rejects(reqPromise, (err) => {
+        assert.equal(err.code, 'API_ABORTED');
+        assert.equal(err.isAborted, true);
+        return true;
+      });
+    });
+
+    test('7.21: [Static Source Check] api.js defines CACHEABLE_ENDPOINTS with verified safe endpoints', () => {
+      assert.ok(
+        apiCode.includes('CACHEABLE_ENDPOINTS = {'),
+        'api.js must define CACHEABLE_ENDPOINTS whitelist'
+      );
+      assert.ok(
+        apiCode.includes("'/api/v1/customer/categories'"),
+        'CACHEABLE_ENDPOINTS must include /api/v1/customer/categories'
+      );
+      assert.ok(
+        apiCode.includes("'/api/v1/customer/subscription/plans'"),
+        'CACHEABLE_ENDPOINTS must include /api/v1/customer/subscription/plans'
+      );
+      assert.ok(
+        apiCode.includes("'/api/v1/customer/profile'"),
+        'CACHEABLE_ENDPOINTS must include /api/v1/customer/profile'
+      );
+    });
+
+    test('7.22: [Static Source Check] api.js enforces MAX_TOTAL_CACHE_ENTRIES bound', () => {
+      assert.ok(
+        apiCode.includes('MAX_TOTAL_CACHE_ENTRIES = 25'),
+        'api.js must define MAX_TOTAL_CACHE_ENTRIES bound'
+      );
+      assert.ok(
+        apiCode.includes('responseCache.size >= MAX_TOTAL_CACHE_ENTRIES'),
+        'api.js must check cache size against maximum entries bound'
+      );
+    });
+
+    test('7.23: [Static Source Check] App.jsx invokes api.clearResponseCache() on logout', () => {
+      assert.ok(
+        appCode.includes('api.clearResponseCache()'),
+        'App.jsx must call api.clearResponseCache() on logout'
+      );
+    });
+
+    test('7.24: [Static Source Check] api.updateProfile invalidates cached profile on success', () => {
+      assert.ok(
+        apiCode.includes("invalidateResponseCache('/api/v1/customer/profile')"),
+        'updateProfile must call invalidateResponseCache'
+      );
+    });
+  });
 });
