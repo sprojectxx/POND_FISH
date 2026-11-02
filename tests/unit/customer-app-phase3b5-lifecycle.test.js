@@ -4,21 +4,24 @@
  * 
  * Verifies:
  * - Scenario 1: Live tracking polling starts when screen is mounted in active foreground.
- * - Scenario 2: Polling stops when app transitions to background.
+ * - Scenario 2: Polling stops and aborts non-essential poll when app transitions to background.
  * - Scenario 3: Polling resumes safely on return to foreground.
  * - Scenario 4: Repeated AppState transitions do not duplicate intervals.
  * - Scenario 5: Slow polling requests do not overlap (concurrency guard).
- * - Scenario 6: Manual refresh and polling share safe request ownership without race conditions.
- * - Scenario 7: Unmounted screens abort in-flight requests and drop stale state updates.
- * - Scenario 8: Request sequence guards prevent older delayed responses from overwriting newer state.
- * - Scenario 9: ProfileScreen success-message timer is retained and cleared on unmount.
- * - Scenario 10: CartScreen async lifecycle drops responses if unmounted before completion.
- * - Scenario 11: SubscriptionScreen awaits ledger retrieval and guards unmount.
- * - Scenario 12: BookingHistoryScreen memoizes renderBookingItem and guards async state.
- * - Scenario 13: TransactionHistoryScreen virtualizes large lists with FlatList and guards async state.
- * - Scenario 14: MarketplaceScreen catalogue filtering is memoized and preserves reference identity.
- * - Scenario 15: App.jsx navigation avoids redundant cart fetches on non-cart screens (Tracking, Profile, Bookings).
- * - Scenario 16: App.jsx hardware back handler and session cleanup on logout.
+ * - Scenario 6: Deterministic Deferred: Background poll -> manual refresh -> old poll settles -> new request remains correctly owned.
+ * - Scenario 7: Deterministic Deferred: Background poll -> app backgrounds -> app returns active before abort settles -> exactly one immediate refresh occurs.
+ * - Scenario 8: Deterministic Deferred: A stale response cannot overwrite a newer response.
+ * - Scenario 9: Deterministic Deferred: A completed older request cannot clear the newer request's in-flight state.
+ * - Scenario 10: Unmounted LiveTrackingScreen aborts in-flight request and cleans up AppState listener.
+ * - Scenario 11: Deterministic Deferred: Profile save succeeds, creates success timer, then unmounts; timer is cleared and does not update state.
+ * - Scenario 12: Deterministic Deferred: Subscription ledger request remains pending during unmount; resolving it afterward does not update state.
+ * - Scenario 13: CartScreen async lifecycle drops responses if unmounted before completion.
+ * - Scenario 14: TransactionHistoryScreen virtualizes large lists with FlatList and guards async state.
+ * - Scenario 15: MarketplaceScreen catalogue filtering is memoized with useMemo.
+ * - Scenario 16: App.jsx navigation avoids redundant cart fetches on non-cart screens (Tracking, Profile, Bookings).
+ * - Scenario 17: App.jsx hardware back handler rules preserved across all screens.
+ * - Scenario 18: App.jsx handleLogout clears credentials, in-flight requests, and response cache safely.
+ * - Scenario 19: App.jsx handleUnauthorized ignores obsolete 401 token and protects active session.
  */
 
 const { describe, it, test } = require('node:test');
@@ -43,6 +46,16 @@ const appSourcePath = path.resolve(__dirname, '../../customer-app/App.jsx');
 // ==============================================================================
 // TEST HARNESS HELPERS
 // ==============================================================================
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function createDeterministicTimerHarness() {
   let currentTime = 0;
@@ -97,9 +110,10 @@ function loadScreenComponent(sourcePath, options = {}) {
     mockReact,
     mockRN = {},
     mockApi = {},
-    mockAuthStorage = { getAuthToken: async () => 'test-token', clearAuthToken: async () => {} },
+    mockAuthStorage = { getAuthToken: async () => 'test-token', clearAuthToken: async () => { } },
     timerHarness = null,
     onRequire = null,
+    onCaptureElement = null,
   } = options;
 
   const src = fs.readFileSync(sourcePath, 'utf8');
@@ -111,10 +125,25 @@ function loadScreenComponent(sourcePath, options = {}) {
   });
 
   const m = { exports: {} };
+  const realJsxRuntime = require('../../customer-app/node_modules/react/jsx-runtime');
+
   const customRequire = (id) => {
     if (onRequire) {
       const custom = onRequire(id);
       if (custom !== undefined) return custom;
+    }
+    if (id === 'react/jsx-runtime') {
+      return {
+        ...realJsxRuntime,
+        jsx: (type, props, key) => {
+          if (onCaptureElement) onCaptureElement(type, props, key);
+          return realJsxRuntime.jsx(type, props, key);
+        },
+        jsxs: (type, props, key) => {
+          if (onCaptureElement) onCaptureElement(type, props, key);
+          return realJsxRuntime.jsxs(type, props, key);
+        },
+      };
     }
     if (id === 'react') return mockReact;
     if (id === 'react-native') {
@@ -129,16 +158,16 @@ function loadScreenComponent(sourcePath, options = {}) {
         Image: 'Image',
         ActivityIndicator: 'ActivityIndicator',
         RefreshControl: 'RefreshControl',
-        Alert: { alert: () => {} },
+        Alert: { alert: () => { } },
         TextInput: 'TextInput',
         Modal: 'Modal',
         StatusBar: 'StatusBar',
         KeyboardAvoidingView: 'KeyboardAvoidingView',
-        AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+        AppState: { currentState: 'active', addEventListener: () => ({ remove: () => { } }) },
         ...mockRN,
       };
     }
-    if (id.includes('razorpay')) return { open: async () => {} };
+    if (id.includes('razorpay')) return { open: async () => { } };
     if (id.includes('api')) return { api: mockApi };
     if (id.includes('auth-storage')) return mockAuthStorage;
     if (id.includes('colors')) return { colors: new Proxy({}, { get: () => '#000000' }) };
@@ -236,7 +265,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
 
     // Mount component
     hookIndex = 0;
-    LiveTrackingScreen({ onNavigate: () => {} });
+    LiveTrackingScreen({ onNavigate: () => { } });
 
     // Execute mount effects
     for (const eff of effects) {
@@ -313,11 +342,12 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     });
 
     hookIndex = 0;
-    LiveTrackingScreen({ onNavigate: () => {} });
+    LiveTrackingScreen({ onNavigate: () => { } });
     for (const eff of effects) {
       const c = eff();
       if (c) cleanups.push(c);
     }
+    await new Promise((r) => setImmediate(r));
 
     assert.equal(apiCallCount, 1, 'Initial call on mount');
 
@@ -384,7 +414,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     });
 
     hookIndex = 0;
-    LiveTrackingScreen({ onNavigate: () => {} });
+    LiveTrackingScreen({ onNavigate: () => { } });
     for (const eff of effects) {
       const c = eff();
       if (c) cleanups.push(c);
@@ -460,7 +490,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     });
 
     hookIndex = 0;
-    LiveTrackingScreen({ onNavigate: () => {} });
+    LiveTrackingScreen({ onNavigate: () => { } });
     for (const eff of effects) {
       const c = eff();
       if (c) cleanups.push(c);
@@ -505,7 +535,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
 
     const mockAppState = {
       currentState: 'active',
-      addEventListener: () => ({ remove: () => {} }),
+      addEventListener: () => ({ remove: () => { } }),
     };
 
     const effects = [];
@@ -536,7 +566,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     });
 
     hookIndex = 0;
-    LiveTrackingScreen({ onNavigate: () => {} });
+    LiveTrackingScreen({ onNavigate: () => { } });
     for (const eff of effects) {
       const c = eff();
       if (c) cleanups.push(c);
@@ -547,7 +577,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     // Advance 15s while request 1 is still in-flight
     await timerHarness.advanceTime(15000);
 
-    // Call count must remain 1 because inFlightRef skipped concurrent poll
+    // Call count must remain 1 because activeRequestIdRef skipped concurrent poll
     assert.equal(apiCallCount, 1, 'In-flight guard must skip interval tick while previous poll is unresolved');
 
     // Resolve first request
@@ -561,29 +591,23 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     for (const c of cleanups) c();
   });
 
-  test('8.6: Manual pull-to-refresh aborts in-flight background poll and takes request ownership', async () => {
-    let abortedSignalCount = 0;
-    let callCount = 0;
+  // ============================================================================
+  // SECTION 2: Deterministic Deferred Promise Ownership & Concurrency Tests
+  // ============================================================================
 
+  test('8.6: Deterministic Deferred: Background poll -> manual refresh -> old poll settles -> new request remains correctly owned', async () => {
+    const requests = [];
     const mockApi = {
-      getCustomerLiveTracking: async (opts) => {
-        callCount++;
-        if (opts?.signal) {
-          opts.signal.addEventListener('abort', () => {
-            abortedSignalCount++;
-          });
-        }
-        if (callCount === 1) {
-          // Hang until aborted
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-        return { success: true, data: { active: true, step: callCount } };
+      getCustomerLiveTracking: (opts) => {
+        const def = createDeferred();
+        requests.push({ def, opts });
+        return def.promise;
       },
     };
 
     const mockAppState = {
       currentState: 'active',
-      addEventListener: () => ({ remove: () => {} }),
+      addEventListener: () => ({ remove: () => { } }),
     };
 
     const effects = [];
@@ -617,27 +641,322 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     });
 
     hookIndex = 0;
-    LiveTrackingScreen({ onNavigate: () => {} });
+    LiveTrackingScreen({ onNavigate: () => { } });
     for (const eff of effects) {
       const c = eff();
       if (c) cleanups.push(c);
     }
 
-    assert.equal(callCount, 1, 'Background poll started');
-    assert.equal(abortedSignalCount, 0, 'Signal not yet aborted');
+    // Mount request 0 finishes
+    assert.equal(requests.length, 1, 'Mount request must be dispatched');
+    requests[0].def.resolve({ success: true, data: { vehicleId: 'TRUCK-MOUNT' } });
+    await new Promise((r) => setImmediate(r));
 
-    // Trigger manual pull-to-refresh
-    const capturedFetchTracking = callbacks[1];
-    assert.ok(capturedFetchTracking, 'capturedFetchTracking must be found');
-    await capturedFetchTracking(true);
+    const fetchTracking = callbacks[1];
 
-    assert.equal(abortedSignalCount, 1, 'Previous in-flight background poll signal must be aborted');
-    assert.equal(callCount, 2, 'Manual pull-to-refresh must execute with priority');
+    // 1. Dispatch background poll (Request 1)
+    fetchTracking(false);
+    assert.equal(requests.length, 2, 'Request 1 (background poll) dispatched');
+    const req1 = requests[1];
+
+    // 2. Dispatch manual pull-to-refresh (Request 2) which supersedes Request 1
+    fetchTracking(true);
+    assert.equal(requests.length, 3, 'Request 2 (manual refresh) dispatched');
+    const req2 = requests[2];
+
+    // Verify Request 1's signal was aborted
+    assert.equal(req1.opts?.signal?.aborted, true, 'Request 1 signal must be aborted by manual refresh');
+
+    // 3. Settle Request 1 (rejects due to abort)
+    const abortErr = new Error('Request aborted');
+    abortErr.name = 'AbortError';
+    req1.def.reject(abortErr);
+    await new Promise((r) => setImmediate(r));
+
+    // 4. Request 2 is still in-flight! A routine interval poll must be skipped
+    fetchTracking(false);
+    assert.equal(requests.length, 3, 'Routine poll must be blocked while Request 2 is still owned');
+
+    // 5. Now Request 2 settles successfully
+    req2.def.resolve({ success: true, data: { vehicleId: 'TRUCK-MANUAL' } });
+    await new Promise((r) => setImmediate(r));
+
+    // 6. After Request 2 completes, the next routine poll can proceed
+    fetchTracking(false);
+    assert.equal(requests.length, 4, 'Next poll allowed to proceed once Request 2 has settled');
+    requests[3].def.resolve({ success: true, data: { vehicleId: 'TRUCK-POLL-2' } });
 
     for (const c of cleanups) c();
   });
 
-  test('8.7: Unmounted LiveTrackingScreen aborts in-flight request and cleans up AppState listener', () => {
+  test('8.7: Deterministic Deferred: Background poll -> app backgrounds -> app returns active before abort settles -> exactly one immediate refresh occurs', async () => {
+    const requests = [];
+    const mockApi = {
+      getCustomerLiveTracking: (opts) => {
+        const def = createDeferred();
+        requests.push({ def, opts });
+        return def.promise;
+      },
+    };
+
+    let appStateListeners = [];
+    const mockAppState = {
+      currentState: 'active',
+      addEventListener: (e, h) => {
+        appStateListeners.push(h);
+        return { remove: () => { appStateListeners = appStateListeners.filter((item) => item !== h); } };
+      },
+    };
+
+    const effects = [];
+    const cleanups = [];
+    let hookIndex = 0;
+    const hookStates = [];
+    const callbacks = [];
+
+    const mockReact = {
+      useState: (init) => {
+        const idx = hookIndex++;
+        if (hookStates[idx] === undefined) hookStates[idx] = typeof init === 'function' ? init() : init;
+        return [hookStates[idx], (val) => { hookStates[idx] = typeof val === 'function' ? val(hookStates[idx]) : val; }];
+      },
+      useRef: (init) => {
+        const idx = hookIndex++;
+        if (!hookStates[idx]) hookStates[idx] = { current: init };
+        return hookStates[idx];
+      },
+      useCallback: (fn) => {
+        callbacks.push(fn);
+        return fn;
+      },
+      useEffect: (cb) => { effects.push(cb); },
+    };
+
+    const LiveTrackingScreen = loadScreenComponent(liveTrackingSourcePath, {
+      mockReact,
+      mockRN: { AppState: mockAppState },
+      mockApi,
+    });
+
+    hookIndex = 0;
+    LiveTrackingScreen({ onNavigate: () => { } });
+    for (const eff of effects) {
+      const c = eff();
+      if (c) cleanups.push(c);
+    }
+
+    // Mount request resolves
+    requests[0].def.resolve({ success: true, data: { vehicleId: 'TRUCK-0' } });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(requests.length, 1);
+
+    const fetchTracking = callbacks[1];
+
+    // 1. Routine poll starts (Request 1)
+    fetchTracking(false);
+    assert.equal(requests.length, 2);
+    const req1 = requests[1];
+
+    // 2. App transitions to background
+    mockAppState.currentState = 'background';
+    for (const l of appStateListeners) l('background');
+    assert.equal(req1.opts?.signal?.aborted, true, 'Request 1 signal must be aborted on backgrounding');
+
+    // 3. App returns to active BEFORE Request 1 has settled
+    mockAppState.currentState = 'active';
+    for (const l of appStateListeners) l('active');
+
+    // 4. Exactly one immediate foreground refresh (Request 2) must be launched
+    assert.equal(requests.length, 3, 'Exactly one immediate refresh must be triggered on return to active');
+    const req2 = requests[2];
+
+    // 5. Now Request 1 settles (aborted error)
+    const abortErr = new Error('Aborted');
+    abortErr.name = 'AbortError';
+    req1.def.reject(abortErr);
+    await new Promise((r) => setImmediate(r));
+
+    // Verify settling Request 1 did not launch any duplicate requests
+    assert.equal(requests.length, 3, 'Settling Request 1 must not trigger extraneous requests');
+
+    // 6. Request 2 settles successfully
+    req2.def.resolve({ success: true, data: { vehicleId: 'TRUCK-FOREGROUND-FRESH' } });
+    await new Promise((r) => setImmediate(r));
+
+    // Verify component state has updated to foreground fresh data
+    const trackingState = hookStates[2]; // trackingData is useState index 2
+    assert.equal(trackingState?.vehicleId, 'TRUCK-FOREGROUND-FRESH');
+
+    for (const c of cleanups) c();
+  });
+
+  test('8.8: Deterministic Deferred: A stale response cannot overwrite a newer response', async () => {
+    const requests = [];
+    const mockApi = {
+      getCustomerLiveTracking: (opts) => {
+        const def = createDeferred();
+        requests.push({ def, opts });
+        return def.promise;
+      },
+    };
+
+    const mockAppState = {
+      currentState: 'active',
+      addEventListener: () => ({ remove: () => { } }),
+    };
+
+    const effects = [];
+    const cleanups = [];
+    let hookIndex = 0;
+    const hookStates = [];
+    const callbacks = [];
+
+    const mockReact = {
+      useState: (init) => {
+        const idx = hookIndex++;
+        if (hookStates[idx] === undefined) hookStates[idx] = typeof init === 'function' ? init() : init;
+        return [hookStates[idx], (val) => { hookStates[idx] = typeof val === 'function' ? val(hookStates[idx]) : val; }];
+      },
+      useRef: (init) => {
+        const idx = hookIndex++;
+        if (!hookStates[idx]) hookStates[idx] = { current: init };
+        return hookStates[idx];
+      },
+      useCallback: (fn) => {
+        callbacks.push(fn);
+        return fn;
+      },
+      useEffect: (cb) => { effects.push(cb); },
+    };
+
+    const LiveTrackingScreen = loadScreenComponent(liveTrackingSourcePath, {
+      mockReact,
+      mockRN: { AppState: mockAppState },
+      mockApi,
+    });
+
+    hookIndex = 0;
+    LiveTrackingScreen({ onNavigate: () => { } });
+    for (const eff of effects) {
+      const c = eff();
+      if (c) cleanups.push(c);
+    }
+
+    requests[0].def.resolve({ success: true, data: { vehicleId: 'TRUCK-INITIAL' } });
+    await new Promise((r) => setImmediate(r));
+
+    const fetchTracking = callbacks[1];
+
+    // Request 1: slow background poll
+    fetchTracking(false);
+    const req1 = requests[1];
+
+    // Request 2: user pulls to refresh (supersedes Request 1)
+    fetchTracking(true);
+    const req2 = requests[2];
+
+    // Request 2 finishes FIRST with fresh data
+    req2.def.resolve({ success: true, data: { vehicleId: 'TRUCK-NEWER' } });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(hookStates[2]?.vehicleId, 'TRUCK-NEWER');
+
+    // Request 1 finishes LATER with stale data
+    req1.def.resolve({ success: true, data: { vehicleId: 'TRUCK-STALE-OLDER' } });
+    await new Promise((r) => setImmediate(r));
+
+    // Verify component state has NOT been overwritten by Request 1
+    assert.equal(hookStates[2]?.vehicleId, 'TRUCK-NEWER', 'Stale older response must not overwrite newer response');
+
+    for (const c of cleanups) c();
+  });
+
+  test('8.9: Deterministic Deferred: A completed older request cannot clear the newer requests in-flight state', async () => {
+    const requests = [];
+    const mockApi = {
+      getCustomerLiveTracking: (opts) => {
+        const def = createDeferred();
+        requests.push({ def, opts });
+        return def.promise;
+      },
+    };
+
+    const mockAppState = {
+      currentState: 'active',
+      addEventListener: () => ({ remove: () => { } }),
+    };
+
+    const effects = [];
+    const cleanups = [];
+    let hookIndex = 0;
+    const hookStates = [];
+    const callbacks = [];
+
+    const mockReact = {
+      useState: (init) => {
+        const idx = hookIndex++;
+        if (hookStates[idx] === undefined) hookStates[idx] = typeof init === 'function' ? init() : init;
+        return [hookStates[idx], (val) => { hookStates[idx] = typeof val === 'function' ? val(hookStates[idx]) : val; }];
+      },
+      useRef: (init) => {
+        const idx = hookIndex++;
+        if (!hookStates[idx]) hookStates[idx] = { current: init };
+        return hookStates[idx];
+      },
+      useCallback: (fn) => {
+        callbacks.push(fn);
+        return fn;
+      },
+      useEffect: (cb) => { effects.push(cb); },
+    };
+
+    const LiveTrackingScreen = loadScreenComponent(liveTrackingSourcePath, {
+      mockReact,
+      mockRN: { AppState: mockAppState },
+      mockApi,
+    });
+
+    hookIndex = 0;
+    LiveTrackingScreen({ onNavigate: () => { } });
+    for (const eff of effects) {
+      const c = eff();
+      if (c) cleanups.push(c);
+    }
+
+    requests[0].def.resolve({ success: true, data: { vehicleId: 'TRUCK-0' } });
+    await new Promise((r) => setImmediate(r));
+
+    const fetchTracking = callbacks[1];
+
+    // Request 1 starts
+    fetchTracking(false);
+    const req1 = requests[1];
+
+    // Request 2 supersedes
+    fetchTracking(true);
+    const req2 = requests[2];
+
+    // Older Request 1 completes first
+    req1.def.resolve({ success: true, data: { vehicleId: 'TRUCK-OLD' } });
+    await new Promise((r) => setImmediate(r));
+
+    // Request 2 is still in-flight. Attempting a routine poll must NOT run
+    // because Request 1 was not allowed to clear activeRequestIdRef!
+    fetchTracking(false);
+    assert.equal(requests.length, 3, 'In-flight state must remain held by Request 2 despite Request 1 having finished');
+
+    // Request 2 now completes
+    req2.def.resolve({ success: true, data: { vehicleId: 'TRUCK-2' } });
+    await new Promise((r) => setImmediate(r));
+
+    // Now ownership is released and a subsequent poll is accepted
+    fetchTracking(false);
+    assert.equal(requests.length, 4, 'Subsequent poll accepted only after Request 2 finishes');
+    requests[3].def.resolve({ success: true, data: { vehicleId: 'TRUCK-3' } });
+
+    for (const c of cleanups) c();
+  });
+
+  test('8.10: Unmounted LiveTrackingScreen aborts in-flight request and cleans up AppState listener', () => {
     let aborted = false;
     let removedListener = false;
 
@@ -646,7 +965,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
         if (opts?.signal) {
           opts.signal.addEventListener('abort', () => { aborted = true; });
         }
-        return new Promise(() => {}); // never resolves
+        return new Promise(() => { }); // never resolves
       },
     };
 
@@ -684,7 +1003,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     });
 
     hookIndex = 0;
-    LiveTrackingScreen({ onNavigate: () => {} });
+    LiveTrackingScreen({ onNavigate: () => { } });
     for (const eff of effects) {
       const c = eff();
       if (c) cleanups.push(c);
@@ -701,13 +1020,14 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
   });
 
   // ============================================================================
-  // SECTION 2: ProfileScreen Success Timer & State Cleanup
+  // SECTION 3: ProfileScreen & SubscriptionScreen Lifecycle & Timers
   // ============================================================================
 
-  test('8.8: ProfileScreen success-message timer is retained and cleared on unmount', async () => {
+  test('8.11: Deterministic Deferred: Profile save succeeds, creates success timer, then unmounts; timer is cleared and does not update state', async () => {
     const timerHarness = createDeterministicTimerHarness();
     let stateUpdatesPostUnmount = 0;
     let isMountedInTest = true;
+    let capturedSaveProfile;
 
     const effects = [];
     const cleanups = [];
@@ -717,7 +1037,13 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     const mockReact = {
       useState: (init) => {
         const idx = hookIndex++;
-        if (hookStates[idx] === undefined) hookStates[idx] = typeof init === 'function' ? init() : init;
+        if (hookStates[idx] === undefined) {
+          if (idx === 0) hookStates[idx] = false; // loading = false so edit modal renders
+          else if (idx === 9) hookStates[idx] = 'Ramesh'; // editName
+          else if (idx === 10) hookStates[idx] = '30'; // editAge
+          else if (idx === 11) hookStates[idx] = 'Indiranagar'; // editArea
+          else hookStates[idx] = typeof init === 'function' ? init() : init;
+        }
         return [hookStates[idx], (val) => {
           if (!isMountedInTest) {
             stateUpdatesPostUnmount++;
@@ -744,31 +1070,103 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
       mockReact,
       mockApi,
       timerHarness,
+      onCaptureElement: (type, props) => {
+        if (props?.onPress && (props.onPress.name === 'handleSaveProfile' || props.onPress.toString().includes('updateProfile'))) {
+          capturedSaveProfile = props.onPress;
+        }
+      },
     });
 
     hookIndex = 0;
-    ProfileScreen({ onNavigate: () => {}, onLogout: () => {} });
+    ProfileScreen({ onNavigate: () => { }, onLogout: () => { } });
     for (const eff of effects) {
       const c = eff();
       if (c) cleanups.push(c);
     }
 
-    // Unmount ProfileScreen
+    assert.ok(capturedSaveProfile, 'handleSaveProfile must be captured from component render');
+    assert.equal(timerHarness.getActiveTimerCount(), 0, 'No active timer before profile save');
+
+    // Execute profile save
+    await capturedSaveProfile();
+    assert.equal(timerHarness.getActiveTimerCount(), 1, 'Success timer must be active after profile save');
+
+    // Unmount ProfileScreen while success timer is active
     isMountedInTest = false;
     for (const c of cleanups) c();
 
     assert.equal(timerHarness.getActiveTimerCount(), 0, 'All timers must be cleared when ProfileScreen unmounts');
 
-    // Advance 10 seconds past any potential timer
+    // Advance 10 seconds past the 4-second success timeout
     await timerHarness.advanceTime(10000);
     assert.equal(stateUpdatesPostUnmount, 0, 'No state updates should occur after ProfileScreen unmounts');
   });
 
-  // ============================================================================
-  // SECTION 3: Async Lifecycle Across Other Screens (Cart, Subscriptions, History)
-  // ============================================================================
+  test('8.12: Deterministic Deferred: Subscription ledger request remains pending during unmount; resolving it afterward does not update state', async () => {
+    const deferredLedger = createDeferred();
+    let ledgerCalled = false;
+    let isMountedInTest = true;
+    let stateUpdatesPostUnmount = 0;
 
-  test('8.9: CartScreen guards async state updates when unmounted before fetchCart completes', async () => {
+    const effects = [];
+    const cleanups = [];
+    let hookIndex = 0;
+    const hookStates = [];
+
+    const mockReact = {
+      useState: (init) => {
+        const idx = hookIndex++;
+        if (hookStates[idx] === undefined) hookStates[idx] = typeof init === 'function' ? init() : init;
+        return [hookStates[idx], (val) => {
+          if (!isMountedInTest) stateUpdatesPostUnmount++;
+          hookStates[idx] = typeof val === 'function' ? val(hookStates[idx]) : val;
+        }];
+      },
+      useRef: (init) => {
+        const idx = hookIndex++;
+        if (!hookStates[idx]) hookStates[idx] = { current: init };
+        return hookStates[idx];
+      },
+      useCallback: (fn) => fn,
+      useEffect: (cb) => { effects.push(cb); },
+    };
+
+    const mockApi = {
+      getSubscription: async () => ({ success: true, data: { hasSubscription: true } }),
+      getSubscriptionPlans: async () => ({ success: true, data: [{ id: 'p1', name: 'Gold' }] }),
+      getSubscriptionLedger: async () => {
+        ledgerCalled = true;
+        return deferredLedger.promise;
+      },
+    };
+
+    const SubscriptionScreen = loadScreenComponent(subscriptionScreenSourcePath, {
+      mockReact,
+      mockApi,
+    });
+
+    hookIndex = 0;
+    SubscriptionScreen({ onNavigate: () => { } });
+    for (const eff of effects) {
+      const c = eff();
+      if (c) cleanups.push(c);
+    }
+
+    await new Promise((r) => setImmediate(r));
+    assert.equal(ledgerCalled, true, 'getSubscriptionLedger must be called as part of screen initialization');
+
+    // Unmount while ledger request is still pending
+    isMountedInTest = false;
+    for (const c of cleanups) c();
+
+    // Now resolve the deferred ledger response
+    deferredLedger.resolve({ success: true, data: [{ id: 'entry-1', amount: 50 }] });
+    await new Promise((r) => setImmediate(r));
+
+    assert.equal(stateUpdatesPostUnmount, 0, 'Zero state updates after SubscriptionScreen unmount');
+  });
+
+  test('8.13: CartScreen guards async state updates when unmounted before fetchCart completes', async () => {
     let cartUpdatedPostUnmount = 0;
     let isMountedInTest = true;
 
@@ -806,7 +1204,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     });
 
     hookIndex = 0;
-    CartScreen({ onNavigate: () => {}, onCartUpdated: () => {} });
+    CartScreen({ onNavigate: () => { }, onCartUpdated: () => { } });
     for (const eff of effects) {
       const c = eff();
       if (c) cleanups.push(c);
@@ -823,65 +1221,11 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     assert.equal(cartUpdatedPostUnmount, 0, 'Unmounted CartScreen must not update state');
   });
 
-  test('8.10: SubscriptionScreen awaits ledger retrieval and guards unmount', async () => {
-    let ledgerAwaited = false;
-    let isMountedInTest = true;
-    let stateUpdatesPostUnmount = 0;
+  // ============================================================================
+  // SECTION 4: Virtualization & Optimization Invariants
+  // ============================================================================
 
-    const effects = [];
-    const cleanups = [];
-    let hookIndex = 0;
-    const hookStates = [];
-
-    const mockReact = {
-      useState: (init) => {
-        const idx = hookIndex++;
-        if (hookStates[idx] === undefined) hookStates[idx] = typeof init === 'function' ? init() : init;
-        return [hookStates[idx], (val) => {
-          if (!isMountedInTest) stateUpdatesPostUnmount++;
-          hookStates[idx] = typeof val === 'function' ? val(hookStates[idx]) : val;
-        }];
-      },
-      useRef: (init) => {
-        const idx = hookIndex++;
-        if (!hookStates[idx]) hookStates[idx] = { current: init };
-        return hookStates[idx];
-      },
-      useCallback: (fn) => fn,
-      useEffect: (cb) => { effects.push(cb); },
-    };
-
-    const mockApi = {
-      getSubscription: async () => ({ success: true, data: { hasSubscription: true } }),
-      getSubscriptionPlans: async () => ({ success: true, data: [{ id: 'p1', name: 'Gold' }] }),
-      getSubscriptionLedger: async () => {
-        ledgerAwaited = true;
-        return { success: true, data: [{ id: 'l1', amount: 50 }] };
-      },
-    };
-
-    const SubscriptionScreen = loadScreenComponent(subscriptionScreenSourcePath, {
-      mockReact,
-      mockApi,
-    });
-
-    hookIndex = 0;
-    SubscriptionScreen({ onNavigate: () => {} });
-    for (const eff of effects) {
-      const c = eff();
-      if (c) cleanups.push(c);
-    }
-
-    await new Promise((r) => setImmediate(r));
-    assert.equal(ledgerAwaited, true, 'getSubscriptionLedger must be called as part of screen initialization');
-
-    // Unmount
-    isMountedInTest = false;
-    for (const c of cleanups) c();
-    assert.equal(stateUpdatesPostUnmount, 0, 'Zero state updates after SubscriptionScreen unmount');
-  });
-
-  test('8.11: TransactionHistoryScreen virtualized FlatList replaces unvirtualized ScrollView', () => {
+  test('8.14: TransactionHistoryScreen virtualized FlatList replaces unvirtualized ScrollView', () => {
     const code = fs.readFileSync(transactionHistoryScreenSourcePath, 'utf8');
 
     // Verify FlatList is imported and used
@@ -892,7 +1236,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     assert.ok(code.includes('renderTransactionCard'), 'Render card function must be defined and memoized');
   });
 
-  test('8.12: MarketplaceScreen catalogue filtering is memoized with useMemo', () => {
+  test('8.15: MarketplaceScreen catalogue filtering is memoized with useMemo', () => {
     const code = fs.readFileSync(marketplaceScreenSourcePath, 'utf8');
 
     assert.ok(code.includes('useMemo'), 'MarketplaceScreen must import useMemo');
@@ -900,10 +1244,10 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
   });
 
   // ============================================================================
-  // SECTION 4: Navigation & Global Cart Fetching In App.jsx
+  // SECTION 5: Navigation & Global Cart Fetching In App.jsx
   // ============================================================================
 
-  test('8.13: App.jsx CART_AWARE_SCREENS prevents redundant getCart calls during non-cart navigation', () => {
+  test('8.16: App.jsx CART_AWARE_SCREENS prevents redundant getCart calls during non-cart navigation', () => {
     const code = fs.readFileSync(appSourcePath, 'utf8');
 
     assert.ok(
@@ -916,7 +1260,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     );
   });
 
-  test('8.14: App.jsx BackHandler hardware-back rules preserved across all screens', () => {
+  test('8.17: App.jsx BackHandler hardware-back rules preserved across all screens', () => {
     const code = fs.readFileSync(appSourcePath, 'utf8');
 
     assert.ok(code.includes("currentScreen === 'PHONE_AUTH' || currentScreen === 'SPLASH'"), 'Auth/Splash hardware back exits app');
@@ -925,7 +1269,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     assert.ok(code.includes("currentScreen === 'HOME'"), 'Home hardware back exits app');
   });
 
-  test('8.15: App.jsx handleLogout clears credentials, in-flight requests, and response cache safely', () => {
+  test('8.18: App.jsx handleLogout clears credentials, in-flight requests, and response cache safely', () => {
     const code = fs.readFileSync(appSourcePath, 'utf8');
 
     assert.ok(code.includes('api.clearInFlightRequests()'), 'Logout must clear in-flight requests');
@@ -934,7 +1278,7 @@ describe('Customer App Phase 3B.5: Lifecycle, Memory & Navigation Verification S
     assert.ok(code.includes('isLoggingOutRef'), 'Logout must be guarded against concurrent invocations');
   });
 
-  test('8.16: App.jsx handleUnauthorized ignores obsolete 401 token and protects active session', () => {
+  test('8.19: App.jsx handleUnauthorized ignores obsolete 401 token and protects active session', () => {
     const code = fs.readFileSync(appSourcePath, 'utf8');
 
     assert.ok(code.includes('if (rejectedToken !== current.token)'), 'handleUnauthorized must validate rejected token against active stored token');

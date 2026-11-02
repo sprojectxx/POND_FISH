@@ -26,7 +26,7 @@ export default function LiveTrackingScreen({ onNavigate }) {
   const [error, setError] = useState(null);
 
   const isMountedRef = useRef(true);
-  const inFlightRef = useRef(false);
+  const activeRequestIdRef = useRef(null);
   const requestSeqRef = useRef(0);
   const abortControllerRef = useRef(null);
   const pollingTimerRef = useRef(null);
@@ -39,18 +39,45 @@ export default function LiveTrackingScreen({ onNavigate }) {
     }
   }, []);
 
-  const fetchTracking = useCallback(async (isPull = false) => {
-    // If a manual pull-to-refresh is requested while a background poll is running,
-    // abort the previous background poll so the manual pull takes immediate priority.
-    if (isPull && inFlightRef.current && abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    } else if (!isPull && inFlightRef.current) {
-      // Prevent overlapping concurrent background polls
-      return;
+  const fetchTracking = useCallback(async (isPullOrOptions = false, isForegroundFlag = false) => {
+    let isPull = false;
+    let isForeground = false;
+    if (typeof isPullOrOptions === 'boolean') {
+      isPull = isPullOrOptions;
+      isForeground = Boolean(isForegroundFlag);
+    } else if (isPullOrOptions && typeof isPullOrOptions === 'object') {
+      isPull = Boolean(isPullOrOptions.isPull);
+      isForeground = Boolean(isPullOrOptions.isForeground || isPullOrOptions.force);
     }
 
-    inFlightRef.current = true;
+    if (!isMountedRef.current) return;
+
+    // Routine background polling is prohibited while the app is backgrounded
+    if (!isPull && appStateRef.current !== 'active') return;
+
+    const hasActiveInFlight = activeRequestIdRef.current !== null;
+    const isPreviousAborted = Boolean(abortControllerRef.current?.signal?.aborted);
+
+    // If another request is currently active and not yet aborted:
+    if (hasActiveInFlight && !isPreviousAborted) {
+      if (isPull || isForeground) {
+        // Manual pull-to-refresh or foreground return supersedes the existing in-flight poll
+        if (abortControllerRef.current) {
+          try {
+            abortControllerRef.current.abort();
+          } catch (_) {
+            // Fallback for custom abort implementations
+          }
+        }
+      } else {
+        // Routine background poll: prevent duplicate or overlapping requests
+        return;
+      }
+    }
+
+    // Allocate new unique request identity and take exclusive active ownership
     const currentSeq = ++requestSeqRef.current;
+    activeRequestIdRef.current = currentSeq;
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     abortControllerRef.current = controller;
@@ -63,25 +90,31 @@ export default function LiveTrackingScreen({ onNavigate }) {
       }
       const res = await api.getCustomerLiveTracking({ signal: controller?.signal });
 
+      // Stale response guard: discard if unmounted or if superseded by a newer request
       if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
         return;
       }
 
-      if (res.success) {
+      if (res && res.success) {
         setTrackingData(res.data);
       } else {
-        setError(res.error?.message || 'Could not load live tracking.');
+        setError(res?.error?.message || 'Could not load live tracking.');
       }
     } catch (err) {
+      // Stale response guard in catch block
       if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
         return;
       }
-      if (err.name === 'AbortError' || err.code === 'API_ABORTED') {
-        return; // Normal cancellation; do not surface error
+      if (err && (err.name === 'AbortError' || err.code === 'API_ABORTED')) {
+        return; // Expected cancellation; do not surface error
       }
-      setError(err.message || 'Unable to connect to live tracking service.');
+      setError(err?.message || 'Unable to connect to live tracking service.');
     } finally {
-      inFlightRef.current = false;
+      // Clear request ownership and abort controller ONLY if this request is still the active owner
+      if (activeRequestIdRef.current === currentSeq) {
+        activeRequestIdRef.current = null;
+        abortControllerRef.current = null;
+      }
       if (isMountedRef.current && currentSeq === requestSeqRef.current) {
         setLoading(false);
         if (isPull) setRefreshing(false);
@@ -114,16 +147,18 @@ export default function LiveTrackingScreen({ onNavigate }) {
       appStateRef.current = nextAppState;
 
       if (nextAppState === 'active' && prev.match(/inactive|background/)) {
-        // App returned to foreground: refresh and restart interval safely
+        // App returned to foreground: guarantee one immediate refresh and restart interval safely
         if (isMountedRef.current) {
-          fetchTracking(false);
+          fetchTracking(false, true);
           startPolling();
         }
       } else if (nextAppState.match(/inactive|background/)) {
         // App entered background: suspend polling and abort in-flight non-essential poll
         stopPolling();
-        if (inFlightRef.current && abortControllerRef.current) {
-          abortControllerRef.current.abort();
+        if (abortControllerRef.current) {
+          try {
+            abortControllerRef.current.abort();
+          } catch (_) {}
         }
       }
     };
@@ -134,8 +169,12 @@ export default function LiveTrackingScreen({ onNavigate }) {
       isMountedRef.current = false;
       stopPolling();
       if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+        try {
+          abortControllerRef.current.abort();
+        } catch (_) {}
       }
+      activeRequestIdRef.current = null;
+      abortControllerRef.current = null;
       if (appStateSub && typeof appStateSub.remove === 'function') {
         appStateSub.remove();
       }
