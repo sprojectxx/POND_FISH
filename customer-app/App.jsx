@@ -70,14 +70,18 @@ export default function App() {
     }
   }, []);
 
-  // Update cart count and summary when entering authenticated flow
-  // CartScreen manages its own authoritative cart fetching; exclude CART to prevent duplicate simultaneous requests.
+  // Screens that actually display cart badges and summary counts in their headers
+  const CART_AWARE_SCREENS = ['HOME', 'FISH_DETAILS'];
+
+  // Update cart count and summary only when entering authenticated flow or navigating to cart-aware screens.
+  // Avoids redundant network requests when switching between non-cart screens (e.g. Tracking, Bookings, Profile).
   useEffect(() => {
     if (
       AUTHENTICATED_SCREENS.includes(currentScreen) &&
       isProfileComplete &&
       currentScreen !== 'PROFILE_COMPLETION' &&
-      currentScreen !== 'CART'
+      currentScreen !== 'CART' &&
+      CART_AWARE_SCREENS.includes(currentScreen)
     ) {
       fetchCartSummary();
     }

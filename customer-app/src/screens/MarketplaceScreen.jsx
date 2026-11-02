@@ -5,7 +5,7 @@
  * freshness indicators, and navigation to Fish Details & Cart.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -36,23 +36,45 @@ export default function MarketplaceScreen({ onNavigate, cartCount = 0 }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Load categories and initial catalogue
   const loadData = useCallback(async () => {
+    const currentSeq = ++requestSeqRef.current;
     try {
-      setError(null);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setError(null);
+      }
       const [catsRes, fishRes] = await Promise.all([
         api.getCategories().catch(() => ({ data: [] })),
         api.getFish(),
       ]);
 
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
+
       setCategories(catsRes.data || []);
       setFishList(fishRes.data || []);
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
       console.error('[MARKETPLACE LOAD ERROR]', err.message);
       setError(err.message || 'Unable to load today’s fish catalogue.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -66,33 +88,35 @@ export default function MarketplaceScreen({ onNavigate, cartCount = 0 }) {
   }, [loadData]);
 
   // Compute filtered list based on search, category, and availability
-  const filteredFish = fishList.filter((item) => {
-    // 1. Category Filter
-    if (selectedCategory && item.categoryId !== selectedCategory) {
-      return false;
-    }
-
-    // 2. Availability Filter
-    if (availabilityFilter === 'BOOKABLE' && !item.onlineBookable) {
-      return false;
-    }
-    if (availabilityFilter === 'IN_STORE' && (!item.physicalAvailable || item.onlineBookable)) {
-      return false;
-    }
-
-    // 3. Search Filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const nameMatch = item.name && item.name.toLowerCase().includes(q);
-      const descMatch = item.description && item.description.toLowerCase().includes(q);
-      const catMatch = item.categoryName && item.categoryName.toLowerCase().includes(q);
-      if (!nameMatch && !descMatch && !catMatch) {
+  const filteredFish = useMemo(() => {
+    return fishList.filter((item) => {
+      // 1. Category Filter
+      if (selectedCategory && item.categoryId !== selectedCategory) {
         return false;
       }
-    }
 
-    return true;
-  });
+      // 2. Availability Filter
+      if (availabilityFilter === 'BOOKABLE' && !item.onlineBookable) {
+        return false;
+      }
+      if (availabilityFilter === 'IN_STORE' && (!item.physicalAvailable || item.onlineBookable)) {
+        return false;
+      }
+
+      // 3. Search Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const nameMatch = item.name && item.name.toLowerCase().includes(q);
+        const descMatch = item.description && item.description.toLowerCase().includes(q);
+        const catMatch = item.categoryName && item.categoryName.toLowerCase().includes(q);
+        if (!nameMatch && !descMatch && !catMatch) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [fishList, selectedCategory, availabilityFilter, searchQuery]);
 
   function renderCategoryPills() {
     return (

@@ -14,6 +14,7 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  AppState,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
@@ -24,34 +25,122 @@ export default function LiveTrackingScreen({ onNavigate }) {
   const [trackingData, setTrackingData] = useState(null);
   const [error, setError] = useState(null);
 
+  const isMountedRef = useRef(true);
+  const inFlightRef = useRef(false);
+  const requestSeqRef = useRef(0);
+  const abortControllerRef = useRef(null);
+  const pollingTimerRef = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
+
+  const stopPolling = useCallback(() => {
+    if (pollingTimerRef.current) {
+      clearInterval(pollingTimerRef.current);
+      pollingTimerRef.current = null;
+    }
+  }, []);
+
   const fetchTracking = useCallback(async (isPull = false) => {
+    // If a manual pull-to-refresh is requested while a background poll is running,
+    // abort the previous background poll so the manual pull takes immediate priority.
+    if (isPull && inFlightRef.current && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    } else if (!isPull && inFlightRef.current) {
+      // Prevent overlapping concurrent background polls
+      return;
+    }
+
+    inFlightRef.current = true;
+    const currentSeq = ++requestSeqRef.current;
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    abortControllerRef.current = controller;
+
     if (isPull) setRefreshing(true);
+
     try {
-      setError(null);
-      const res = await api.getCustomerLiveTracking();
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setError(null);
+      }
+      const res = await api.getCustomerLiveTracking({ signal: controller?.signal });
+
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
+
       if (res.success) {
         setTrackingData(res.data);
       } else {
         setError(res.error?.message || 'Could not load live tracking.');
       }
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
+      if (err.name === 'AbortError' || err.code === 'API_ABORTED') {
+        return; // Normal cancellation; do not surface error
+      }
       setError(err.message || 'Unable to connect to live tracking service.');
     } finally {
-      setLoading(false);
-      if (isPull) setRefreshing(false);
+      inFlightRef.current = false;
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+        if (isPull) setRefreshing(false);
+      }
     }
   }, []);
 
+  const startPolling = useCallback(() => {
+    stopPolling();
+    // Only schedule timer if screen is mounted and app is in foreground
+    if (isMountedRef.current && appStateRef.current === 'active') {
+      pollingTimerRef.current = setInterval(() => {
+        if (isMountedRef.current && appStateRef.current === 'active') {
+          fetchTracking(false);
+        }
+      }, 15000);
+    }
+  }, [fetchTracking, stopPolling]);
+
   useEffect(() => {
-    fetchTracking();
+    isMountedRef.current = true;
 
-    // Polling fallback every 15 seconds
-    const interval = setInterval(() => {
-      fetchTracking();
-    }, 15000);
+    // Initial fetch when screen mounts
+    fetchTracking(false);
+    startPolling();
 
-    return () => clearInterval(interval);
-  }, [fetchTracking]);
+    // AppState lifecycle listener: stop polling when backgrounded, resume when active
+    const handleAppStateChange = (nextAppState) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (nextAppState === 'active' && prev.match(/inactive|background/)) {
+        // App returned to foreground: refresh and restart interval safely
+        if (isMountedRef.current) {
+          fetchTracking(false);
+          startPolling();
+        }
+      } else if (nextAppState.match(/inactive|background/)) {
+        // App entered background: suspend polling and abort in-flight non-essential poll
+        stopPolling();
+        if (inFlightRef.current && abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      }
+    };
+
+    const appStateSub = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      isMountedRef.current = false;
+      stopPolling();
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (appStateSub && typeof appStateSub.remove === 'function') {
+        appStateSub.remove();
+      }
+    };
+  }, [fetchTracking, startPolling, stopPolling]);
 
   if (loading) {
     return (

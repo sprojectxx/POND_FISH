@@ -4,7 +4,7 @@
  * Displays customer's reserved bookings with status badges and instant QR ticket access.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,16 +25,38 @@ export default function BookingHistoryScreen({ onNavigate }) {
   const [bookings, setBookings] = useState([]);
   const [error, setError] = useState(null);
 
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fetchBookings = useCallback(async () => {
+    const currentSeq = ++requestSeqRef.current;
     try {
-      setError(null);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setError(null);
+      }
       const res = await api.getBookings();
+
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
       setBookings(res.data || []);
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
       setError(err.message || 'Unable to load booking history.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -47,14 +69,18 @@ export default function BookingHistoryScreen({ onNavigate }) {
     await fetchBookings();
   }
 
-  async function handleSelectBooking(bookingId) {
+  const handleSelectBooking = useCallback(async (bookingId) => {
     try {
       const res = await api.getBookingDetails(bookingId);
-      onNavigate('BOOKING_CONFIRMATION', { booking: res.data });
+      if (isMountedRef.current) {
+        onNavigate('BOOKING_CONFIRMATION', { booking: res.data });
+      }
     } catch (err) {
-      Alert.alert('Booking Details Error', err.message || 'Could not load booking details.');
+      if (isMountedRef.current) {
+        Alert.alert('Booking Details Error', err.message || 'Could not load booking details.');
+      }
     }
-  }
+  }, [onNavigate]);
 
   function renderStatusBadge(status, expiresAt) {
     const isExpired = expiresAt && new Date(expiresAt) <= new Date() && ['CONFIRMED', 'CREATED', 'PENDING_COLLECTION'].includes(status);
@@ -89,7 +115,7 @@ export default function BookingHistoryScreen({ onNavigate }) {
     );
   }
 
-  function renderBookingItem({ item }) {
+  const renderBookingItem = useCallback(({ item }) => {
     const createdDate = new Date(item.created_at).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
@@ -141,7 +167,7 @@ export default function BookingHistoryScreen({ onNavigate }) {
         </View>
       </TouchableOpacity>
     );
-  }
+  }, [handleSelectBooking, onNavigate]);
 
   return (
     <View style={styles.container}>

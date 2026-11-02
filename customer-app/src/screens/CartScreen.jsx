@@ -5,7 +5,7 @@
  * empty state, order summary calculation, backend revalidation, and checkout eligibility enforcement.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,11 +33,29 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [error, setError] = useState(null);
 
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Authoritative server-side cart retrieval
   const fetchCart = useCallback(async () => {
+    const currentSeq = ++requestSeqRef.current;
     try {
-      setError(null);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setError(null);
+      }
       const res = await api.getCart();
+
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
+
       const cartData = res.data || {
         items: [],
         summary: { totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true },
@@ -47,11 +65,16 @@ export default function CartScreen({ onNavigate, onCartUpdated }) {
         onCartUpdated(cartData);
       }
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
       console.error('[CART FETCH ERROR]', err.message);
       setError(err.message || 'Unable to load your cart.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [onCartUpdated]);
 

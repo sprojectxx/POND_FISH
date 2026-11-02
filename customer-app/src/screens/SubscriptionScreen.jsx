@@ -46,11 +46,26 @@ export default function SubscriptionScreen({ onNavigate }) {
   const [preparingPurchase, setPreparingPurchase] = useState(false);
   const [ledgerError, setLedgerError] = useState(null);
 
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fetchLedger = useCallback(async () => {
     try {
-      setLedgerLoading(true);
-      setLedgerError(null);
+      if (isMountedRef.current) {
+        setLedgerLoading(true);
+        setLedgerError(null);
+      }
       const ledgerRes = await api.getSubscriptionLedger({ limit: 50 });
+
+      if (!isMountedRef.current) return;
+
       if (ledgerRes.success && Array.isArray(ledgerRes.data)) {
         setLedgerEntries(ledgerRes.data);
       } else if (Array.isArray(ledgerRes.data)) {
@@ -59,21 +74,31 @@ export default function SubscriptionScreen({ onNavigate }) {
         setLedgerEntries([]);
       }
     } catch (err) {
+      if (!isMountedRef.current) return;
       console.warn('[LEDGER FETCH ERROR]', err.message);
       setLedgerError(err.message || 'Could not load credit movements.');
       setLedgerEntries([]);
     } finally {
-      setLedgerLoading(false);
+      if (isMountedRef.current) {
+        setLedgerLoading(false);
+      }
     }
   }, []);
 
   const loadData = useCallback(async (isRefresh = false) => {
+    const currentSeq = ++requestSeqRef.current;
     try {
-      setError(null);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setError(null);
+      }
       const [subRes, plansRes] = await Promise.all([
         api.getSubscription(),
         api.getSubscriptionPlans(isRefresh ? { bypassCache: true } : {}),
       ]);
+
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
 
       const subData = subRes.data || { hasSubscription: false, subscription: null };
       const plansData = Array.isArray(plansRes.data) ? plansRes.data : [];
@@ -82,15 +107,18 @@ export default function SubscriptionScreen({ onNavigate }) {
       setPlans(plansData);
 
       // Fetch authentic customer credit ledger
-      fetchLedger();
+      await fetchLedger();
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
       console.error('[SUBSCRIPTION HUB LOAD ERROR]', err);
       setError(err.message || 'Unable to load subscription details.');
       setSubscriptionState(null);
       setPlans([]);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [fetchLedger]);
 

@@ -4,7 +4,7 @@
  * Displays verified customer identity, subscription status, edit capabilities, account shortcuts, and secure logout.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,10 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
+  const isMountedRef = useRef(true);
+  const successTimerRef = useRef(null);
+  const requestSeqRef = useRef(0);
+
   // Genuine customer identity state
   const [profile, setProfile] = useState(routeParams?.customer || null);
 
@@ -44,10 +48,24 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
   const [editError, setEditError] = useState('');
   const [editSuccessMsg, setEditSuccessMsg] = useState('');
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (successTimerRef.current) {
+        clearTimeout(successTimerRef.current);
+        successTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Load genuine profile and subscription data
   const loadProfileData = useCallback(async (isRefresh = false) => {
+    const currentSeq = ++requestSeqRef.current;
     try {
-      setError(null);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setError(null);
+      }
       const [profileRes, subRes] = await Promise.all([
         api.getProfile(null, isRefresh ? { bypassCache: true } : {}).catch((err) => {
           console.warn('[PROFILE FETCH WARNING]', err.message);
@@ -58,6 +76,10 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
           return null;
         }),
       ]);
+
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
 
       if (profileRes && profileRes.success && profileRes.data) {
         setProfile(profileRes.data);
@@ -75,11 +97,14 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
         setSubscriptionState(subRes.data);
       }
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
       console.error('[PROFILE LOAD ERROR]', err);
       setError(err.message || 'Unable to load profile information.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [routeParams]);
 
@@ -141,15 +166,29 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
         ...response.data,
       };
 
+      if (!isMountedRef.current) return;
+
       setProfile(updatedCustomer);
       setIsEditModalVisible(false);
       setEditSuccessMsg('Profile updated successfully.');
-      setTimeout(() => setEditSuccessMsg(''), 4000);
+
+      if (successTimerRef.current) {
+        clearTimeout(successTimerRef.current);
+      }
+      successTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setEditSuccessMsg('');
+        }
+        successTimerRef.current = null;
+      }, 4000);
     } catch (err) {
+      if (!isMountedRef.current) return;
       console.error('[PROFILE SAVE ERROR]', err);
       setEditError(err.message || 'Unable to save your profile. Please try again.');
     } finally {
-      setEditLoading(false);
+      if (isMountedRef.current) {
+        setEditLoading(false);
+      }
     }
   }
 

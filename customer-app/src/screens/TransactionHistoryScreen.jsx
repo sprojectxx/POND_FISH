@@ -6,13 +6,14 @@
  * subscription credit applied, and receipt views.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  FlatList,
   StatusBar,
   RefreshControl,
   ActivityIndicator,
@@ -26,19 +27,41 @@ export default function TransactionHistoryScreen({ onNavigate }) {
   const [transactions, setTransactions] = useState([]);
   const [errorMessage, setErrorMessage] = useState(null);
 
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fetchTransactions = useCallback(async () => {
+    const currentSeq = ++requestSeqRef.current;
     try {
-      setErrorMessage(null);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setErrorMessage(null);
+      }
       const res = await api.getCustomerTransactions({ limit: 50 });
+
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
       if (res.success && Array.isArray(res.data)) {
         setTransactions(res.data);
       }
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
       console.warn('[TRANSACTION HISTORY ERROR]', err);
       setErrorMessage(err.message || 'Unable to load transaction history.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -50,6 +73,135 @@ export default function TransactionHistoryScreen({ onNavigate }) {
     setRefreshing(true);
     fetchTransactions();
   }, [fetchTransactions]);
+
+  const renderTransactionCard = useCallback(({ item: tx }) => {
+    const items = Array.isArray(tx.items) ? tx.items : [];
+    const isSubOnly = tx.paymentMethod === 'SUBSCRIPTION_ONLY';
+    const status = tx.status || 'COMPLETED';
+    const statusColor =
+      status === 'COMPLETED'
+        ? colors.freshGreen
+        : status === 'PENDING'
+        ? colors.warning
+        : status === 'FAILED'
+        ? colors.freshRed
+        : colors.textMuted;
+
+    const paymentMethodLabel =
+      tx.paymentMethod === 'SUBSCRIPTION_ONLY'
+        ? 'Subscription'
+        : tx.paymentMethod === 'RAZORPAY'
+        ? 'Razorpay'
+        : tx.paymentMethod === 'CASH'
+        ? 'Cash'
+        : tx.paymentMethod === 'UPI'
+        ? 'UPI'
+        : tx.paymentMethod || 'Counter';
+
+    const dateStr = tx.createdAt ? new Date(tx.createdAt).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }) : '';
+
+    return (
+      <View style={styles.card}>
+        {/* Card Top Row */}
+        <View style={styles.cardTopRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.txNumber}>{tx.transactionNumber}</Text>
+            <Text style={styles.txDate}>{dateStr}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {/* Status Pill */}
+            <View
+              style={[
+                styles.statusPill,
+                { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}55` },
+              ]}
+            >
+              <Text style={[styles.statusPillText, { color: statusColor }]}>
+                {status}
+              </Text>
+            </View>
+
+            {/* Method Pill */}
+            <View
+              style={[
+                styles.methodPill,
+                isSubOnly ? styles.methodPillSub : styles.methodPillRazorpay,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.methodPillText,
+                  isSubOnly ? styles.methodTextSub : styles.methodTextRazorpay,
+                ]}
+              >
+                {paymentMethodLabel}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Bill ID Tag */}
+        {Boolean(tx.billNumber) && (
+          <View style={styles.billTagRow}>
+            <Text style={styles.billTagLabel}>Bill ID:</Text>
+            <Text style={styles.billTagValue}>{tx.billNumber}</Text>
+          </View>
+        )}
+
+        <View style={styles.divider} />
+
+        {/* Items Summary */}
+        <View style={styles.itemsBox}>
+          {items.length > 0 ? (
+            items.map((it, idx) => (
+              <View key={it.id || idx} style={styles.itemRow}>
+                <Text style={styles.itemName}>
+                  • {it.fishName} ({it.quantityKg} kg)
+                </Text>
+                <Text style={styles.itemSubtotal}>₹{it.subtotal?.toFixed(2)}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic' }}>
+              In-store counter purchase settlement
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Financial Summary */}
+        <View style={styles.financeRow}>
+          <View>
+            {tx.subCreditUsed > 0 && (
+              <Text style={styles.creditText}>
+                Credit Applied: -₹{tx.subCreditUsed.toFixed(2)}
+              </Text>
+            )}
+            <Text style={styles.totalLabel}>
+              Total Bill: ₹{tx.totalBillAmount?.toFixed(2)}
+            </Text>
+            {tx.razorpayGatewayFee > 0 && (
+              <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                Gateway Fee: ₹{tx.razorpayGatewayFee.toFixed(2)}
+              </Text>
+            )}
+          </View>
+
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.paidLabel}>Paid Amount</Text>
+            <Text style={styles.paidAmount}>₹{tx.finalPaidAmount?.toFixed(2)}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -114,9 +266,15 @@ export default function TransactionHistoryScreen({ onNavigate }) {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={transactions}
+          keyExtractor={(item) => String(item.id || item.transactionNumber)}
+          renderItem={renderTransactionCard}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={5}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -125,136 +283,7 @@ export default function TransactionHistoryScreen({ onNavigate }) {
               colors={[colors.primary]}
             />
           }
-        >
-          {transactions.map((tx) => {
-            const items = Array.isArray(tx.items) ? tx.items : [];
-            const isSubOnly = tx.paymentMethod === 'SUBSCRIPTION_ONLY';
-            const status = tx.status || 'COMPLETED';
-            const statusColor =
-              status === 'COMPLETED'
-                ? colors.freshGreen
-                : status === 'PENDING'
-                ? colors.warning
-                : status === 'FAILED'
-                ? colors.freshRed
-                : colors.textMuted;
-
-            const paymentMethodLabel =
-              tx.paymentMethod === 'SUBSCRIPTION_ONLY'
-                ? 'Subscription'
-                : tx.paymentMethod === 'RAZORPAY'
-                ? 'Razorpay'
-                : tx.paymentMethod === 'CASH'
-                ? 'Cash'
-                : tx.paymentMethod === 'UPI'
-                ? 'UPI'
-                : tx.paymentMethod || 'Counter';
-
-            const dateStr = tx.createdAt ? new Date(tx.createdAt).toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            }) : '';
-
-            return (
-              <View key={tx.id} style={styles.card}>
-                {/* Card Top Row */}
-                <View style={styles.cardTopRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.txNumber}>{tx.transactionNumber}</Text>
-                    <Text style={styles.txDate}>{dateStr}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    {/* Status Pill */}
-                    <View
-                      style={[
-                        styles.statusPill,
-                        { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}55` },
-                      ]}
-                    >
-                      <Text style={[styles.statusPillText, { color: statusColor }]}>
-                        {status}
-                      </Text>
-                    </View>
-
-                    {/* Method Pill */}
-                    <View
-                      style={[
-                        styles.methodPill,
-                        isSubOnly ? styles.methodPillSub : styles.methodPillRazorpay,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.methodPillText,
-                          isSubOnly ? styles.methodTextSub : styles.methodTextRazorpay,
-                        ]}
-                      >
-                        {paymentMethodLabel}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Bill ID Tag */}
-                {Boolean(tx.billNumber) && (
-                  <View style={styles.billTagRow}>
-                    <Text style={styles.billTagLabel}>Bill ID:</Text>
-                    <Text style={styles.billTagValue}>{tx.billNumber}</Text>
-                  </View>
-                )}
-
-                <View style={styles.divider} />
-
-                {/* Items Summary */}
-                <View style={styles.itemsBox}>
-                  {items.length > 0 ? (
-                    items.map((it, idx) => (
-                      <View key={it.id || idx} style={styles.itemRow}>
-                        <Text style={styles.itemName}>
-                          • {it.fishName} ({it.quantityKg} kg)
-                        </Text>
-                        <Text style={styles.itemSubtotal}>₹{it.subtotal?.toFixed(2)}</Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic' }}>
-                      In-store counter purchase settlement
-                    </Text>
-                  )}
-                </View>
-
-                <View style={styles.divider} />
-
-                {/* Financial Summary */}
-                <View style={styles.financeRow}>
-                  <View>
-                    {tx.subCreditUsed > 0 && (
-                      <Text style={styles.creditText}>
-                        Credit Applied: -₹{tx.subCreditUsed.toFixed(2)}
-                      </Text>
-                    )}
-                    <Text style={styles.totalLabel}>
-                      Total Bill: ₹{tx.totalBillAmount?.toFixed(2)}
-                    </Text>
-                    {tx.razorpayGatewayFee > 0 && (
-                      <Text style={{ fontSize: 11, color: colors.textMuted }}>
-                        Gateway Fee: ₹{tx.razorpayGatewayFee.toFixed(2)}
-                      </Text>
-                    )}
-                  </View>
-
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.paidLabel}>Paid Amount</Text>
-                    <Text style={styles.paidAmount}>₹{tx.finalPaidAmount?.toFixed(2)}</Text>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
+        />
       )}
     </View>
   );

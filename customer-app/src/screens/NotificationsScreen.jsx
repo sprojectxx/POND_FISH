@@ -13,7 +13,7 @@
  * - Pull-to-refresh support.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -44,25 +44,47 @@ export default function NotificationsScreen({ onNavigate }) {
   const [error, setError] = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
 
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fetchNotifications = useCallback(async (cat = selectedCategory) => {
+    const currentSeq = ++requestSeqRef.current;
     try {
-      setError(null);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setError(null);
+      }
       const res = await api.getNotifications({
         limit: 50,
         offset: 0,
         type: cat === 'ALL' ? null : cat,
       });
 
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
+
       if (res.data) {
         setNotifications(res.data.notifications || []);
         setUnreadCount(res.data.unreadCount || 0);
       }
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
       console.warn('[NOTIFICATIONS SCREEN ERROR]', err.message);
       setError(err.message || 'Unable to load notifications.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [selectedCategory]);
 

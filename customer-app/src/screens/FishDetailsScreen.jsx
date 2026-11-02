@@ -5,7 +5,7 @@
  * online booking eligibility checks, quantity selection, and Add to Cart action.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,21 +39,44 @@ export default function FishDetailsScreen({
   const [error, setError] = useState(null);
   const [cartSuccessMessage, setCartSuccessMessage] = useState(null);
 
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fetchDetails = useCallback(async () => {
     if (!fishId) return;
+    const currentSeq = ++requestSeqRef.current;
     try {
-      setError(null);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setError(null);
+      }
       const res = await api.getFishDetails(fishId);
+
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
+
       if (res.data) {
         setFish(res.data);
       } else {
         throw new Error('Fish record not found.');
       }
     } catch (err) {
+      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
+        return;
+      }
       console.error('[FISH DETAILS ERROR]', err.message);
       setError(err.message || 'Unable to load fish details.');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [fishId]);
 
@@ -92,8 +115,11 @@ export default function FishDetailsScreen({
         onCartUpdated(result.data);
       }
 
-      setCartSuccessMessage(`Added ${quantity} kg of ${fish.name} to cart!`);
+      if (isMountedRef.current) {
+        setCartSuccessMessage(`Added ${quantity} kg of ${fish.name} to cart!`);
+      }
     } catch (err) {
+      if (!isMountedRef.current) return;
       console.error('[ADD TO CART ERROR]', err.message);
       let msg = err.message || 'Could not add fish to cart.';
       if (err.code === 'FISH_NOT_ONLINE_BOOKABLE') {
@@ -103,7 +129,9 @@ export default function FishDetailsScreen({
       }
       Alert.alert('Unable to Add', msg);
     } finally {
-      setAddingToCart(false);
+      if (isMountedRef.current) {
+        setAddingToCart(false);
+      }
     }
   }
 
