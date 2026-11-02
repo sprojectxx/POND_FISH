@@ -1062,7 +1062,6 @@ export const api = {
    */
   clearResponseCache,
   invalidateResponseCache,
-  saveToResponseCache,
   getResponseCacheStats,
   resetResponseCacheStats,
   getResponseCacheSize: () => responseCache.size,

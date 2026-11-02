@@ -157,7 +157,7 @@ function loadProductionApiModule(mockStorage = {}, mockFetch = null, customAbort
   code = code.replace(/export\s+function\s+setUnauthorizedHandler/g, 'exports.setUnauthorizedHandler = function setUnauthorizedHandler');
   code = code.replace(/export\s+const\s+api\s*=\s*\{/g, 'const api = {');
 
-  code += '\nexports.api = api;\nexports.request = request;\nexports.buildDeduplicationKey = buildDeduplicationKey;\nexports.inFlightGetRequests = inFlightGetRequests;\nexports.evaluateDeduplicatable = evaluateDeduplicatable;\nexports.extractAndNormalizeAuthorization = extractAndNormalizeAuthorization;';
+  code += '\nexports.api = api;\nexports.request = request;\nexports.buildDeduplicationKey = buildDeduplicationKey;\nexports.inFlightGetRequests = inFlightGetRequests;\nexports.evaluateDeduplicatable = evaluateDeduplicatable;\nexports.extractAndNormalizeAuthorization = extractAndNormalizeAuthorization;\nexports.saveToResponseCache = saveToResponseCache;';
 
   const m = { exports: {} };
   const fn = new Function('exports', 'require', 'mockAuthStorage', 'fetch', '__DEV__', 'process', 'FormData', 'AbortController', 'console', code);
@@ -3838,11 +3838,18 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
     });
 
     test('7.32: Global limit enforcement: Cache size cannot exceed MAX_TOTAL_CACHE_ENTRIES (25)', async () => {
-      const { api: productionApi } = loadProductionApiModule();
+      const { api: productionApi, saveToResponseCache } = loadProductionApiModule();
 
-      // Insert 25 distinct entries
+      // Policy verification: internal cache-writing machinery must not be exposed on public application API
+      assert.strictEqual(
+        productionApi.saveToResponseCache,
+        undefined,
+        'saveToResponseCache must not be exposed as part of the public application API'
+      );
+
+      // Insert 25 distinct entries via internal test-harness binding
       for (let i = 1; i <= 25; i++) {
-        productionApi.saveToResponseCache(`custom-key-${i}`, {
+        saveToResponseCache(`custom-key-${i}`, {
           baseEndpoint: `/api/v1/custom-endpoint-${i}`,
           data: { id: i },
           timestamp: Date.now(),
@@ -3854,7 +3861,7 @@ describe('Customer App Phase 3B.2 & 3B.3 Verification Suite', () => {
       assert.equal(productionApi.getResponseCacheSize(), 25, 'Cache must reach exactly MAX_TOTAL_CACHE_ENTRIES (25)');
 
       // Adding the 26th entry must evict the global oldest entry to respect 25 limit
-      productionApi.saveToResponseCache('custom-key-26', {
+      saveToResponseCache('custom-key-26', {
         baseEndpoint: '/api/v1/custom-endpoint-26',
         data: { id: 26 },
         timestamp: Date.now(),
