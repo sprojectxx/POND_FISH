@@ -893,6 +893,13 @@ function request(endpoint, options = {}) {
           requestGlobalGen === globalInvalidationGeneration &&
           requestEndpointGen === getEndpointGeneration(baseEndpoint);
 
+        if (!isGenerationValid && isGet) {
+          const resetErr = new Error('In-flight request cancelled due to session reset');
+          resetErr.code = 'API_SESSION_RESET';
+          resetErr.isSessionReset = true;
+          throw resetErr;
+        }
+
         if (shouldWriteCache && cacheKey && isGenerationValid && netRes && netRes.success !== false) {
           const byteSize = estimatePayloadBytes(netRes);
           saveToResponseCache(cacheKey, {

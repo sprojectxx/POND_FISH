@@ -15,7 +15,7 @@ import {
   Image,
 } from 'react-native';
 import { colors } from '../theme/colors';
-import { getAuthTokens, clearAuthTokens } from '../services/auth-storage';
+import { getAuthTokens, clearAuthTokens, isLogoutPending } from '../services/auth-storage';
 import { api } from '../services/api';
 import { orchestrateStartupSession } from '../utils/startup-session';
 
@@ -28,6 +28,7 @@ export default function SplashScreen({ onNavigate }) {
     return orchestrateStartupSession({
       getAuthTokens,
       clearAuthTokens,
+      isLogoutPending,
       apiClient: api,
       onNavigate,
       setError,

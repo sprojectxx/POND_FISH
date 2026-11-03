@@ -50,6 +50,17 @@ function resolveNavigationDecision(
   const isTargetAuthenticated = AUTHENTICATED_SCREENS.includes(resolvedScreen);
   const isExplicitAuthTransition = Boolean(params?.token || params?.customer);
 
+  // Locked logout states block all navigation attempts
+  if (currentScreen === 'LOGOUT_FAILURE' || currentScreen === 'LOGOUT_IN_PROGRESS') {
+    return {
+      blocked: true,
+      redirected: false,
+      nextScreen: currentScreen,
+      nextIsAuthenticated: false,
+      nextIsProfileComplete: false,
+    };
+  }
+
   // Stale requests cannot navigate the customer back into authenticated screens after logout
   if (isTargetAuthenticated && !isAuthenticated && !isExplicitAuthTransition) {
     return {

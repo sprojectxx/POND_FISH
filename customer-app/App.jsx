@@ -13,6 +13,7 @@ import {
   Text,
   TouchableOpacity,
   BackHandler,
+  ActivityIndicator,
 } from 'react-native';
 import { colors } from './src/theme/colors';
 import { api, setUnauthorizedHandler } from './src/services/api';
@@ -43,7 +44,9 @@ export default function App() {
   const [screenParams, setScreenParams] = useState({});
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
+  const [logoutError, setLogoutError] = useState(null);
   const isLoggingOutRef = useRef(false);
+  const activeSessionIdRef = useRef(1);
 
   const [cartSummary, setCartSummary] = useState({
     totalItems: 0,
@@ -57,9 +60,14 @@ export default function App() {
 
   const fetchCartSummary = useCallback(async () => {
     if (isFetchingCartRef.current) return;
+    const sessionId = activeSessionIdRef.current;
     isFetchingCartRef.current = true;
     try {
       const res = await api.getCart();
+      if (sessionId !== activeSessionIdRef.current) {
+        // Discard response if session changed or logged out
+        return;
+      }
       if (res.data?.summary) {
         setCartSummary(res.data.summary);
       }
@@ -90,28 +98,64 @@ export default function App() {
   const handleLogout = useCallback(async (expectedToken = null) => {
     if (isLoggingOutRef.current) return;
     isLoggingOutRef.current = true;
+
+    // Check token identity if expectedToken was supplied (e.g. from 401 callback)
+    if (expectedToken) {
+      try {
+        const current = await getAuthTokens();
+        if (current?.token && current.token !== expectedToken) {
+          console.warn('[LOGOUT] Session token changed before clearing; aborting obsolete logout');
+          isLoggingOutRef.current = false;
+          return;
+        }
+      } catch (e) {
+        console.warn('[LOGOUT] Error verifying token before logout', e);
+      }
+    }
+
+    // 1. Immediately invalidate session identity and cancel all in-flight requests
+    activeSessionIdRef.current += 1;
+    api.clearInFlightRequests();
+    api.clearResponseCache();
+
+    // 2. Immediately revoke access to authenticated screens and clear all private in-memory customer data
+    setIsAuthenticated(false);
+    setIsProfileComplete(false);
+    setScreenParams({});
+    setCartSummary({ totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true });
+
+    // 3. Immediately move away from authenticated screens to prevent viewing private data
+    setCurrentScreen('LOGOUT_IN_PROGRESS');
+
     let didClear = false;
+    let clearError = null;
 
     try {
       didClear = await clearAuthTokens(expectedToken);
       if (!didClear && expectedToken) {
-        console.warn('[LOGOUT] Session token changed before clearing; aborting obsolete logout');
+        console.warn('[LOGOUT] Session token changed during clear; aborting obsolete logout');
+        isLoggingOutRef.current = false;
         return;
       }
-      api.clearInFlightRequests();
-      api.clearResponseCache();
     } catch (e) {
-      console.warn('[LOGOUT] Error clearing tokens', e);
+      clearError = e;
+      console.warn('[LOGOUT] Error clearing tokens from Keystore', e);
     } finally {
       isLoggingOutRef.current = false;
     }
 
-    if (didClear || !expectedToken) {
-      setIsAuthenticated(false);
-      setIsProfileComplete(false);
-      setScreenParams({});
-      setCartSummary({ totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true });
+    // 4. Verification of credential deletion:
+    // Navigation to normal unauthenticated login flow (PHONE_AUTH) MUST ONLY happen after
+    // successful credential removal has been verified (didClear === true and no clearError).
+    if (didClear && !clearError) {
+      setLogoutError(null);
       setCurrentScreen('PHONE_AUTH');
+    } else {
+      // Invariant: A failed or thrown credential deletion must never be treated as successful logout.
+      // The app transitions to a locked logout-failure state blocking all authenticated screens.
+      const errorMsg = clearError?.message || 'Secure credential reset failed';
+      setLogoutError(errorMsg);
+      setCurrentScreen('LOGOUT_FAILURE');
     }
   }, []);
 
@@ -155,6 +199,18 @@ export default function App() {
   }, [handleUnauthorized]);
 
   function handleNavigate(targetScreen, params = {}) {
+    if (currentScreen === 'LOGOUT_FAILURE' || currentScreen === 'LOGOUT_IN_PROGRESS') {
+      return;
+    }
+
+    if (targetScreen === 'LOGOUT_FAILURE') {
+      setIsAuthenticated(false);
+      setIsProfileComplete(false);
+      setLogoutError(params?.error || 'Secure credential reset failed');
+      setCurrentScreen('LOGOUT_FAILURE');
+      return;
+    }
+
     const decision = resolveNavigationDecision(
       { currentScreen, isAuthenticated, isProfileComplete },
       targetScreen,
@@ -193,7 +249,7 @@ export default function App() {
   // Intercept Android hardware back press to avoid escaping authenticated boundary or returning after logout
   useEffect(() => {
     const backAction = () => {
-      if (currentScreen === 'PHONE_AUTH' || currentScreen === 'SPLASH') {
+      if (currentScreen === 'PHONE_AUTH' || currentScreen === 'SPLASH' || currentScreen === 'LOGOUT_FAILURE' || currentScreen === 'LOGOUT_IN_PROGRESS') {
         BackHandler.exitApp();
         return true;
       }
@@ -231,6 +287,7 @@ export default function App() {
   }, [currentScreen, isProfileComplete]);
 
   const handleCartUpdated = useCallback((cartData) => {
+    if (!isAuthenticated) return;
     if (cartData?.summary) {
       setCartSummary(cartData.summary);
     } else if (Array.isArray(cartData?.items)) {
@@ -239,7 +296,7 @@ export default function App() {
         totalItems: cartData.items.length,
       }));
     }
-  }, []);
+  }, [isAuthenticated]);
 
   // Hide bottom navigation during initial auth, splash, mandatory profile completion, and checkout/details flows
   const showBottomNav = AUTHENTICATED_SCREENS.includes(currentScreen) &&
@@ -259,6 +316,50 @@ export default function App() {
       <View style={styles.screenContainer}>
         {currentScreen === 'SPLASH' && (
           <SplashScreen onNavigate={handleNavigate} />
+        )}
+
+        {currentScreen === 'LOGOUT_IN_PROGRESS' && (
+          <View style={styles.logoutProgressContainer}>
+            <ActivityIndicator size="large" color="#0284C7" />
+            <Text style={styles.logoutProgressText}>Logging out securely...</Text>
+          </View>
+        )}
+
+        {currentScreen === 'LOGOUT_FAILURE' && (
+          <View style={styles.logoutFailureContainer}>
+            <View style={styles.logoutFailureCard}>
+              <Text style={styles.logoutFailureIcon}>🔒</Text>
+              <Text style={styles.logoutFailureTitle}>Secure Logout Error</Text>
+              <Text style={styles.logoutFailureMessage}>
+                Your session credentials could not be securely removed from device hardware storage.
+                {'\n\n'}
+                To protect your personal data, access to your account has been locked. Please retry to complete the logout.
+              </Text>
+              {logoutError ? (
+                <View style={styles.logoutErrorBox}>
+                  <Text style={styles.logoutErrorText}>{logoutError}</Text>
+                </View>
+              ) : null}
+              <TouchableOpacity
+                style={styles.logoutRetryButton}
+                onPress={() => handleLogout(null)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Retry Secure Logout"
+              >
+                <Text style={styles.logoutRetryButtonText}>Retry Logout</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logoutExitButton}
+                onPress={() => BackHandler.exitApp()}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Exit Application"
+              >
+                <Text style={styles.logoutExitButtonText}>Exit App</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
         {currentScreen === 'PHONE_AUTH' && (
@@ -552,5 +653,107 @@ const styles = StyleSheet.create({
   navLabelActive: {
     color: '#0284C7',
     fontWeight: '800',
+  },
+  logoutProgressContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0A192F',
+    padding: 24,
+  },
+  logoutProgressText: {
+    marginTop: 16,
+    color: '#94A3B8',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  logoutFailureContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0A192F',
+    padding: 24,
+  },
+  logoutFailureCard: {
+    backgroundColor: '#0F2744',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 380,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  logoutFailureIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  logoutFailureTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  logoutFailureMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  logoutErrorBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#EF4444',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    width: '100%',
+    marginBottom: 20,
+  },
+  logoutErrorText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  logoutRetryButton: {
+    backgroundColor: '#0284C7',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logoutRetryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  logoutExitButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  logoutExitButtonText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

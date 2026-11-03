@@ -8,6 +8,7 @@ import * as Keychain from 'react-native-keychain';
 
 const AUTH_SERVICE_KEY = 'com.pondfish.customer.auth';
 const DEVICE_TOKEN_SERVICE_KEY = 'com.pondfish.customer.device_token';
+const LOGOUT_PENDING_SERVICE_KEY = 'com.pondfish.customer.logout_pending';
 
 let cachedDeviceToken = null;
 
@@ -47,6 +48,11 @@ export async function saveAuthTokens(token, refreshToken = '') {
   if (!token) throw new Error('Token is required for secure persistence');
 
   return enqueueStorageMutation(async () => {
+    try {
+      await Keychain.resetGenericPassword({
+        service: LOGOUT_PENDING_SERVICE_KEY,
+      });
+    } catch (_) {}
     await Keychain.setGenericPassword('authToken', JSON.stringify({ token, refreshToken }), {
       service: AUTH_SERVICE_KEY,
       securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
@@ -56,19 +62,47 @@ export async function saveAuthTokens(token, refreshToken = '') {
   });
 }
 
+// Internal direct checker for pending logout tombstone
+async function isLogoutPendingInternal() {
+  try {
+    const creds = await Keychain.getGenericPassword({
+      service: LOGOUT_PENDING_SERVICE_KEY,
+    });
+    return Boolean(creds && creds.password === '1');
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Checks whether an uncompleted or interrupted logout tombstone exists in Keystore.
+ * @returns {Promise<boolean>}
+ */
+export async function isLogoutPending() {
+  return isLogoutPendingInternal();
+}
+
 /**
  * Retrieve securely stored authentication credentials.
  * Awaits any in-flight mutation queue to observe consistent state.
  * @returns {Promise<{ token: string, refreshToken: string } | null>}
  */
 export async function getAuthTokens() {
-  return storageMutationQueue.then(() => readCredentialsDirect());
+  return storageMutationQueue.then(async () => {
+    const pending = await isLogoutPendingInternal();
+    if (pending) {
+      // Incomplete or interrupted logout detected; do not restore credentials
+      return null;
+    }
+    return readCredentialsDirect();
+  });
 }
 
 /**
  * Erase credentials upon logout, serialized through storageMutationQueue.
  * If expectedToken is provided, verifies that stored token still matches expectedToken
  * before resetting Keystore. Returns true if cleared, false if obsolete/aborted.
+ * Ensures Keystore exceptions propagate to caller, and verifies credentials are absent.
  * @param {string|null} [expectedToken] - Optional token to verify before clearing
  */
 export async function clearAuthTokens(expectedToken = null) {
@@ -81,15 +115,41 @@ export async function clearAuthTokens(expectedToken = null) {
       }
     }
 
+    // Mark persistent logout pending tombstone before executing primary reset
+    try {
+      await Keychain.setGenericPassword('logoutPending', '1', {
+        service: LOGOUT_PENDING_SERVICE_KEY,
+      });
+    } catch (_) {}
+
+    // Primary credential reset: hardware exceptions propagate to caller
     await Keychain.resetGenericPassword({
       service: AUTH_SERVICE_KEY,
     });
+
+    // Verification check: ensure primary authentication credential is genuinely absent
+    const verifyCreds = await readCredentialsDirect();
+    if (verifyCreds && verifyCreds.token) {
+      throw new Error('Primary authentication credential could not be cleared from Keystore');
+    }
+
+    // Primary credential is confirmed absent; clear persistent logout pending tombstone
+    try {
+      await Keychain.resetGenericPassword({
+        service: LOGOUT_PENDING_SERVICE_KEY,
+      });
+    } catch (_) {}
+
+    // Device-token cleanup failure is handled and reported separately without failing primary logout
     try {
       cachedDeviceToken = null;
       await Keychain.resetGenericPassword({
         service: DEVICE_TOKEN_SERVICE_KEY,
       });
-    } catch (_) {}
+    } catch (deviceErr) {
+      console.warn('[AUTH STORAGE] Device-token cleanup encountered error, but primary auth token was cleared');
+    }
+
     return true;
   });
 }

@@ -16,6 +16,7 @@
 async function orchestrateStartupSession({
   getAuthTokens,
   clearAuthTokens,
+  isLogoutPending,
   apiClient,
   onNavigate,
   setError,
@@ -36,6 +37,31 @@ async function orchestrateStartupSession({
   }
 
   try {
+    // Check if an incomplete or interrupted logout tombstone exists
+    if (typeof isLogoutPending === 'function') {
+      const pending = await isLogoutPending();
+      if (pending) {
+        try {
+          let didClear = false;
+          if (typeof clearAuthTokens === 'function') {
+            didClear = await clearAuthTokens();
+          }
+          if (didClear) {
+            if (isMountedRef?.current && typeof onNavigate === 'function') {
+              onNavigate('PHONE_AUTH');
+            }
+            return { destination: 'PHONE_AUTH', cleared: true };
+          }
+        } catch (storageErr) {
+          console.error('[STARTUP] Previous logout failed to clear Keystore', storageErr);
+          if (isMountedRef?.current && typeof onNavigate === 'function') {
+            onNavigate('LOGOUT_FAILURE', { error: 'Previous logout could not clear stored credentials. Please retry.' });
+          }
+          return { destination: 'LOGOUT_FAILURE', storageError: storageErr };
+        }
+      }
+    }
+
     // 1. Read hardware-backed Android Keystore
     const stored = await getAuthTokens();
 

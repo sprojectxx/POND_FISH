@@ -231,18 +231,19 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
       if (typeof onLogout === 'function') {
         await onLogout();
       } else {
-        await clearAuthTokens();
-        if (typeof onNavigate === 'function') {
-          onNavigate('PHONE_AUTH');
+        const didClear = await clearAuthTokens();
+        if (didClear) {
+          if (typeof onNavigate === 'function') {
+            onNavigate('PHONE_AUTH');
+          }
+        } else {
+          setError('Logout failed: stored credentials could not be cleared.');
         }
       }
     } catch (err) {
       console.error('[LOGOUT ERROR]', err);
-      // Fallback navigation even if Keystore threw an exception
-      if (typeof onLogout === 'function') {
-        onLogout();
-      } else if (typeof onNavigate === 'function') {
-        onNavigate('PHONE_AUTH');
+      if (typeof onLogout !== 'function') {
+        setError('Logout failed: secure storage error.');
       }
     }
   }
