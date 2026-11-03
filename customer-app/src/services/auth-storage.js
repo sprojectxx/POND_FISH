@@ -60,11 +60,15 @@ export async function saveAuthTokens(token, refreshToken = '') {
         service: LOGOUT_PENDING_SERVICE_KEY,
       });
       if (resetMarkerRes === false) {
-        throw new Error('Failed to reset logout pending marker from Keystore (returned false)');
+        const falseErr = new Error('Failed to reset logout pending marker from Keystore (returned false)');
+        falseErr.code = 'TOMBSTONE_RESET_ERROR';
+        throw falseErr;
       }
-    } catch (markerErr) {
-      console.warn('[AUTH STORAGE] Could not clear existing logout pending marker before saving', markerErr);
-      throw markerErr;
+    } catch (_markerErr) {
+      console.warn('[AUTH STORAGE] Could not clear existing logout pending marker before saving');
+      const sanitizedMarkerErr = new Error('Failed to reset logout pending marker from Keystore');
+      sanitizedMarkerErr.code = 'TOMBSTONE_RESET_ERROR';
+      throw sanitizedMarkerErr;
     }
 
     // Verify old tombstone is confirmed absent before saving new credentials
@@ -88,9 +92,9 @@ export async function saveAuthTokens(token, refreshToken = '') {
       readBackCreds = await Keychain.getGenericPassword({
         service: AUTH_SERVICE_KEY,
       });
-    } catch (readErr) {
+    } catch (_readErr) {
       const sanitizedErr = new Error('Credential verification failed: error reading back from Keystore');
-      sanitizedErr.cause = readErr;
+      sanitizedErr.code = 'KEYSTORE_READ_ERROR';
       throw sanitizedErr;
     }
 
@@ -136,13 +140,17 @@ async function getLogoutPendingStatusInternal() {
       return { status: TOMBSTONE_STATUS.PRESENT, present: true };
     }
     // Unexpected or malformed marker value -> treat as unsafe/unknown state. Never interpret as confirmed absence.
+    const malformedErr = new Error('Unexpected or malformed tombstone marker in Keystore');
+    malformedErr.code = 'TOMBSTONE_MALFORMED';
     return {
       status: TOMBSTONE_STATUS.UNKNOWN,
       present: null,
-      error: new Error('Unexpected or malformed tombstone marker in Keystore'),
+      error: malformedErr,
     };
-  } catch (err) {
-    return { status: TOMBSTONE_STATUS.UNKNOWN, present: null, error: err };
+  } catch (_err) {
+    const storageErr = new Error('Secure storage failed while reading logout tombstone marker');
+    storageErr.code = 'TOMBSTONE_STORAGE_ERROR';
+    return { status: TOMBSTONE_STATUS.UNKNOWN, present: null, error: storageErr };
   }
 }
 
@@ -167,7 +175,6 @@ export async function isLogoutPending() {
   if (result.status === TOMBSTONE_STATUS.UNKNOWN) {
     const err = new Error('Secure storage failed while reading logout tombstone marker');
     err.code = 'TOMBSTONE_STORAGE_ERROR';
-    err.cause = result.error;
     throw err;
   }
   return result.present;
@@ -192,7 +199,6 @@ export async function getAuthTokens() {
       // Must not return previously stored credentials when logout state cannot be safely determined.
       const err = new Error('Cannot determine logout state: secure storage failed while reading tombstone');
       err.code = 'TOMBSTONE_STORAGE_ERROR';
-      err.cause = tombstone.error;
       throw err;
     }
     return readCredentialsDirect();
@@ -298,7 +304,7 @@ export async function saveDeviceToken(deviceToken) {
       });
       return true;
     } catch (err) {
-      console.warn('[AUTH STORAGE] Could not persist device token to Keystore', err);
+      console.warn('[AUTH STORAGE] Could not persist device token to Keystore');
       return false;
     }
   });
@@ -322,7 +328,7 @@ export async function getDeviceToken() {
         return creds.password;
       }
     } catch (err) {
-      console.warn('[AUTH STORAGE] Could not read device token from Keystore', err);
+      console.warn('[AUTH STORAGE] Could not read device token from Keystore');
     }
     return null;
   });
@@ -341,7 +347,7 @@ export async function clearDeviceToken() {
       });
       return true;
     } catch (err) {
-      console.warn('[AUTH STORAGE] Could not reset device token in Keystore', err);
+      console.warn('[AUTH STORAGE] Could not reset device token in Keystore');
       return false;
     }
   });

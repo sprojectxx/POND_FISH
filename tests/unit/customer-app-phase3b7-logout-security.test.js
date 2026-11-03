@@ -1078,8 +1078,17 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
     }
   });
 
-  await t.test('1.22. Save credentials fault injection: Keystore read-back exception fails with redacted error without credential leakage', async () => {
-    const distinctiveToken = 'SECRET_READBACK_THROW_TOKEN_999';
+  await t.test('1.22. Save credentials fault injection: Native Keystore exception with sensitive secrets fails with sanitized error and zero leak in cause, properties, stack, serialized output or console', async () => {
+    const passedToken = 'SECRET_TOKEN_PASSED_AS_ARGUMENT_111';
+    const secretInMessage = 'SECRET_TOKEN_IN_RAW_EXCEPTION_MSG_777';
+    const secretInProperty = 'SECRET_TOKEN_IN_RAW_EXCEPTION_PROP_888';
+    const secretInStack = 'SECRET_TOKEN_IN_RAW_EXCEPTION_STACK_999';
+
+    const rawKeystoreError = new Error(`Native Android Keystore failure with token: ${secretInMessage}`);
+    rawKeystoreError.sensitiveToken = secretInProperty;
+    rawKeystoreError.tokenMetadata = { token: secretInProperty, details: 'critical secret payload' };
+    rawKeystoreError.stack = `Error: Native failure with ${secretInStack}\n    at MockKeystoreDriver.getGenericPassword (/dev/keystore:1:1)`;
+
     const customKeychain = {
       SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
       STORAGE_TYPE: { KEYSTORE: 1 },
@@ -1087,25 +1096,157 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       getGenericPassword: async (opts = {}) => {
         if (opts.service === 'com.pondfish.customer.logout_pending') return false;
         if (opts.service === 'com.pondfish.customer.auth') {
-          throw new Error('Native Keystore hardware driver I/O failure');
+          throw rawKeystoreError;
         }
         return false;
       },
       setGenericPassword: async () => true,
     };
+
+    const capturedLogs = [];
+    const origWarn = console.warn;
+    const origError = console.error;
+    const origLog = console.log;
+    console.warn = (...args) => capturedLogs.push(args.join(' '));
+    console.error = (...args) => capturedLogs.push(args.join(' '));
+    console.log = (...args) => capturedLogs.push(args.join(' '));
+
+    const util = require('util');
     const { authStorage } = loadAuthStorageModule(customKeychain);
 
-    await assert.rejects(
-      authStorage.saveAuthTokens(distinctiveToken),
-      (err) => {
-        assert.equal(err.message, 'Credential verification failed: error reading back from Keystore');
-        assert.equal(err.message.includes(distinctiveToken), false);
-        return true;
+    try {
+      let caughtErr = null;
+      try {
+        await authStorage.saveAuthTokens(passedToken);
+      } catch (err) {
+        caughtErr = err;
       }
-    );
+
+      assert.ok(caughtErr, 'saveAuthTokens must reject when read-back throws');
+
+      // 1. Outer error message must be sanitized
+      assert.equal(caughtErr.message, 'Credential verification failed: error reading back from Keystore');
+      assert.equal(caughtErr.message.includes(passedToken), false, 'Outer message must not contain passed token');
+      assert.equal(caughtErr.message.includes(secretInMessage), false, 'Outer message must not contain secret from raw error message');
+      assert.equal(caughtErr.message.includes(secretInProperty), false, 'Outer message must not contain secret from raw error property');
+      assert.equal(caughtErr.message.includes(secretInStack), false, 'Outer message must not contain secret from raw error stack');
+
+      // 2. Useful error classification must be preserved without attaching raw cause
+      assert.equal(caughtErr.code, 'KEYSTORE_READ_ERROR', 'Useful error classification must be preserved');
+      assert.equal(caughtErr.cause, undefined, 'Raw native error must not be attached to err.cause');
+
+      // 3. Serialized error representation must not leak secrets
+      const serializedJson = JSON.stringify(caughtErr);
+      assert.equal(serializedJson.includes(passedToken), false, 'JSON.stringify must not leak passed token');
+      assert.equal(serializedJson.includes(secretInMessage), false, 'JSON.stringify must not leak secretInMessage');
+      assert.equal(serializedJson.includes(secretInProperty), false, 'JSON.stringify must not leak secretInProperty');
+      assert.equal(serializedJson.includes(secretInStack), false, 'JSON.stringify must not leak secretInStack');
+
+      const inspected = util.inspect(caughtErr, { depth: null, showHidden: true });
+      assert.equal(inspected.includes(passedToken), false, 'util.inspect must not leak passed token');
+      assert.equal(inspected.includes(secretInMessage), false, 'util.inspect must not leak secretInMessage');
+      assert.equal(inspected.includes(secretInProperty), false, 'util.inspect must not leak secretInProperty');
+      assert.equal(inspected.includes(secretInStack), false, 'util.inspect must not leak secretInStack');
+
+      // 4. Stack trace of the thrown error must not include the raw error stack or secrets
+      const stackStr = String(caughtErr.stack || '');
+      assert.equal(stackStr.includes(passedToken), false, 'err.stack must not leak passed token');
+      assert.equal(stackStr.includes(secretInMessage), false, 'err.stack must not leak secretInMessage');
+      assert.equal(stackStr.includes(secretInProperty), false, 'err.stack must not leak secretInProperty');
+      assert.equal(stackStr.includes(secretInStack), false, 'err.stack must not leak secretInStack');
+
+      // 5. Diagnostic output (console logs) produced by tested code must not leak secrets
+      const allLogs = capturedLogs.join('\n');
+      assert.equal(allLogs.includes(passedToken), false, 'Console output must not leak passed token');
+      assert.equal(allLogs.includes(secretInMessage), false, 'Console output must not leak secretInMessage');
+      assert.equal(allLogs.includes(secretInProperty), false, 'Console output must not leak secretInProperty');
+      assert.equal(allLogs.includes(secretInStack), false, 'Console output must not leak secretInStack');
+    } finally {
+      console.warn = origWarn;
+      console.error = origError;
+      console.log = origLog;
+    }
   });
 
-  await t.test('1.23. Successful save writes credentials, reads back matching credentials, and returns true', async () => {
+  await t.test('1.23. Tombstone error propagation: Native Keystore exception containing sensitive secrets during tombstone read fails safely with zero leak in message, cause, stack, serialized output or console', async () => {
+    const secretInTombstoneMsg = 'SECRET_TOKEN_IN_TOMBSTONE_MSG_444';
+    const secretInTombstoneProp = 'SECRET_TOKEN_IN_TOMBSTONE_PROP_555';
+    const secretInTombstoneStack = 'SECRET_TOKEN_IN_TOMBSTONE_STACK_666';
+
+    const rawTombstoneError = new Error(`KeyStore tombstone fault: ${secretInTombstoneMsg}`);
+    rawTombstoneError.tokenSecret = secretInTombstoneProp;
+    rawTombstoneError.stack = `Error: Tombstone fault with ${secretInTombstoneStack}\n    at MockKeystoreDriver.getGenericPassword (/dev/keystore:2:2)`;
+
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      resetGenericPassword: async () => true,
+      getGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.logout_pending') {
+          throw rawTombstoneError;
+        }
+        return { username: 'authToken', password: JSON.stringify({ token: 'saved-token' }) };
+      },
+      setGenericPassword: async () => true,
+    };
+
+    const capturedLogs = [];
+    const origWarn = console.warn;
+    const origError = console.error;
+    const origLog = console.log;
+    console.warn = (...args) => capturedLogs.push(args.join(' '));
+    console.error = (...args) => capturedLogs.push(args.join(' '));
+    console.log = (...args) => capturedLogs.push(args.join(' '));
+
+    const util = require('util');
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+
+    try {
+      // Test isLogoutPending
+      let pendingErr = null;
+      try {
+        await authStorage.isLogoutPending();
+      } catch (err) {
+        pendingErr = err;
+      }
+
+      assert.ok(pendingErr, 'isLogoutPending must reject when tombstone read throws');
+      assert.equal(pendingErr.code, 'TOMBSTONE_STORAGE_ERROR');
+      assert.equal(pendingErr.message, 'Secure storage failed while reading logout tombstone marker');
+      assert.equal(pendingErr.cause, undefined, 'Raw tombstone error must not be attached to err.cause');
+      assert.equal(pendingErr.message.includes(secretInTombstoneMsg), false);
+      assert.equal(String(pendingErr.stack).includes(secretInTombstoneStack), false);
+      assert.equal(util.inspect(pendingErr).includes(secretInTombstoneProp), false);
+
+      // Test getAuthTokens
+      let authErr = null;
+      try {
+        await authStorage.getAuthTokens();
+      } catch (err) {
+        authErr = err;
+      }
+
+      assert.ok(authErr, 'getAuthTokens must reject when tombstone read throws');
+      assert.equal(authErr.code, 'TOMBSTONE_STORAGE_ERROR');
+      assert.equal(authErr.message, 'Cannot determine logout state: secure storage failed while reading tombstone');
+      assert.equal(authErr.cause, undefined, 'Raw tombstone error must not be attached to err.cause');
+      assert.equal(authErr.message.includes(secretInTombstoneMsg), false);
+      assert.equal(String(authErr.stack).includes(secretInTombstoneStack), false);
+      assert.equal(util.inspect(authErr).includes(secretInTombstoneProp), false);
+
+      // Test zero console leakage
+      const allLogs = capturedLogs.join('\n');
+      assert.equal(allLogs.includes(secretInTombstoneMsg), false);
+      assert.equal(allLogs.includes(secretInTombstoneProp), false);
+      assert.equal(allLogs.includes(secretInTombstoneStack), false);
+    } finally {
+      console.warn = origWarn;
+      console.error = origError;
+      console.log = origLog;
+    }
+  });
+
+  await t.test('1.24. Successful save writes credentials, reads back matching credentials, and returns true', async () => {
     const { authStorage } = loadAuthStorageModule();
     const result = await authStorage.saveAuthTokens('valid-jwt-token-999', 'valid-refresh-token-888');
     assert.equal(result, true, 'saveAuthTokens must return true when write and read-back verification succeed');

@@ -47,26 +47,25 @@ test('PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite',
     throw new Error('[DB FATAL] DATABASE_URL is not configured. Real PostgreSQL integration tests are mandatory.');
   }
 
-  const isLocal = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
-  const pool = new Pool({
-    connectionString,
-    ssl: isLocal ? false : { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000,
-  });
-
   process.env.DATABASE_URL = connectionString;
+  if (!process.env.DB_POOL_MAX) {
+    process.env.DB_POOL_MAX = '5';
+  }
+  const dbPoolModule = require('../../lib/db/pool');
+  const pool = dbPoolModule.getPool();
+
   const posFinalizationEngine = require('../../lib/engines/pos-finalization');
   const billRepository = require('../../lib/db/repositories/billRepository');
   const workerEngine = require('../../lib/engines/worker');
   const workerRepository = require('../../lib/db/repositories/workerRepository');
   const bookingRepository = require('../../lib/db/repositories/bookingRepository');
 
-  let client;
   try {
-    client = await pool.connect();
+    const probe = await pool.connect();
+    probe.release();
     t.diagnostic('[DB CONNECTED] Real PostgreSQL connection established.');
   } catch (err) {
-    await pool.end();
+    await dbPoolModule.resetPool();
     if (isOptional) {
       t.diagnostic(`[DB OPTIONAL] Connection failed: ${err.message}. Skipping.`);
       return;
@@ -109,12 +108,7 @@ test('PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite',
     } catch (cleanErr) {
       console.warn('[CLEANUP WARNING]', cleanErr.message);
     } finally {
-      if (client) client.release();
-      await pool.end();
-      try {
-        const dbPoolModule = require('../../lib/db/pool');
-        await dbPoolModule.getPool().end();
-      } catch (_) {}
+      await dbPoolModule.resetPool();
     }
   });
 
