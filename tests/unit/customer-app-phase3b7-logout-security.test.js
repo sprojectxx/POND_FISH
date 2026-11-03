@@ -218,7 +218,7 @@ function createAppHarness(mockAuthStorage, mockApi) {
 
 /**
  * Loads and renders the actual production App.jsx component via Babel transformation.
- * Connects directly to production App state and handlers without duplicating component logic.
+ * Connects directly to production App state, hooks, and screen props without duplicating component logic.
  */
 function loadTransformedApp(mockDependencies = {}) {
   const babel = require('@babel/core');
@@ -231,10 +231,28 @@ function loadTransformedApp(mockDependencies = {}) {
     filename: 'App.jsx',
   }).code;
 
-  const React = require('react');
   let capturedUnauthorizedHandler = null;
   const renderedScreens = [];
   const capturedScreenProps = {};
+
+  const stateValues = [];
+  const stateSetters = [];
+  const refValues = [];
+  let isExecuting = false;
+
+  let stateCursor = 0;
+  let refCursor = 0;
+
+  let appInstance = null;
+
+  function runRender() {
+    stateCursor = 0;
+    refCursor = 0;
+    renderedScreens.length = 0;
+    if (appInstance) {
+      return appInstance();
+    }
+  }
 
   const customRequire = (id) => {
     if (id.startsWith('@babel/runtime')) {
@@ -242,36 +260,90 @@ function loadTransformedApp(mockDependencies = {}) {
     }
     if (id === 'react') {
       return {
-        ...React,
-        useEffect: (fn) => {
+        useState: (initial) => {
+          const idx = stateCursor++;
+          if (stateValues.length <= idx) {
+            stateValues[idx] = typeof initial === 'function' ? initial() : initial;
+            stateSetters[idx] = (updater) => {
+              const nextVal = typeof updater === 'function' ? updater(stateValues[idx]) : updater;
+              stateValues[idx] = nextVal;
+              if (!isExecuting) {
+                isExecuting = true;
+                try {
+                  runRender();
+                } finally {
+                  isExecuting = false;
+                }
+              }
+            };
+          }
+          return [stateValues[idx], stateSetters[idx]];
+        },
+        useRef: (initial) => {
+          const idx = refCursor++;
+          if (refValues.length <= idx) {
+            refValues[idx] = { current: initial };
+          }
+          return refValues[idx];
+        },
+        useCallback: (fn, _deps) => fn,
+        useMemo: (fn, _deps) => fn(),
+        useEffect: (fn, _deps) => {
           try {
             fn();
           } catch (_) {}
         },
+        createElement: (comp, props, ...children) => {
+          if (typeof comp === 'function') {
+            return comp(props);
+          }
+          return { type: comp, props, children };
+        },
       };
     }
-    if (id === 'react/jsx-runtime') return require('react/jsx-runtime');
+    if (id === 'react/jsx-runtime') {
+      return {
+        jsx: (comp, props) => {
+          if (typeof comp === 'function') {
+            return comp(props);
+          }
+          return { type: comp, props };
+        },
+        jsxs: (comp, props) => {
+          if (typeof comp === 'function') {
+            return comp(props);
+          }
+          return { type: comp, props };
+        },
+        Fragment: ({ children }) => children,
+      };
+    }
     if (id === 'react-native') {
       return {
         StyleSheet: { create: (obj) => obj },
-        BackHandler: { addEventListener: () => ({ remove: () => {} }) },
+        BackHandler: { addEventListener: () => ({ remove: () => {} }), exitApp: () => {} },
         StatusBar: () => null,
-        SafeAreaView: (props) => React.createElement('div', null, props.children),
-        View: (props) => React.createElement('div', null, props.children),
-        Text: (props) => React.createElement('span', null, props.children),
+        SafeAreaView: (props) => props?.children || null,
+        View: (props) => props?.children || null,
+        Text: (props) => props?.children || null,
         ActivityIndicator: () => null,
-        TouchableOpacity: (props) => React.createElement('button', { onClick: props.onPress }, props.children),
+        TouchableOpacity: (props) => {
+          if (props?.accessibilityLabel === 'Retry Secure Logout') {
+            capturedScreenProps['LOGOUT_FAILURE'] = { onRetry: props.onPress };
+          }
+          return props?.children || null;
+        },
       };
     }
     if (id === './src/utils/session-controller') return require(sessionControllerPath);
     if (id === './src/utils/navigation-guard') return require(navigationGuardPath);
     if (id === './src/theme/colors') return { colors: {} };
     if (id.startsWith('./src/screens/')) {
-      const screenName = path.basename(id);
+      const screenName = path.basename(id, path.extname(id));
       return function MockScreen(props) {
         renderedScreens.push(screenName);
         capturedScreenProps[screenName] = props;
-        return React.createElement('div', { 'data-screen': screenName });
+        return null;
       };
     }
     if (id === './src/services/api') {
@@ -306,13 +378,27 @@ function loadTransformedApp(mockDependencies = {}) {
   });
 
   vm.runInContext(transformed, context);
-  const App = moduleObj.exports.default;
+  appInstance = moduleObj.exports.default;
+
+  // Run initial render to mount App
+  isExecuting = true;
+  try {
+    runRender();
+  } finally {
+    isExecuting = false;
+  }
 
   return {
-    App,
-    getRenderedScreens: () => renderedScreens,
+    App: appInstance,
+    getRenderedScreens: () => [...renderedScreens],
     getCapturedScreenProps: () => capturedScreenProps,
+    getScreenProps: (name) => capturedScreenProps[name],
     getUnauthorizedHandler: () => capturedUnauthorizedHandler,
+    getCurrentScreen: () => stateValues[0],
+    getCartSummary: () => stateValues[5],
+    getLogoutError: () => stateValues[4],
+    getActiveSessionId: () => refValues[1]?.current,
+    render: runRender,
   };
 }
 
@@ -825,6 +911,108 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
     assert.equal(res, true, 'Primary logout must succeed even if device-token reset failed');
   });
 
+  await t.test('1.18. Save credentials fault injection: Write returns true but read-back returns wrong token throws error', async () => {
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      resetGenericPassword: async () => true,
+      getGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.logout_pending') {
+          return false; // No tombstone
+        }
+        if (opts.service === 'com.pondfish.customer.auth') {
+          // Fault injection: returns wrong token
+          return { username: 'authToken', password: JSON.stringify({ token: 'wrong-token-corrupted', refreshToken: '' }) };
+        }
+        return false;
+      },
+      setGenericPassword: async () => true, // write reports true
+    };
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+    await assert.rejects(
+      authStorage.saveAuthTokens('expected-token-123'),
+      (err) => {
+        assert.ok(err.message.includes('Verification failed: Saved token mismatch'), `Must throw token mismatch error, got: ${err.message}`);
+        return true;
+      }
+    );
+  });
+
+  await t.test('1.19. Save credentials fault injection: Write returns true but read-back returns no credentials throws error', async () => {
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      resetGenericPassword: async () => true,
+      getGenericPassword: async () => false, // returns nothing
+      setGenericPassword: async () => true, // write reports true
+    };
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+    await assert.rejects(
+      authStorage.saveAuthTokens('expected-token-123'),
+      (err) => {
+        assert.ok(err.message.includes('Verification failed: Credentials missing or empty after save'), `Must throw missing credentials error, got: ${err.message}`);
+        return true;
+      }
+    );
+  });
+
+  await t.test('1.20. Save credentials fault injection: Write returns true but read-back returns malformed credentials throws error', async () => {
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      resetGenericPassword: async () => true,
+      getGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.logout_pending') return false;
+        if (opts.service === 'com.pondfish.customer.auth') {
+          return { username: 'authToken', password: 'NOT_VALID_JSON{[' };
+        }
+        return false;
+      },
+      setGenericPassword: async () => true,
+    };
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+    await assert.rejects(
+      authStorage.saveAuthTokens('expected-token-123'),
+      (err) => {
+        assert.ok(err.message.includes('Verification failed: Saved credentials corrupted or unparseable'), `Must throw unparseable error, got: ${err.message}`);
+        return true;
+      }
+    );
+  });
+
+  await t.test('1.21. Save credentials fault injection: Write returns true but read-back returns mismatched refresh token throws error', async () => {
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      resetGenericPassword: async () => true,
+      getGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.logout_pending') return false;
+        if (opts.service === 'com.pondfish.customer.auth') {
+          return { username: 'authToken', password: JSON.stringify({ token: 'jwt-123', refreshToken: 'corrupted-refresh' }) };
+        }
+        return false;
+      },
+      setGenericPassword: async () => true,
+    };
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+    await assert.rejects(
+      authStorage.saveAuthTokens('jwt-123', 'expected-refresh-456'),
+      (err) => {
+        assert.ok(err.message.includes('Verification failed: Saved refreshToken mismatch'), `Must throw refresh token mismatch error, got: ${err.message}`);
+        return true;
+      }
+    );
+  });
+
+  await t.test('1.22. Successful save writes credentials, reads back matching credentials, and returns true', async () => {
+    const { authStorage } = loadAuthStorageModule();
+    const result = await authStorage.saveAuthTokens('valid-jwt-token-999', 'valid-refresh-token-888');
+    assert.equal(result, true, 'saveAuthTokens must return true when write and read-back verification succeed');
+    const readBack = await authStorage.getAuthTokens();
+    assert.equal(readBack.token, 'valid-jwt-token-999');
+    assert.equal(readBack.refreshToken, 'valid-refresh-token-888');
+  });
+
   // ----------------------------------------------------------------------------
   // SECTION 2: ASYNC AUTH LOOKUP RACE & HTTP-METHOD REGRESSION COVERAGE
   // ----------------------------------------------------------------------------
@@ -1210,8 +1398,8 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
     let requestsReset = false;
     let cacheCleared = false;
     const mockApi = {
-      resetSession: () => { requestsReset = true; },
-      clearInFlightRequests: () => { requestsReset = true; },
+      resetSession: () => { requestsReset = true; cacheCleared = true; },
+      clearInFlightRequests: () => { requestsReset = true; cacheCleared = true; },
       clearResponseCache: () => { cacheCleared = true; },
     };
 
@@ -1244,8 +1432,8 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
     let requestsReset = false;
     let cacheCleared = false;
     const mockApi = {
-      resetSession: () => { requestsReset = true; },
-      clearInFlightRequests: () => { requestsReset = true; },
+      resetSession: () => { requestsReset = true; cacheCleared = true; },
+      clearInFlightRequests: () => { requestsReset = true; cacheCleared = true; },
       clearResponseCache: () => { cacheCleared = true; },
     };
 
@@ -1406,15 +1594,54 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
     assert.equal(target, 'PHONE_AUTH');
   });
 
+  await t.test('3.10. Single owner cache invalidation: executeSessionLogout with production API clears response cache exactly once', async () => {
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'jwt' }) });
+
+    const initialStats = apiModule.api.getResponseCacheStats();
+
+    // 1. Success path invalidation
+    const res = await executeSessionLogout({
+      expectedToken: null,
+      authStorage: { clearAuthTokens: async () => true },
+      apiClient: apiModule.api,
+      setState: () => {},
+    });
+
+    assert.equal(res.status, LOGOUT_STATUS.SUCCESS);
+    const statsAfterSuccess = apiModule.api.getResponseCacheStats();
+    assert.equal(statsAfterSuccess.invalidations - initialStats.invalidations, 1, 'Production cache invalidations count must increment by exactly 1 during successful logout');
+    assert.equal(statsAfterSuccess.globalGeneration - initialStats.globalGeneration, 1, 'Global invalidation generation must increment by exactly 1');
+
+    // 2. Failure path invalidation (must also clear cache exactly once and cancel requests)
+    const failRes = await executeSessionLogout({
+      expectedToken: null,
+      authStorage: { clearAuthTokens: async () => { throw new Error('Hardware Android Keystore fatal error'); } },
+      apiClient: apiModule.api,
+      setState: () => {},
+    });
+
+    assert.equal(failRes.status, LOGOUT_STATUS.FAILURE);
+    const statsAfterFailure = apiModule.api.getResponseCacheStats();
+    assert.equal(statsAfterFailure.invalidations - initialStats.invalidations, 2, 'Cumulative invalidations must increment by exactly 2 (1 per invalidation)');
+    assert.equal(statsAfterFailure.globalGeneration - initialStats.globalGeneration, 2, 'Cumulative global generation must increment by exactly 2');
+  });
+
   // ----------------------------------------------------------------------------
   // SECTION 4: ACTUAL App.jsx PRODUCTION INTEGRATION COVERAGE
   // ----------------------------------------------------------------------------
 
-  await t.test('4.0. Environment Note: Headless Node.js integration verification of actual App.jsx', () => {
-    // Note: A full React Native native bridge (Android Activity / native UI tree) is not present
-    // in headless Node.js test runners. Integration testing is conducted against the actual
-    // Babel-transformed production App.jsx component, executing its actual state hooks,
-    // session controller delegation, and unauthorized handler listeners without duplication.
+  await t.test('4.0. Environment Boundary: Specification of UI integration test capabilities and constraints', () => {
+    // What IS tested:
+    // 1. Full execution of actual production App.jsx component via Babel transformation.
+    // 2. Component state transitions across SPLASH -> PROFILE -> LOGOUT_IN_PROGRESS -> PHONE_AUTH / LOGOUT_FAILURE.
+    // 3. Capture of actual ProfileScreen props (routeParams, onNavigate, onLogout) passed from App.jsx.
+    // 4. Invocation of actual onLogout prop, executing session-controller, clearAuthTokens, and resetSession.
+    // 5. Fail-closed locking in LOGOUT_FAILURE upon hardware Keystore failure and retry execution.
+    // 6. In-memory cart state reset and session isolation between sequential user accounts.
+    //
+    // What is NOT tested (due to React Native headless environment limitations):
+    // 1. Native Android Activity / JVM thread transitions and Choreographer vsync dropped frame counts.
+    // 2. Android hardware Keystore secure element cryptographic operations on a physical ARM processor.
     assert.ok(fs.existsSync(appSourcePath), 'App.jsx production source must exist');
   });
 
@@ -1440,20 +1667,31 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       api: mockApi,
     });
 
-    const ReactDOMServer = require('react-dom/server');
-    const React = require('react');
-    ReactDOMServer.renderToString(React.createElement(harness.App));
+    // 1. Initial screen is SPLASH
+    assert.equal(harness.getCurrentScreen(), 'SPLASH');
+    const splashProps = harness.getScreenProps('SplashScreen');
+    assert.equal(typeof splashProps?.onNavigate, 'function');
 
-    // Verify unauthorized handler was registered with api client
-    const unauthHandler = harness.getUnauthorizedHandler();
-    assert.equal(typeof unauthHandler, 'function', 'App.jsx must register unauthorized handler with API client');
+    // 2. Navigate to PROFILE with authenticated user payload
+    splashProps.onNavigate('PROFILE', {
+      token: 'prod-jwt-123',
+      customer: { id: 'cust_prod_1', isProfileComplete: true },
+    });
 
-    // Trigger manual logout via App.jsx's handleUnauthorized or Profile logout handler
-    unauthHandler('prod-jwt-123');
-    await new Promise((r) => setTimeout(r, 30));
+    // App has re-rendered to PROFILE
+    assert.equal(harness.getCurrentScreen(), 'PROFILE');
+    const profileProps = harness.getScreenProps('ProfileScreen');
+    assert.ok(profileProps, 'ProfileScreen must receive props from production App.jsx');
+    assert.equal(typeof profileProps.onLogout, 'function', 'ProfileScreen must receive onLogout from production App.jsx');
 
-    assert.equal(storageCleared, true, 'Actual App.jsx logout must clear secure storage');
-    assert.equal(apiResetCalled, true, 'Actual App.jsx logout must reset API session');
+    // 3. Invoke actual onLogout callback passed to ProfileScreen
+    await profileProps.onLogout();
+
+    // 4. Assert verification: session controller invoked, storage cleared, API reset, navigation to PHONE_AUTH
+    assert.equal(storageCleared, true, 'Actual App.jsx onLogout must clear secure storage');
+    assert.equal(apiResetCalled, true, 'Actual App.jsx onLogout must reset API session');
+    assert.equal(harness.getCurrentScreen(), 'PHONE_AUTH', 'App must transition to PHONE_AUTH upon successful logout');
+    assert.ok(harness.getScreenProps('PhoneAuthScreen'), 'PhoneAuthScreen must be rendered');
   });
 
   await t.test('4.2. Actual App.jsx: Logout triggered by genuine 401 response invokes session controller and clears session', async () => {
@@ -1478,19 +1716,23 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       api: mockApi,
     });
 
-    const ReactDOMServer = require('react-dom/server');
-    const React = require('react');
-    ReactDOMServer.renderToString(React.createElement(harness.App));
+    // Navigate to PROFILE so app is authenticated
+    harness.getScreenProps('SplashScreen').onNavigate('PROFILE', {
+      token: 'active-token-789',
+      customer: { id: 'cust_401', isProfileComplete: true },
+    });
+    assert.equal(harness.getCurrentScreen(), 'PROFILE');
 
     const unauthHandler = harness.getUnauthorizedHandler();
     assert.equal(typeof unauthHandler, 'function');
 
-    // Trigger 401 with matching token
+    // Trigger 401 with matching active token
     unauthHandler('active-token-789');
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 50));
 
     assert.equal(clearExpectedToken, 'active-token-789', 'Matching 401 must pass rejected token to clearAuthTokens');
     assert.equal(apiResetCalled, true, 'Session must be reset on genuine 401');
+    assert.equal(harness.getCurrentScreen(), 'PHONE_AUTH');
   });
 
   await t.test('4.3. Actual App.jsx: Obsolete 401 callback after new account logged in is ignored and active session preserved', async () => {
@@ -1515,21 +1757,23 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       api: mockApi,
     });
 
-    const ReactDOMServer = require('react-dom/server');
-    const React = require('react');
-    ReactDOMServer.renderToString(React.createElement(harness.App));
+    harness.getScreenProps('SplashScreen').onNavigate('PROFILE', {
+      token: 'new-account-token-999',
+      customer: { id: 'cust_new', isProfileComplete: true },
+    });
+    assert.equal(harness.getCurrentScreen(), 'PROFILE');
 
     const unauthHandler = harness.getUnauthorizedHandler();
 
     // Trigger obsolete 401 with superseded token
-    unauthHandler('superseded-old-token-000');
-    await new Promise((r) => setTimeout(r, 30));
+    await unauthHandler('superseded-old-token-000');
 
     assert.equal(clearAttempted, false, 'Obsolete 401 must NOT invoke clearAuthTokens');
     assert.equal(apiResetCalled, false, 'Obsolete 401 must NOT reset active API session');
+    assert.equal(harness.getCurrentScreen(), 'PROFILE', 'Active session screen must remain undisturbed');
   });
 
-  await t.test('4.4. Actual App.jsx: Secure-storage failure during logout transitions to locked LOGOUT_FAILURE', async () => {
+  await t.test('4.4. Actual App.jsx: Secure-storage failure during ProfileScreen logout transitions to locked LOGOUT_FAILURE', async () => {
     const mockAuthStorage = {
       getAuthTokens: async () => ({ token: 'failing-token' }),
       clearAuthTokens: async () => {
@@ -1549,18 +1793,26 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       api: mockApi,
     });
 
-    const ReactDOMServer = require('react-dom/server');
-    const React = require('react');
-    ReactDOMServer.renderToString(React.createElement(harness.App));
+    harness.getScreenProps('SplashScreen').onNavigate('PROFILE', {
+      token: 'failing-token',
+      customer: { id: 'cust_fail', isProfileComplete: true },
+    });
+    assert.equal(harness.getCurrentScreen(), 'PROFILE');
 
-    const unauthHandler = harness.getUnauthorizedHandler();
-    unauthHandler('failing-token');
-    await new Promise((r) => setTimeout(r, 30));
+    const profileProps = harness.getScreenProps('ProfileScreen');
+    await profileProps.onLogout();
 
-    assert.equal(apiResetCalled, true, 'Fail-closed: API session must be reset even when storage fails');
+    assert.equal(apiResetCalled, true, 'Fail-closed: API session reset must be executed even when storage fails');
+    assert.equal(harness.getCurrentScreen(), 'LOGOUT_FAILURE', 'App must transition to LOGOUT_FAILURE on secure-storage error');
+    assert.ok(harness.getLogoutError(), 'Logout error message must be set');
+    assert.ok(harness.getScreenProps('LOGOUT_FAILURE'), 'LOGOUT_FAILURE UI with retry button must be rendered');
+
+    // Verify navigation guard locks user: attempts to navigate to HOME are blocked
+    harness.getScreenProps('ProfileScreen')?.onNavigate?.('HOME');
+    assert.equal(harness.getCurrentScreen(), 'LOGOUT_FAILURE', 'Navigation attempts must be blocked while in LOGOUT_FAILURE');
   });
 
-  await t.test('4.5. Actual App.jsx: Successful retry after previous storage failure clears session', async () => {
+  await t.test('4.5. Actual App.jsx: Successful retry from LOGOUT_FAILURE transitions to PHONE_AUTH', async () => {
     let attempt = 0;
     const mockAuthStorage = {
       getAuthTokens: async () => ({ token: 'retry-token' }),
@@ -1585,26 +1837,28 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       api: mockApi,
     });
 
-    const ReactDOMServer = require('react-dom/server');
-    const React = require('react');
-    ReactDOMServer.renderToString(React.createElement(harness.App));
-
-    const unauthHandler = harness.getUnauthorizedHandler();
+    harness.getScreenProps('SplashScreen').onNavigate('PROFILE', {
+      token: 'retry-token',
+      customer: { id: 'cust_retry', isProfileComplete: true },
+    });
 
     // First attempt fails
-    unauthHandler('retry-token');
-    await new Promise((r) => setTimeout(r, 30));
+    await harness.getScreenProps('ProfileScreen').onLogout();
     assert.equal(attempt, 1);
+    assert.equal(harness.getCurrentScreen(), 'LOGOUT_FAILURE');
 
-    // Second attempt (retry) succeeds
-    unauthHandler('retry-token');
-    await new Promise((r) => setTimeout(r, 30));
+    // Second attempt (retry button on LOGOUT_FAILURE screen) succeeds
+    const failureProps = harness.getScreenProps('LOGOUT_FAILURE');
+    assert.equal(typeof failureProps?.onRetry, 'function', 'LOGOUT_FAILURE screen must have onRetry callback');
+    await failureProps.onRetry();
+
     assert.equal(attempt, 2);
+    assert.equal(harness.getCurrentScreen(), 'PHONE_AUTH', 'Successful retry must transition to PHONE_AUTH');
+    assert.equal(harness.getLogoutError(), null, 'Logout error must be cleared on success');
     assert.ok(apiResetCount >= 2, 'API session reset must be executed on each attempt');
   });
 
-  await t.test('4.6. Actual App.jsx: Account data isolation resets in-memory cart and prevents leakage', async () => {
-    let cartFetchCount = 0;
+  await t.test('4.6. Actual App.jsx: Account data isolation resets in-memory cart and prevents leakage between accounts', async () => {
     const mockAuthStorage = {
       getAuthTokens: async () => ({ token: 'user-a' }),
       clearAuthTokens: async () => true,
@@ -1613,10 +1867,7 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       clearInFlightRequests: () => {},
       clearResponseCache: () => {},
       resetSession: () => {},
-      getCart: async () => {
-        cartFetchCount++;
-        return { data: { summary: { totalItems: 5, totalQuantity: 5, totalAmount: 1200 } } };
-      },
+      getCart: async () => ({ data: { summary: { totalItems: 0 } } }),
     };
 
     const harness = loadTransformedApp({
@@ -1624,28 +1875,40 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       api: mockApi,
     });
 
-    const ReactDOMServer = require('react-dom/server');
-    const React = require('react');
-    ReactDOMServer.renderToString(React.createElement(harness.App));
+    // 1. User A logs in and navigates to HOME
+    harness.getScreenProps('SplashScreen').onNavigate('HOME', {
+      token: 'user-a',
+      customer: { id: 'user_a', name: 'Alice', isProfileComplete: true },
+    });
+    assert.equal(harness.getCurrentScreen(), 'HOME');
 
-    const unauthHandler = harness.getUnauthorizedHandler();
-    unauthHandler('user-a');
-    await new Promise((r) => setTimeout(r, 30));
-
-    // Verify session controller invalidates cart and state
-    const result = await executeSessionLogout({
-      expectedToken: null,
-      authStorage: mockAuthStorage,
-      apiClient: mockApi,
-      setState: (updates) => {
-        if ('cartSummary' in updates) {
-          assert.equal(updates.cartSummary.totalItems, 0, 'Cart items must be reset to 0');
-          assert.equal(updates.cartSummary.totalAmount, 0, 'Cart amount must be reset to 0');
-        }
+    // 2. User A updates cart
+    harness.getScreenProps('HomeScreen').onCartUpdated({
+      summary: {
+        totalItems: 4,
+        totalQuantity: 4,
+        totalAmount: 1600,
+        isAllBookable: true,
       },
     });
+    assert.equal(harness.getCartSummary().totalItems, 4);
 
-    assert.equal(result.status, LOGOUT_STATUS.SUCCESS);
+    // 3. User A navigates to PROFILE and invokes actual onLogout
+    harness.getScreenProps('HomeScreen').onNavigate('PROFILE');
+    assert.equal(harness.getCurrentScreen(), 'PROFILE');
+    await harness.getScreenProps('ProfileScreen').onLogout();
+
+    // Verify session terminated and cart reset in App state
+    assert.equal(harness.getCurrentScreen(), 'PHONE_AUTH');
+    assert.equal(harness.getCartSummary().totalItems, 0, 'Cart must be wiped on logout');
+
+    // 4. User B logs in
+    harness.getScreenProps('PhoneAuthScreen').onNavigate('HOME', {
+      token: 'user-b',
+      customer: { id: 'user_b', name: 'Bob', isProfileComplete: true },
+    });
+    assert.equal(harness.getCurrentScreen(), 'HOME');
+    assert.equal(harness.getCartSummary().totalItems, 0, 'User B must not see User A cart items');
   });
 
 });

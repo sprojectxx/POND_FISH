@@ -106,13 +106,14 @@ async function executeSessionLogout({
       if (typeof onSessionInvalidated === 'function') {
         onSessionInvalidated();
       }
-      // Single-owner session invalidation: controller coordinates resetSession and cache clearance.
+      // Single-owner session invalidation: resetSession() internally cancels in-flight
+      // requests and clears the response cache exactly once. If resetSession is unavailable,
+      // fallback to clearInFlightRequests or clearResponseCache.
       if (typeof apiClient?.resetSession === 'function') {
         apiClient.resetSession();
       } else if (typeof apiClient?.clearInFlightRequests === 'function') {
         apiClient.clearInFlightRequests({ resetSession: true });
-      }
-      if (typeof apiClient?.clearResponseCache === 'function') {
+      } else if (typeof apiClient?.clearResponseCache === 'function') {
         apiClient.clearResponseCache();
       }
 
@@ -133,13 +134,14 @@ async function executeSessionLogout({
       if (typeof onSessionInvalidated === 'function') {
         onSessionInvalidated();
       }
-      // Single-owner session invalidation: controller coordinates resetSession and cache clearance.
+      // Single-owner session invalidation: resetSession() internally cancels in-flight
+      // requests and clears the response cache exactly once. If resetSession is unavailable,
+      // fallback to clearInFlightRequests or clearResponseCache.
       if (typeof apiClient?.resetSession === 'function') {
         apiClient.resetSession();
       } else if (typeof apiClient?.clearInFlightRequests === 'function') {
         apiClient.clearInFlightRequests({ resetSession: true });
-      }
-      if (typeof apiClient?.clearResponseCache === 'function') {
+      } else if (typeof apiClient?.clearResponseCache === 'function') {
         apiClient.clearResponseCache();
       }
 

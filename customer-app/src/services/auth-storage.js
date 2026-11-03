@@ -81,6 +81,42 @@ export async function saveAuthTokens(token, refreshToken = '') {
     if (setRes === false) {
       throw new Error('Failed to persist authentication credentials to Keystore (returned false)');
     }
+
+    // Read-back verification of newly persisted credentials
+    let readBackCreds;
+    try {
+      readBackCreds = await Keychain.getGenericPassword({
+        service: AUTH_SERVICE_KEY,
+      });
+    } catch (readErr) {
+      throw new Error(`Verification failed: Error reading back credentials from Keystore: ${readErr.message}`);
+    }
+
+    if (!readBackCreds || readBackCreds === false || !readBackCreds.password) {
+      throw new Error('Verification failed: Credentials missing or empty after save');
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(readBackCreds.password);
+    } catch (parseErr) {
+      throw new Error(`Verification failed: Saved credentials corrupted or unparseable: ${parseErr.message}`);
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Verification failed: Saved credentials are not a valid object');
+    }
+
+    if (parsed.token !== token) {
+      throw new Error(`Verification failed: Saved token mismatch (expected '${token}', got '${parsed.token}')`);
+    }
+
+    const expectedRefresh = refreshToken || '';
+    const actualRefresh = parsed.refreshToken || '';
+    if (actualRefresh !== expectedRefresh) {
+      throw new Error(`Verification failed: Saved refreshToken mismatch (expected '${expectedRefresh}', got '${actualRefresh}')`);
+    }
+
     return true;
   });
 }
