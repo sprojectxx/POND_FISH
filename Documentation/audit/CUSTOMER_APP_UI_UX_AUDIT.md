@@ -1,37 +1,36 @@
-# PONDFISH Customer Mobile App — UI/UX Engineering Audit & Design System Specification
+# PONDFISH Customer Mobile App — UI/UX Engineering Audit & Design Specification Validation
 
 **Target Application:** `customer-app/`  
 **Repository:** `https://github.com/sprojectxx/POND_FISH`  
-**Approved Baseline / Current HEAD:** `58f274fd7af9e1b472fc3964ef40ebb8b7810cf8`  
-**Audit Date:** November 3, 2026  
+**Approved Baseline / HEAD:** `a972a7626e386bc2450cfc28b1e22707b08c445b`  
+**Audit Validation Date:** November 3, 2026  
 **Auditor:** Antigravity Mobile UI/UX & Systems Architecture Engineering  
 
 ---
 
-## 1. Executive Summary & Blinkit-Grade Benchmarking
+## 1. Executive Summary & Usability Benchmarking
 
 ### 1.1 Executive Summary
-The PondFish customer mobile application is a React Native Android application (React 18.3.1, React Native 0.75.4) built to serve retail fresh-fish commerce, customer subscriptions, counter bill scanning, and order reservations. While the application possesses solid low-level security foundations (including strict token-tombstone handling, credential sanitization, and bounded connection pooling), its user interface and interaction architecture fall significantly short of modern consumer commerce standards.
+The PondFish customer mobile application is a React Native Android application (React 18.3.1, React Native 0.75.4) built for retail fresh-fish commerce, customer subscriptions, counter bill scanning, and scheduled order reservations. While the application features robust low-level authentication security (such as fail-closed Keychain tombstone management, sanitized credential error cause chains, and bounded connection pooling), its user experience and presentation layers contain several friction points and misleading patterns that require systematic engineering correction before any visual redesign.
 
-The current user experience suffers from five fundamental structural defects:
-1. **Severe Visual Clutter & Misplaced Priorities**: The primary discovery surface (`HomeScreen.jsx`, 2,315 lines) forces users through a gauntlet of five unvirtualized promotional banners, subscription quota summaries, and harbor truck animations before revealing a single product.
-2. **Fabricated Commerce Tropes (Dark Patterns)**: Hardcoded `★ 4.8` ratings, fake `(1,420)` review counts, artificial `⚡ 8 mins` delivery promises, fake urgency countdowns (`⏱ Ends in 03h:24m`), and deceptive `Continuous 0-4°C Cold Chain` banners undermine brand integrity and contradict PondFish’s genuine identity as a live-tank, fresh-cut retail business.
-3. **Monolithic Custom Navigation State Machine**: Instead of using an industry-standard navigation stack (such as React Navigation), `App.jsx` orchestrates screens via a 723-line monolithic state machine (`currentScreen` string state). This produces fragile back-handler interception, prevents deep-linking, breaks nested stack transitions, and limits bottom navigation to a rigid, emoji-based 5-item bar.
-4. **Missing Commerce Primitives**: The app lacks a sticky cart summary bar, has no interactive cut/cleaning yield visualizer, lacks address management (using hardcoded strings like "Flat 302, Madhapur, Hyd"), and provides no GPS or reverse-geocoded location onboarding.
-5. **Performance & Viewport Inefficiencies**: Critical list components use flex-wrap percentage widths (`width: '48%'`) instead of virtualized `FlatList` column grids with `getItemLayout`, causing layout recalculations and unbounded memory consumption.
+This validation audit establishes the foundational design system and operational parameters by addressing five core areas:
+1. **Preserving the Agreed Navigation Model**: Validating and standardizing the existing 5-action bottom navigation (`Home`, `Track`, `Scan Bill` [Center Elevated], `Bookings`, `Profile`) rather than imposing an unapproved generic e-commerce tab structure.
+2. **Purging Deceptive Marketing & Dark Patterns**: Removing hardcoded ratings (`★ 4.8`), fake review counts (`(1,420)`), unachievable `⚡ 8 mins` delivery promises, fake urgency countdowns (`⏱ Ends in 03h:24m`), and deceptive `Continuous 0-4°C Cold Chain` banners.
+3. **Eliminating Unsupported Business Assumptions**: Removing rigid, unverified assumptions regarding fish dressing yields (e.g. 720g/750g), cutting turnaround times (20m), delivery windows (45–60m), bio-insulated packaging, and arbitrary fee structures. All operational figures must be configuration-driven and backed by backend data.
+4. **Pragmatic Navigation Architecture**: Recommending that the current hardened state machine in `App.jsx` be preserved and visually upgraded rather than risking an expensive, high-risk migration to React Navigation solely for UI polish.
+5. **Rigorous Root Test Failure Investigation**: Thoroughly investigating and documenting the pre-existing database connection timeouts responsible for root `npm test` exiting with code 1.
 
-### 1.2 Blinkit-Grade Benchmarking
-To bring PondFish up to the benchmark established by tier-1 quick-commerce applications (such as Blinkit, Zepto, and Instamart) while remaining strictly tailored to the live-fish retail trade, the following delta must be addressed:
+### 1.2 Usability Benchmarking: Current State vs Target Standard
 
-| Benchmark Dimension | Modern Quick Commerce (Blinkit Standard) | Current PondFish Customer App (`customer-app`) | Target PondFish Standard |
+| Dimension | Modern Commerce Standard | Current PondFish Customer App (`customer-app`) | Target PondFish Standard |
 | :--- | :--- | :--- | :--- |
-| **Initial Viewport** | 4–6 products visible immediately on launch; compact 2-column grid. | 0 products visible. 100% of the initial 800dp viewport is consumed by banners, quotas, and truck cards. | 4 products immediately visible below a compact location/search header. |
-| **Product Discovery** | Direct, high-contrast imagery, clear price per kg, instant `ADD` or `− 1 +` stepper. | Generic fish card with fake `★ 4.8`, fake `8 mins`, non-stepper `+ ADD` button, no weight/yield notes. | 2-column compact grid, live tank status badge, price per kg, gross vs net yield note, inline stepper. |
-| **Customization** | Instant bottom sheet for weight/cut selection without leaving browsing context. | Redirects to a heavy 1,124-line details screen; cut choices do not update live net weight or price. | Lightweight bottom sheet showing cuts (Curry Cut, Bengali, Steaks, Fillet) and dynamic yield calculator. |
-| **Cart Interaction** | Persistent floating sticky cart bar at viewport bottom (`3 items • ₹640 [View Cart]`). | No floating cart bar. Cart count is hidden in a small top header icon (`CartBadgeButton`) on 2 screens only. | Global sticky cart bar sliding up smoothly when `items.length > 0`, anchored above bottom navigation. |
-| **Navigation Architecture** | Native stack navigation (`@react-navigation/native`), hardware transitions, deep linking. | String-state conditional rendering in `App.jsx`, manually wired back button handler. | Standard React Navigation stack with bottom tab navigator and shared element transitions. |
-| **Operational Honesty** | Accurate delivery windows based on real courier routing and warehouse packing times. | Claims "⚡ 8 mins" and "Continuous 0-4°C Cold Chain" despite being a counter-cut store business. | Honest preparation windows ("Ready for pickup in 25 mins" / "Local delivery in 45–60 mins"). |
-| **Location & Address** | Instant GPS auto-detect, reverse-geocoded street address, saved address switcher. | None. Single freeform `area` string in profile. Address in checkout is hardcoded dummy text. | GPS permission, reverse geocoding proxy, structured address cards (`House`, `Street`, `Landmark`). |
+| **Initial Viewport** | Products immediately visible near the top; clean visual hierarchy. | 0 products visible. 100% of the initial 800dp viewport is consumed by banners, quotas, and truck cards. | Immediate product visibility near top; promotional banners demoted or compacted. |
+| **Product Discovery** | High-contrast photography, price per unit/kg, instant `ADD` or `− 1 +` stepper. | Generic card with fake `★ 4.8`, fake `8 mins`, non-stepper `+ ADD` button, no yield notes. | Responsive 2-column grid, verified availability status, price/kg, config-backed yield note, inline stepper. |
+| **Customization** | Lightweight modal/sheet for cut selection without leaving browsing context. | Redirects to a heavy 1,124-line screen; cut choices do not update live net weight or price. | Lightweight bottom sheet showing verified cuts and dynamic configuration-backed yield calculator. |
+| **Cart Interaction** | Persistent floating sticky cart bar at viewport bottom (`3 items • ₹640 [View Basket]`). | No floating cart bar. Cart count is hidden in a small top header icon (`CartBadgeButton`) on 2 screens only. | Global sticky cart bar sliding up smoothly when `items.length > 0`, anchored above bottom navigation. |
+| **Navigation Model** | Clear icons, clean labels, $\ge 48\text{dp}$ touch targets, safe-area compliance. | Unicode emojis (`🏪`, `🧭`, `▣`, `📅`, `👤`), small tap targets on narrow screens. | Preserved 5-action navigation with consistent SVG icon family, elevated center Scan Bill, safe-area insets. |
+| **Operational Honesty**| Realistic delivery/pickup windows based on actual store prep capacity. | Claims "⚡ 8 mins" and "Continuous 0-4°C Cold Chain" despite being a counter-cut store business. | Operational data-driven preparation windows; honest counter-cut retail presentation. |
+| **Location & Address**| Instant GPS detection, reverse-geocoded street address, saved address switcher. | None. Single freeform `area` string in profile. Address in checkout is hardcoded dummy text. | GPS permission, reverse geocoding proxy, structured address cards (`House`, `Street`, `Landmark`). |
 
 ---
 
@@ -43,7 +42,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **SP**: Spacing & 4px Grid Alignment
 - **CS**: Design Token Consistency
 - **NV**: Navigation & Screen Transitions
-- **AX**: Accessibility & Touch Target Health ($\ge 44 \times 44\text{ dp}$)
+- **AX**: Accessibility & Touch Target Health ($\ge 44 \times 44\text{ dp}$, $\ge 48 \times 48\text{ dp}$ for nav)
 - **IQ**: Interaction Quality & State Feedback
 - **PR**: Performance & Virtualization Readiness
 - **OVR**: Overall Screen Score (Weighted Average)
@@ -52,27 +51,27 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 
 ### 2.1 `App.jsx` (Application Orchestrator & Navigation Shell)
 - **File**: `customer-app/App.jsx` (723 lines)
-- **Purpose**: Authenticated application root, navigation state machine, Android hardware back-button interceptor, global auth guard, and 5-tab bottom navigation bar.
+- **Purpose**: Authenticated application root, navigation state machine, Android hardware back-button interceptor, global auth guard, and 5-action bottom navigation bar.
 - **Visual Hierarchy Assessment**:
-  The bottom navigation bar occupies 56dp at the bottom. However, navigation items use raw Unicode emoji glyphs (`🏪`, `🧭`, `▣`, `📅`, `👤`), which render inconsistently across Android OEM skins (Samsung OneUI vs Stock Android vs Xiaomi MIUI). The elevated center `Scan Bill` button (`▣`) dominates the visual hierarchy, prioritizing physical counter receipt scanning over primary fish browsing.
+  The bottom navigation bar occupies 56dp at the bottom. However, navigation items use raw Unicode emoji glyphs (`🏪`, `🧭`, `▣`, `📅`, `👤`), which render inconsistently across Android OEM skins (Samsung OneUI vs Stock Android vs Xiaomi MIUI). The elevated center `Scan Bill` button (`▣`) provides direct counter bill scanning access, but requires vector icon refinement and dynamic safe-area insets.
 - **Typography & Spacing Assessment**:
   Font sizes are hardcoded (`fontSize: 10` for labels, `fontSize: 16` for icons). Active state labels turn `#16A34A` (green), while inactive labels remain `#64748B` (slate).
 - **Interaction & State Handling Assessment**:
-  Uses manual conditional rendering (`{currentScreen === 'HOME' && <HomeScreen ... />}`). Screen transitions are instantaneous without native transition animations. If a user presses back, a sprawling 50-line `BackHandler` switch statement decides whether to exit or redirect.
+  Uses manual conditional rendering (`{currentScreen === 'HOME' && <HomeScreen ... />}`). Screen transitions are instantaneous. The custom `BackHandler` explicitly handles back-press transitions for security boundaries (preventing unauthorized back navigation, routing checkout back to cart, double-back to exit), which is thoroughly tested and reliable.
 - **Accessibility & Touch Target Compliance**:
   Navigation items measure ~40dp width on narrow viewports, violating the 48dp minimum navigation tap target. Lacks `accessibilityRole="tab"` and `accessibilityState={{ selected: currentScreen === tab }}`.
 - **Performance & Health**:
-  Unmounted screens lose their internal state completely when switched, causing fresh API re-fetches upon return unless cached in API service.
+  Unmounted screens lose ephemeral state (scroll position) when switched, but critical state (auth tokens, cart, user profile) is safely centralized in `api.js` cache or `App.jsx` state.
 - **Concrete Defects**:
   - `App.jsx:465-520`: Emojis (`🏪`, `🧭`, `▣`, `📅`, `👤`) used as navigation icons instead of vector icons or SVG glyphs.
-  - `App.jsx:472-484`: "Track" is given top-level bottom tab space, despite being useful only when an order is in transit.
-  - `App.jsx:83`: `CART_AWARE_SCREENS` only includes `['HOME', 'FISH_DETAILS']`, leaving `Categories`, `LiveTracking`, and `Profile` completely unaware of active cart contents.
+  - `App.jsx:83`: `CART_AWARE_SCREENS` only includes `['HOME', 'FISH_DETAILS']`, leaving other screens unaware of active cart contents.
 - **Actionable Redesign Recommendations**:
-  1. Migrate to `@react-navigation/bottom-tabs` and `@react-navigation/native-stack`.
-  2. Reorder bottom tabs to standard commerce flow: `Store`, `Categories/Search`, `Orders`, `Subscription`, `Profile`.
-  3. Replace raw emojis with crisp SVG icons.
+  1. Preserve the agreed 5-action bottom navigation: `Home`, `Track`, `Scan Bill` (Center Elevated), `Bookings`, `Profile`.
+  2. Replace raw emojis with a consistent vector/SVG icon family.
+  3. Ensure all 5 items provide at least 48x48dp touch targets and apply dynamic `paddingBottom: insets.bottom`.
+  4. Implement persistent sticky cart bar floating above the bottom navigation bar.
 - **Scores**:
-  - VH: 4/10 | TY: 5/10 | SP: 6/10 | CS: 5/10 | NV: 4/10 | AX: 4/10 | IQ: 4/10 | PR: 6/10 | **OVR: 4.8/10**
+  - VH: 5/10 | TY: 5/10 | SP: 6/10 | CS: 5/10 | NV: 6/10 | AX: 5/10 | IQ: 5/10 | PR: 7/10 | **OVR: 5.5/10**
 
 ---
 
@@ -80,15 +79,15 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/HomeScreen.jsx` (2,315 lines)
 - **Purpose**: Main storefront for fish discovery, search, category filtering, quota tracking, and daily catch discovery.
 - **Visual Hierarchy Assessment**:
-  Catastrophically overloaded. The screen header includes: (1) location header, (2) notification icon, (3) search bar, (4) subscription quota banner, (5) live catch truck card, (6) scan bill banner, (7) flash sale countdown banner, (8) previously bought carousel, (9) category pills. Only after scrolling past ~1,400 pixels does the user reach the product grid.
+  Overloaded header area. The screen header includes: (1) location header, (2) notification icon, (3) search bar, (4) subscription quota banner, (5) live catch truck card, (6) scan bill banner, (7) flash sale countdown banner, (8) previously bought carousel, (9) category pills.
 - **Typography & Spacing Assessment**:
-  Multiple competing colors and weights. Deep blues, amber banners, bright green pills, and harsh borders fight for visual attention. Padding fluctuates between 8, 10, 14, and 16dp arbitrarily.
+  Multiple competing colors and weights. Padding fluctuates between 8, 10, 14, and 16dp arbitrarily.
 - **Interaction & State Handling Assessment**:
   Search input triggers local client-side filtering via `filterFishCatalogue`. Pull-to-refresh resets state cleanly, but the orchestrator triggers 4 concurrent network requests simultaneously.
 - **Accessibility & Touch Target Compliance**:
-  Many micro-buttons (e.g. `Recharge` button, `Track Live ✈` link, `Clear Search` cross) have hit areas under 32x32dp.
+  Several micro-buttons (e.g. `Recharge` button, `Track Live ✈` link, `Clear Search` cross) have hit areas under 32x32dp.
 - **Performance & List Rendering Health**:
-  While the main list uses `FlatList`, its `ListHeaderComponent` contains multiple nested unvirtualized sub-lists and carousels, resulting in high memory usage and dropped frames on mid-range Android devices.
+  Main list uses `FlatList`, but its `ListHeaderComponent` contains multiple nested unvirtualized sub-lists and carousels, resulting in high memory usage.
 - **Concrete Defects**:
   - `HomeScreen.jsx:639`: Renders fake subscription data (`Gold Plan: 0.6 kg remaining for today`) if `subData` is null.
   - `HomeScreen.jsx:706`: Renders fake live truck tracking (`Fresh Catch Truck #OD-04 Published Live, ETA 18 mins, Destination: Madhapur Cold Hub`) when no delivery is active.
@@ -97,8 +96,8 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
   - `HomeScreen.jsx:873`: Hardcoded fake stock scarcity `🔥 Only 3 left`.
 - **Actionable Redesign Recommendations**:
   1. Strip out fake countdowns, fake stock scarcity, and fake truck fallbacks.
-  2. Demote secondary banners (Scan Bill, Quotas) to compact dismissible cards or dedicated tabs.
-  3. Elevate the 2-column product grid to the immediate viewport below search.
+  2. Demote secondary banners (Scan Bill, Quotas) to compact dismissible cards.
+  3. Elevate the product catalogue to ensure immediate product visibility near the top of the viewport.
 - **Scores**:
   - VH: 3/10 | TY: 4/10 | SP: 4/10 | CS: 4/10 | NV: 5/10 | AX: 4/10 | IQ: 4/10 | PR: 4/10 | **OVR: 4.0/10**
 
@@ -108,11 +107,11 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/components/FishCard.jsx` (306 lines)
 - **Purpose**: Core product card rendered within catalogue lists and discovery grids.
 - **Visual Hierarchy Assessment**:
-  Clean card foundation, but visual focus is diluted by secondary elements. The fish image is bounded, but the card contains a clutter of badges: discount tag, rating star, delivery time, stock label, and category link.
+  Visual focus is diluted by secondary elements. The card contains a clutter of badges: discount tag, rating star, delivery time, stock label, and category link.
 - **Typography & Spacing Assessment**:
   Card uses `width: '48%'` inside a flex-wrap container. Pricing typography is readable (`₹{effectivePrice}` bold), but weight units are missing (does ₹380 mean per fish, per 500g, or per kg?).
 - **Interaction & State Handling Assessment**:
-  Tapping `+ ADD` immediately triggers `api.addToCart` without allowing the user to select their desired cut (Whole, Curry Cut, Steaks, Fillet) or gross weight. Lacks an inline `− 1 +` stepper when item is already in cart.
+  Tapping `+ ADD` immediately triggers `api.addToCart` without allowing the user to select their desired cut or gross weight. Lacks an inline `− 1 +` stepper when item is already in cart.
 - **Accessibility & Touch Target Compliance**:
   The `+ ADD` button is compact (30dp height), making it difficult to tap accurately on smaller screens.
 - **Performance & Health**:
@@ -124,9 +123,9 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
   - `FishCard.jsx:106`: Single `+ ADD` button without quantity stepper or cut selector.
 - **Actionable Redesign Recommendations**:
   1. Remove hardcoded 4.8 star rating and 8-min delivery text.
-  2. Add net yield note (e.g., `Gross 1kg → ~750g Cleaned`).
+  2. Implement responsive card layout within 2-column `FlatList`.
   3. Implement inline stepper `[ − 1 + ]` when item is in basket.
-  4. Expand touch target to 44x44dp.
+  4. Expand touch target to $\ge 44\text{dp}$.
 - **Scores**:
   - VH: 5/10 | TY: 5/10 | SP: 6/10 | CS: 5/10 | NV: 6/10 | AX: 5/10 | IQ: 5/10 | PR: 5/10 | **OVR: 5.2/10**
 
@@ -136,11 +135,11 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/FishDetailsScreen.jsx` (1,124 lines)
 - **Purpose**: Full-screen view for species information, nutritional profile, cut selection, and cart addition.
 - **Visual Hierarchy Assessment**:
-  Large hero image at top with floating back, share, and heart buttons. However, the image is cluttered with floating pills (`⚡ 8 MINS`, `✓ 100% CHEMICAL-FREE`). Below the image, the screen transitions into tabs (Overview, Cuts, Nutrition, Recipes).
+  Large hero image at top with floating back, share, and heart buttons. Image is cluttered with floating pills (`⚡ 8 MINS`, `✓ 100% CHEMICAL-FREE`). Below the image, screen transitions into tabs (Overview, Cuts, Nutrition, Recipes).
 - **Typography & Spacing Assessment**:
   Typography hierarchy is generally well structured, but sections feel disconnected. Tab headers lack clear indicator animations.
 - **Interaction & State Handling Assessment**:
-  Contains cut selection radio options (Curry Cut, Bengali Cut, Steaks, Fillet, Whole Cleaned). However, selecting a cut does not adjust the estimated net yield weight or update the subtotal in the sticky bottom bar.
+  Contains cut selection radio options (Curry Cut, Bengali Cut, Steaks, Fillet, Whole Cleaned).
 - **Accessibility & Touch Target Compliance**:
   Tab buttons and floating heart icon meet 44dp hit areas. Cut radio selection cards have large touch targets.
 - **Performance & Health**:
@@ -148,11 +147,11 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - `FishDetailsScreen.jsx:226`: Floating badge `⚡ 8 MINS`.
   - `FishDetailsScreen.jsx:280-281`: Hardcoded `★ 4.8` and `(1,323)` reviews.
-  - Lacks dynamic net yield calculation tied to cut choice.
+  - `FishDetailsScreen.jsx:248`: Unverified badge `✓ 100% CHEMICAL-FREE`.
 - **Actionable Redesign Recommendations**:
   1. Eliminate fake 8-minute badge and fake ratings.
-  2. Add dynamic yield visualizer: show gross weight vs expected net pan-ready weight based on selected cut.
-  3. Sticky bottom bar must show clear breakdown: base price + cut customization fee = total.
+  2. Connect cut selection to backend species configuration; calculate yields only when yield ratios are configured.
+  3. Omit unverified chemical-free claims pending documented laboratory protocols.
 - **Scores**:
   - VH: 6/10 | TY: 6/10 | SP: 6/10 | CS: 6/10 | NV: 6/10 | AX: 6/10 | IQ: 6/10 | PR: 6/10 | **OVR: 6.0/10**
 
@@ -162,7 +161,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/CartScreen.jsx` (759 lines)
 - **Purpose**: View basket items, adjust quantities, verify subscription coverage, and review weight totals.
 - **Visual Hierarchy Assessment**:
-  Standard vertical item list followed by summary card and checkout button. The hierarchy is functional, but lacks visual separation between store-pickup items and delivery items.
+  Standard vertical item list followed by summary card and checkout button. Functional, but lacks visual separation between store-pickup items and delivery items.
 - **Typography & Spacing Assessment**:
   Clean typography scale using `colors.textPrimary` (`#0D203B`). Spacing between items is comfortable (12dp margin).
 - **Interaction & State Handling Assessment**:
@@ -170,12 +169,12 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Accessibility & Touch Target Compliance**:
   Stepper buttons measure 36x36dp (slightly below 44dp target). Steppers should include `hitSlop`.
 - **Performance & Health**:
-  Renders items using `ScrollView` with `.map()` instead of `FlatList`. While typical carts contain <10 items, large orders could cause unnecessary re-renders.
+  Renders items using `ScrollView` with `.map()`.
 - **Concrete Defects**:
-  - `CartScreen.jsx:331`: Displays line item `Cold-Chain Packaging: Free` (misleading representation of counter bio-packaging).
-  - Lacks ability to modify cut selection from within the cart (user must delete and re-add).
+  - `CartScreen.jsx:331`: Displays line item `Cold-Chain Packaging: Free` (unverified claim).
+  - Lacks ability to modify cut selection from within the cart.
 - **Actionable Redesign Recommendations**:
-  1. Replace "Cold-Chain Packaging" with "Bio-Insulated Fresh Packaging".
+  1. Replace "Cold-Chain Packaging" with verified packaging line items from backend configuration.
   2. Allow editing cut selection directly via a bottom-sheet trigger on the cart row.
   3. Add address preview card directly above the checkout CTA.
 - **Scores**:
@@ -226,7 +225,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - `PhoneAuthScreen.jsx:189`: Footer tagline claims `Direct farm-gate harvests • Continuous cold chain • Bengaluru counter`.
 - **Actionable Redesign Recommendations**:
-  1. Update footer tagline to reflect live-tank freshness: `Live tank harvests • Custom cut at counter • Zero preservatives`.
+  1. Update footer tagline to reflect live/fresh fish retail: `Fresh catches • Prepared to order at retail counter • Quality assured`.
 - **Scores**:
   - VH: 8/10 | TY: 8/10 | SP: 8/10 | CS: 7/10 | NV: 7/10 | AX: 8/10 | IQ: 8/10 | PR: 9/10 | **OVR: 7.9/10**
 
@@ -246,7 +245,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Performance & Health**:
   Robust security handling; prevents double submission with internal refs.
 - **Concrete Defects**:
-  - Minor: If Firebase SMS fails, fallback messaging can be slightly cryptic.
+  - None critical.
 - **Actionable Redesign Recommendations**:
   1. Add automatic SMS retrieval hint for Android (using SMS Retriever API).
 - **Scores**:
@@ -258,7 +257,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/ProfileCompletionScreen.jsx` (360 lines)
 - **Purpose**: Mandatory onboarding gate collecting Customer Name, Age, and Area.
 - **Visual Hierarchy Assessment**:
-  Simple 3-field form. The hierarchy is clean, but visually utilitarian. It looks like an administrative form rather than a welcoming consumer onboarding experience.
+  Simple 3-field form. Clean, but utilitarian.
 - **Typography & Spacing Assessment**:
   Standard input fields with floating or static labels. Consistent 16dp vertical spacing.
 - **Interaction & State Handling Assessment**:
@@ -270,7 +269,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - Collects only a freeform `area` string (e.g. "Madhapur") without house number, street, landmark, or GPS coordinates.
 - **Actionable Redesign Recommendations**:
-  1. Transform this screen into a modern Location & Profile Onboarding flow with GPS auto-detection and map pin confirmation.
+  1. Transition into a structured Location & Profile Onboarding flow with GPS auto-detection and address fields.
 - **Scores**:
   - VH: 6/10 | TY: 6/10 | SP: 7/10 | CS: 6/10 | NV: 7/10 | AX: 7/10 | IQ: 6/10 | PR: 8/10 | **OVR: 6.6/10**
 
@@ -280,7 +279,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/ProfileScreen.jsx` (1,392 lines)
 - **Purpose**: Manage user details, view active club pass, access past orders, manage addresses, and execute secure logout.
 - **Visual Hierarchy Assessment**:
-  User profile card at top, followed by subscription card, delivery preferences, settings menu list, and logout button. Visual flow is logical, but the menu list is cluttered with non-functional or misleading items.
+  User profile card at top, followed by subscription card, delivery preferences, settings menu list, and logout button. Visual flow is logical, but menu list contains dead alerts.
 - **Typography & Spacing Assessment**:
   Menu items use small icons with dual-line title and subtitle text. Spacing is consistent.
 - **Interaction & State Handling Assessment**:
@@ -321,7 +320,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - Store directions button triggers generic map intent with static coordinates.
 - **Actionable Redesign Recommendations**:
-  1. Add live counter preparation status: `Order Received → Cleaning in Progress → Packed & Ready in Tank`.
+  1. Add counter preparation status: `Order Received → Cleaning in Progress → Packed & Ready in Tank`.
 - **Scores**:
   - VH: 8/10 | TY: 8/10 | SP: 8/10 | CS: 8/10 | NV: 8/10 | AX: 7/10 | IQ: 8/10 | PR: 9/10 | **OVR: 8.0/10**
 
@@ -353,7 +352,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/SubscriptionScreen.jsx` (1,851 lines)
 - **Purpose**: Educate customers on weekly fish quotas, display active plan usage, and purchase subscription tiers.
 - **Visual Hierarchy Assessment**:
-  Heavily stylized tier comparison cards (Silver, Gold, Platinum). High visual weight, with gold gradients and badge ribbons. Visually impressive but overly complex.
+  Heavily stylized tier comparison cards (Silver, Gold, Platinum). Visually rich, but complex.
 - **Typography & Spacing Assessment**:
   Price figures are prominent (`₹1,999 / mo`). Benefits checklists are clearly laid out.
 - **Interaction & State Handling Assessment**:
@@ -367,7 +366,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
   - `SubscriptionScreen.jsx:648`: Feature item claims `Free 8-min Express`.
   - `SubscriptionScreen.jsx:823`: Subtext claims `8-min delivery or instant scan at retail`.
 - **Actionable Redesign Recommendations**:
-  1. Replace "Free 8-min Express" with "Priority Counter Cutting & Free Local Delivery".
+  1. Replace "Free 8-min Express" with verified subscription benefits (e.g. "Priority Counter Preparation & Free Delivery over threshold").
   2. Modularize tier cards into separate subcomponents.
 - **Scores**:
   - VH: 6/10 | TY: 6/10 | SP: 6/10 | CS: 6/10 | NV: 6/10 | AX: 6/10 | IQ: 6/10 | PR: 5/10 | **OVR: 5.9/10**
@@ -378,7 +377,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/LiveTrackingScreen.jsx` (848 lines)
 - **Purpose**: Track live replenishment vans bringing fresh morning catch from coastal landing harbors to the retail store counter.
 - **Visual Hierarchy Assessment**:
-  Custom canvas or simulated map view showing truck position between harbor origin and destination hub. Prominent ETA pill and driver contact information.
+  Simulated map view showing truck position between harbor origin and destination store counter. Prominent ETA pill and driver contact information.
 - **Typography & Spacing Assessment**:
   Well-balanced metadata cards. Clear status badges (`EN ROUTE`, `TRUCK ARRIVED`).
 - **Interaction & State Handling Assessment**:
@@ -390,7 +389,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - `LiveTrackingScreen.jsx:284-286`: Empty state copy mentions "dedicated GPS-tracked refrigerated truck delivers fresh catch directly from local fishing harbors".
 - **Actionable Redesign Recommendations**:
-  1. Clearly contextualize this as *Store Replenishment Tracking* (showing when tomorrow's/today's fresh catch arrives at the live tanks), rather than customer home courier dispatch.
+  1. Contextualize this cleanly as *Store Replenishment Tracking* (showing when the morning's fresh catch arrives at the live tanks), rather than customer home courier dispatch.
 - **Scores**:
   - VH: 7/10 | TY: 7/10 | SP: 7/10 | CS: 7/10 | NV: 7/10 | AX: 7/10 | IQ: 7/10 | PR: 8/10 | **OVR: 7.1/10**
 
@@ -406,15 +405,15 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Interaction & State Handling Assessment**:
   Uses `react-native-image-picker`. Handles permissions cleanly, provides retake vs confirm preview.
 - **Accessibility & Touch Target Compliance**:
-  Shutter button is huge (72dp circular button), highly accessible.
+  Shutter button is 72dp circular button, highly accessible.
 - **Performance & Health**:
   Camera picker memory is managed properly; temporary image URI passed to review screen.
 - **Concrete Defects**:
-  - Center position in bottom navigation elevates this specialized feature above primary browsing.
+  - None critical. Retains center elevated bottom nav placement.
 - **Actionable Redesign Recommendations**:
-  1. Keep the excellent camera UX, but move the entry point into the Profile or Orders tab rather than occupying the center bottom tab.
+  1. Maintain the center elevated button trigger in the 5-action bottom navigation.
 - **Scores**:
-  - VH: 8/10 | TY: 7/10 | SP: 8/10 | CS: 8/10 | NV: 6/10 | AX: 8/10 | IQ: 8/10 | PR: 8/10 | **OVR: 7.6/10**
+  - VH: 8/10 | TY: 7/10 | SP: 8/10 | CS: 8/10 | NV: 7/10 | AX: 8/10 | IQ: 8/10 | PR: 8/10 | **OVR: 7.8/10**
 
 ---
 
@@ -422,7 +421,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/BillReviewScreen.jsx` (961 lines)
 - **Purpose**: Review OCR-extracted line items from scanned store receipt, edit item quantities, and submit for subscription quota deduction.
 - **Visual Hierarchy Assessment**:
-  Split-screen or stacked view with receipt thumbnail at top and editable table of extracted items below.
+  Stacked view with receipt thumbnail at top and editable table of extracted items below.
 - **Typography & Spacing Assessment**:
   Tabular price figures. Clear input borders for edited weights.
 - **Interaction & State Handling Assessment**:
@@ -453,10 +452,6 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
   Primary buttons exceed 48dp height.
 - **Performance & Health**:
   Fast, static rendering.
-- **Concrete Defects**:
-  - None critical.
-- **Actionable Redesign Recommendations**:
-  1. Add subtle haptic vibration on success/failure outcome mount.
 - **Scores**:
   - VH: 8/10 | TY: 8/10 | SP: 8/10 | CS: 8/10 | NV: 8/10 | AX: 8/10 | IQ: 8/10 | PR: 9/10 | **OVR: 8.1/10**
 
@@ -466,7 +461,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **File**: `customer-app/src/screens/TransactionHistoryScreen.jsx` (541 lines)
 - **Purpose**: Ledger of customer payments, wallet debits, subscription renewals, and refunds.
 - **Visual Hierarchy Assessment**:
-  Chronological list grouped by month or date. Green positive indicators for refunds/credits, dark indicators for payments.
+  Chronological list grouped by date. Positive indicators for refunds/credits, dark indicators for payments.
 - **Typography & Spacing Assessment**:
   Tabular financial numbers (`+₹450`, `-₹1,200`). Consistent row spacing.
 - **Interaction & State Handling Assessment**:
@@ -475,10 +470,6 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
   Rows are comfortably spaced.
 - **Performance & Health**:
   Virtual list rendering via `FlatList`.
-- **Concrete Defects**:
-  - Lacks PDF receipt download button for corporate/tax expenses.
-- **Actionable Redesign Recommendations**:
-  1. Add "Download Receipt" link to individual transaction rows.
 - **Scores**:
   - VH: 7/10 | TY: 7/10 | SP: 7/10 | CS: 7/10 | NV: 7/10 | AX: 7/10 | IQ: 7/10 | PR: 8/10 | **OVR: 7.1/10**
 
@@ -492,15 +483,11 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Typography & Spacing Assessment**:
   Clean timestamps (`2 hours ago`), readable notification titles.
 - **Interaction & State Handling Assessment**:
-  Swipe to dismiss or tap to navigate to relevant order.
+  Tap to navigate to relevant order.
 - **Accessibility & Touch Target Compliance**:
   Notification cards have large hit areas.
 - **Performance & Health**:
   Standard `FlatList` implementation.
-- **Concrete Defects**:
-  - Lacks "Mark all as read" top action.
-- **Actionable Redesign Recommendations**:
-  1. Add "Mark all as read" button in screen header.
 - **Scores**:
   - VH: 7/10 | TY: 7/10 | SP: 7/10 | CS: 7/10 | NV: 7/10 | AX: 7/10 | IQ: 7/10 | PR: 8/10 | **OVR: 7.1/10**
 
@@ -522,31 +509,19 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - `SplashScreen.jsx:64`: Sub-tagline claims `Dedicated Cold-Chain to Bangalore Counter`.
 - **Actionable Redesign Recommendations**:
-  1. Replace tagline with brand identity: `Live & Fresh Fish Retail • Custom Cut at Counter`.
+  1. Replace tagline with verified brand identity: `Fresh Fish Retail • Cleaned & Dressed to Order`.
 - **Scores**:
   - VH: 8/10 | TY: 7/10 | SP: 8/10 | CS: 7/10 | NV: 8/10 | AX: 8/10 | IQ: 8/10 | PR: 9/10 | **OVR: 7.9/10**
 
 ---
 
 ### 2.21 Shared Components Audit
-1. **`CartBadgeButton.jsx`** (63 lines):
-   - Compact header cart button with badge circle.
-   - Score: **7.5/10**. Missing animated bounce when cart count increments.
-2. **`EmptyStateView.jsx`** (80 lines):
-   - Reusable empty state view with illustration, title, subtitle, and action button.
-   - Score: **8.0/10**. Well structured and accessible.
-3. **`ErrorStateView.jsx`** (80 lines):
-   - Reusable error container with retry button.
-   - Score: **8.0/10**. Clean, user-friendly error recovery.
-4. **`FreshnessBadge.jsx`** (57 lines):
-   - Tag displaying "Live in Tank", "Cleaned & Dressed", or "Fresh Today".
-   - Score: **7.8/10**. Excellent semantic pill design; needs dark-mode token support.
-5. **`LoadingSkeleton.jsx`** (96 lines):
-   - Animated shimmer placeholder for cards and headers.
-   - Score: **8.2/10**. Smooth loop animation, avoids generic spinners.
-6. **`OptimizedFishImage.jsx`** (70 lines):
-   - Memoized fish image with placeholder fallback.
-   - Score: **7.9/10**. Prevents CLS by locking aspect ratio; could add disk cache headers.
+1. **`CartBadgeButton.jsx`** (63 lines): Header cart button with badge circle. Score: **7.5/10**.
+2. **`EmptyStateView.jsx`** (80 lines): Reusable empty state view with illustration, title, subtitle, and action button. Score: **8.0/10**.
+3. **`ErrorStateView.jsx`** (80 lines): Reusable error container with retry button. Score: **8.0/10**.
+4. **`FreshnessBadge.jsx`** (57 lines): Tag displaying verified availability or catch status. Score: **7.8/10**.
+5. **`LoadingSkeleton.jsx`** (96 lines): Animated shimmer placeholder for cards and headers. Score: **8.2/10**.
+6. **`OptimizedFishImage.jsx`** (70 lines): Memoized fish image with placeholder fallback. Score: **7.9/10**.
 
 ---
 
@@ -554,16 +529,16 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 
 ```
 ========================================================================================================
-PONDFISH CUSTOMER APP — UI/UX AUDIT SCORECARD (HEAD: 58f274fd7af9e1b472fc3964ef40ebb8b7810cf8)
+PONDFISH CUSTOMER APP — VALIDATED UI/UX AUDIT SCORECARD
 ========================================================================================================
 Screen / Component             VH    TY    SP    CS    NV    AX    IQ    PR    Overall Score / 10
 --------------------------------------------------------------------------------------------------------
-App.jsx                        4     5     6     5     4     4     4     6     4.8 / 10  (Needs Overhaul)
-HomeScreen.jsx                 3     4     4     4     5     4     4     4     4.0 / 10  (Critical Bloat)
-FishCard.jsx                   5     5     6     5     6     5     5     5     5.2 / 10  (Needs Polish)
+App.jsx                        5     5     6     5     6     5     5     7     5.5 / 10  (Needs Icon Polish)
+HomeScreen.jsx                 3     4     4     4     5     4     4     4     4.0 / 10  (Critical Clutter)
+FishCard.jsx                   5     5     6     5     6     5     5     5     5.2 / 10  (Needs Stepper/Tokens)
 FishDetailsScreen.jsx          6     6     6     6     6     6     6     6     6.0 / 10  (Average)
 CartScreen.jsx                 6     6     6     6     6     5     6     6     5.9 / 10  (Average)
-CheckoutScreen.jsx             4     5     5     4     5     5     4     5     4.6 / 10  (Needs Overhaul)
+CheckoutScreen.jsx             4     5     5     4     5     5     4     5     4.6 / 10  (Needs Address Flow)
 PhoneAuthScreen.jsx            8     8     8     7     7     8     8     9     7.9 / 10  (Good)
 OtpVerifyScreen.jsx            8     8     8     8     8     8     8     9     8.1 / 10  (Strong)
 ProfileCompletionScreen.jsx    6     6     7     6     7     7     6     8     6.6 / 10  (Average)
@@ -572,7 +547,7 @@ BookingConfirmationScreen.jsx  8     8     8     8     8     7     8     9     8
 BookingHistoryScreen.jsx       7     7     7     7     7     7     7     8     7.1 / 10  (Good)
 SubscriptionScreen.jsx         6     6     6     6     6     6     6     5     5.9 / 10  (Over-engineered)
 LiveTrackingScreen.jsx         7     7     7     7     7     7     7     8     7.1 / 10  (Good)
-ScanBillScreen.jsx             8     7     8     8     6     8     8     8     7.6 / 10  (Good)
+ScanBillScreen.jsx             8     7     8     8     7     8     8     8     7.8 / 10  (Good)
 BillReviewScreen.jsx           7     7     7     7     7     6     7     7     6.9 / 10  (Average)
 TransactionResultScreen.jsx    8     8     8     8     8     8     8     9     8.1 / 10  (Strong)
 TransactionHistoryScreen.jsx   7     7     7     7     7     7     7     8     7.1 / 10  (Good)
@@ -581,7 +556,7 @@ SplashScreen.jsx               8     7     8     7     8     8     8     9     7
 --------------------------------------------------------------------------------------------------------
 Shared Components (Average)    8     8     8     8     8     8     8     8     7.9 / 10  (Strong)
 ========================================================================================================
-APPLICATION-WIDE COMPOSITE SCORE: 6.8 / 10
+APPLICATION-WIDE COMPOSITE SCORE: 6.9 / 10
 ========================================================================================================
 ```
 
@@ -589,73 +564,64 @@ APPLICATION-WIDE COMPOSITE SCORE: 6.8 / 10
 
 ## 3. PondFish Visual Design System Specification
 
-To enforce Blinkit-grade visual calmness and eliminate ad-hoc styling across all future screens, the PondFish design system establishes the following atomic tokens and component specifications:
+### 3.1 Token File Implementation & Safe Migration Plan
+1. **Source of Truth File**: Create `customer-app/src/theme/tokens.js` containing all atomic tokens: `Colors`, `Typography`, `Spacing`, `Radii`, `Shadows`, `Layout`.
+2. **Backward-Compatible Migration of `colors.js`**: Existing screens import `{ colors } from '../theme/colors'`. To ensure zero runtime crashes during incremental redesign:
+   ```javascript
+   // customer-app/src/theme/colors.js (Backward Compatibility Shim)
+   import { Colors } from './tokens';
 
-### 3.1 Color Tokens
-- **Canvas / Background**: `#F7F8FA` (subtle grey-blue tint, provides contrast against white cards)
-- **Surface / Card**: `#FFFFFF` (pure white, card boundaries defined by `#EEF2F6` 1px border)
-- **Primary Brand Navy**: `#0D203B` (deep coastal marine, authoritative, used for headers, titles, and active nav)
-- **Brand Navy Light**: `#1B3A60` (secondary interactive elements)
-- **Accent Action Green**: `#009B70` (vibrant fresh green, used for primary CTAs, ADD buttons, in-stock badges)
-- **Action Green Pressed**: `#007A58` (active tap state for green buttons)
-- **Action Green Subtle**: `#E6F6F1` (fill for steppers, freshness badges, success banners)
-- **Secondary Blue**: `#2583D8` (freshwater blue, used for info badges, links, tracking pills)
-- **Text Primary**: `#0D203B` (contrast ratio 12.8:1 against `#FFFFFF`, exceeds WCAG AAA)
-- **Text Secondary**: `#64748B` (contrast ratio 4.6:1 against `#FFFFFF`, satisfies WCAG AA)
-- **Text Muted**: `#94A3B8` (placeholders and inactive icons)
-- **Borders**: `#EEF2F6` (subtle card outlines) and `#CBD5E1` (input borders)
+   export const colors = {
+     ...Colors,
+     primary: Colors.brandNavy,
+     accent: Colors.actionGreen,
+     freshGreen: Colors.actionGreen,
+     textPrimary: Colors.textPrimary,
+     textSecondary: Colors.textSecondary,
+     cardBg: Colors.surface,
+   };
+   ```
 
-### 3.2 Typography Scale
-- **Display Hero**: 24–28px, Bold (700), Line Height: 32px
-- **Screen Title**: 18–20px, Bold (700), Line Height: 26px
-- **Section Header**: 16–17px, Semi-Bold (600), Line Height: 22px
+### 3.2 Color Tokens
+- **Background / Canvas**: `#F7F8FA` (calm light grey canvas)
+- **Surface / Card**: `#FFFFFF` (pure white surface with 1px `#EEF2F6` border)
+- **Primary Brand Navy**: `#0D203B` (deep marine tone for titles and active navigation items)
+- **Action Accent Green**: `#009B70` (vibrant fresh green for primary CTAs and steppers)
+- **Secondary Freshwater Blue**: `#2583D8` (secondary accents, links, and info tags)
+- **Text Primary**: `#0D203B` (high contrast 12.8:1, WCAG AAA compliant)
+- **Text Secondary**: `#64748B` (readable subtitle color, WCAG AA compliant)
+- **Text Muted**: `#94A3B8` (placeholders and inactive navigation icons)
+
+### 3.3 Typography & Platform Font Support
+Android uses system `Roboto` / `sans-serif` fonts with explicit weights and line heights:
+- **Display Hero**: 24px, Bold (700), Line Height: 30px
+- **Screen Title**: 20px, Bold (700), Line Height: 26px
+- **Section Header**: 16px, Semi-Bold (600), Line Height: 22px
 - **Body Large**: 15px, Medium (500), Line Height: 21px
 - **Body Medium**: 14px, Regular (400), Line Height: 20px
-- **Body Small / Subtitle**: 12–13px, Regular (400), Line Height: 18px
-- **Caption / Badge**: 10–11px, Medium (500), Line Height: 14px
-- **Price Figures**: 15–18px, Bold (700), `fontVariant: ['tabular-nums']`
+- **Body Small**: 12px, Regular (400), Line Height: 16px
+- **Caption / Badge**: 11px, Medium (500), Line Height: 14px
+- **Price Figures**: 15px / 20px, Bold (700/800), `fontVariant: ['tabular-nums']`
 
-### 3.3 Spacing & Layout Grid
-- Strict **4px base grid**: 4, 8, 12, 16, 20, 24, 32, 40, 48px.
-- Screen edge horizontal padding: **16px**.
-- Card internal padding: **12px**.
-- Grid gap between product cards: **10px**.
-- Section vertical margin: **20px**.
+### 3.4 Responsive Card Dimensions
+- Use `FlatList` with `numColumns={2}` and dynamic column widths rather than hardcoded 48% percentage widths or fixed-pixel heights.
+- Cards scale proportionally with device width while maintaining an image aspect ratio of 1:1 or 4:3.
 
-### 3.4 Corner Radius Scale
-- Micro (tags, pills, status dots): **4–6px**.
-- Standard (buttons, input fields, counter pills): **8–10px**.
-- Card / Container (product cards, modal sheets): **12–16px**.
-- Pill (floating CTAs, steppers, category chips): **9999px**.
+### 3.5 Bottom Navigation & Center Action Specifications
+- **Height**: 56dp + `insets.bottom` dynamically via `useSafeAreaInsets()`.
+- **Items**: 5 actions (`Home`, `Track`, `Scan Bill`, `Bookings`, `Profile`).
+- **Touch Targets**: Minimum 48x48dp per navigation item.
+- **Center Elevated Action (`Scan Bill`)**:
+  - Diameter: 52–56dp circular button.
+  - Background: `Colors.brandNavy`.
+  - Elevation: `elevation: 4`, `shadowRadius: 6`.
+  - Icon: Clean white camera/bill scanner glyph.
+  - Float: Negative top margin (`marginTop: -14`) to anchor elegantly above the navigation bar line.
 
-### 3.5 Elevation & Shadows
-- Reject heavy, muddy drop shadows. Default to flat surfaces with a 1px `#EEF2F6` border.
-- When elevation is required for floating bars or bottom sheets:
-  `elevation: 4`, `shadowColor: '#0D203B'`, `shadowOffset: { width: 0, height: -2 }`, `shadowOpacity: 0.08`, `shadowRadius: 8`.
-
-### 3.6 Component Standards
-1. **Primary Action Button**:
-   - Height: 48dp.
-   - Background: `#009B70`.
-   - Text: 15px Semi-Bold `#FFFFFF`.
-   - Corner Radius: 10px or 9999px (pill).
-   - Pressed Opacity: 0.8.
-2. **Quantity Stepper Control**:
-   - Container: 32dp height, `#E6F6F1` background, `#009B70` border, 8px radius.
-   - Buttons (`−` and `+`): 32x32dp hit target, `#009B70` bold text.
-   - Center Number: 14px Bold `#009B70`.
-3. **Product Card**:
-   - 2-column grid layout with fixed aspect ratio.
-   - Image height: 110dp.
-   - Padding: 10dp.
-   - Border: 1px `#EEF2F6`.
-   - Background: Pure White `#FFFFFF`.
-   - Corner Radius: 12px.
-4. **Freshness Badge**:
-   - Padding: 4px horizontal, 2px vertical.
-   - Background: `#E6F6F1` (Live/Fresh) or `#EBF4FC` (Cleaned).
-   - Text: 10px Medium `#009B70` or `#2583D8`.
-   - Corner Radius: 4px.
+### 3.6 Sticky Cart Bar Positioning & Styling
+- **Position**: `position: 'absolute'`, `bottom: 56 + insets.bottom + 8`, `left: 12`, `right: 12`.
+- **Dimensions**: Height 52dp, `borderRadius: 12`, `elevation: 6`.
+- **Z-Index**: `zIndex: 100` (floats above scrollable views and stays above bottom navigation).
 
 ---
 
@@ -663,97 +629,80 @@ To enforce Blinkit-grade visual calmness and eliminate ad-hoc styling across all
 
 ```mermaid
 flowchart TD
-    P0["Phase P0: Critical Usability & False Claims Removal\n(Purge fake urgency, fake ratings, fake 8-min SLA, fake cold chain)"]
-    P1["Phase P1: Core Commerce Flow Redesign\n(Blinkit-grade Home, 2-column grid, sticky cart bar, cut customizer)"]
-    P2["Phase P2: Secondary Flows & Account Management\n(Real address manager, GPS onboarding, modernized tabs)"]
-    P3["Phase P3: Visual Polish, Delight & Micro-interactions\n(Haptic feedback, animated transitions, live tank status)"]
+    P0["Phase P0: Critical Usability & False Claims Removal\n(Purge fake urgency, fake ratings, fake 8-min SLA, fake cold chain;\nUnlock address button)"]
+    P1["Phase P1: Core Commerce Flow Redesign\n(Home screen product visibility, FishCard stepper, sticky cart bar,\nconfig-driven cuts)"]
+    P2["Phase P2: Navigation Visual Polish & Location Flow\n(Vector SVG icons for agreed 5 tabs, safe area insets,\nGPS reverse-geocoded address manager)"]
+    P3["Phase P3: Visual Polish & Delight\n(Haptic feedback, animated transitions, native driver performance)"]
 
     P0 --> P1 --> P2 --> P3
 ```
 
 ### Phase P0: Critical Usability & False Claims Removal (Immediate Sprint)
-- **Objective**: Protect business integrity and fix high-severity customer friction.
-- **Scope**:
-  1. Remove hardcoded `★ 4.8` ratings and `(1,420)` review counts from `FishCard.jsx` and `FishDetailsScreen.jsx`.
-  2. Remove fake `⚡ 8 mins` delivery badges from `FishCard.jsx`, `FishDetailsScreen.jsx`, `CheckoutScreen.jsx`, and `SubscriptionScreen.jsx`.
-  3. Purge fake urgency timers (`⏱ Ends in 03h:24m`) and fake scarcity counters (`🔥 Only 3 left`) from `HomeScreen.jsx`.
-  4. Remove fake subscription fallback (`Gold Plan: 0.6 kg remaining`) and fake truck fallback (`Fresh Catch Truck #OD-04`) from `HomeScreen.jsx`.
-  5. Replace misleading "Cold-Chain" copy with honest "Live Tank Freshness & Bio-Insulated Packaging".
-  6. Unlock the dead `CHANGE` address button in `CheckoutScreen.jsx`.
+- Remove hardcoded `★ 4.8` ratings and `(1,420)` review counts from `FishCard.jsx` and `FishDetailsScreen.jsx`.
+- Remove fake `⚡ 8 mins` delivery badges from `FishCard.jsx`, `FishDetailsScreen.jsx`, `CheckoutScreen.jsx`, and `SubscriptionScreen.jsx`.
+- Purge fake urgency timers (`⏱ Ends in 03h:24m`) and fake scarcity counters (`🔥 Only 3 left`) from `HomeScreen.jsx`.
+- Remove fake subscription fallback (`Gold Plan: 0.6 kg remaining`) and fake truck fallback (`Fresh Catch Truck #OD-04`) from `HomeScreen.jsx`.
+- Replace misleading "Cold-Chain" copy with honest "Live Tank & Fresh Counter Retail" descriptions.
+- Unlock the dead `CHANGE` address button in `CheckoutScreen.jsx`.
 
 ### Phase P1: Core Commerce Flow Redesign (Sprint 2)
-- **Objective**: Establish the Blinkit-grade product discovery and ordering experience.
-- **Scope**:
-  1. Re-architect `HomeScreen.jsx`: Demote bloated promotional banners; place the 2-column virtualized product grid directly below the search bar.
-  2. Implement persistent **Sticky Cart Bar** across all shopping screens (`items count • total price [View Basket]`).
-  3. Rebuild `FishCard.jsx` with real weight/yield indicators (gross vs net weight) and inline `− 1 +` stepper controls.
-  4. Add interactive **Cut & Preparation Customizer** bottom sheet to `FishDetailsScreen.jsx` with dynamic yield recalculation.
-  5. Streamline `CartScreen.jsx` and `CheckoutScreen.jsx` with transparent bill breakdown (cutting fees, packaging, taxes).
+- Re-architect `HomeScreen.jsx`: Demote bloated promotional banners; elevate the 2-column virtualized product catalogue to ensure immediate product visibility.
+- Implement persistent **Sticky Cart Bar** across all shopping screens.
+- Rebuild `FishCard.jsx` with responsive grid sizing and inline `− 1 +` stepper controls.
+- Add configuration-backed cut selection bottom sheet to `FishDetailsScreen.jsx`.
+- Connect checkout bill breakdown to authoritative backend API fees.
 
-### Phase P2: Secondary Flows & Location Onboarding (Sprint 3)
-- **Objective**: Enable full address management, GPS location detection, and modernize navigation.
-- **Scope**:
-  1. Migrate `App.jsx` navigation to `@react-navigation/native-stack` and `@react-navigation/bottom-tabs`.
-  2. Implement Location Onboarding Flow with GPS auto-detection, reverse geocoding proxy, and manual address entry.
-  3. Build full **Delivery Address Manager** in `ProfileScreen.jsx` (Home, Work, Other).
-  4. Redesign bottom navigation bar: replace emojis with SVG icons; reorder tabs to `Store`, `Categories`, `Orders`, `Subscription`, `Profile`.
+### Phase P2: Navigation Visual Polish & Location Onboarding (Sprint 3)
+- Modernize the agreed 5-action bottom navigation in `App.jsx` with a consistent SVG icon family and dynamic safe-area insets.
+- Build structured **Address Management** and GPS location onboarding flow.
+- Ensure all touch targets satisfy $\ge 48\text{dp}$.
 
-### Phase P3: Visual Polish & Delight (Sprint 4)
-- **Objective**: Add micro-interactions and high-end quick-commerce refinement.
-- **Scope**:
-  1. Add haptic feedback on stepper increments and order placement.
-  2. Implement cart badge bounce/scale micro-animations.
-  3. Add live tank webcam or counter status indicator for retail stores.
-  4. Add offline mode sync and cached catalogue browsing.
+### Phase P3: Visual Polish & Micro-Interactions (Sprint 4)
+- Add haptic feedback on stepper increments.
+- Implement native driver animations for cart transitions.
 
 ---
 
 ## 5. Business Reality & Misleading Claims Audit
 
 ### 5.1 Business Reality Definition
-PondFish operates a **live-fish retail store business**. Live freshwater and marine fish are held in aerated retail store tanks and cut/cleaned to order at the customer counter. Orders placed through the mobile app are either prepared for **store counter pickup** or dispatched via **local neighborhood delivery couriers (30–60 minute window)**.
+PondFish operates a **live-tank retail store business**. Live freshwater and marine fish are held in aerated retail store tanks and cut/cleaned to order at the customer counter. Orders placed through the mobile app are either prepared for **store counter pickup** or dispatched via **local neighborhood delivery couriers**.
 
 PondFish is:
 - **NOT** a cold-chain logistics operation (it does not operate a fleet of 0–4°C refrigerated reefer trucks delivering direct to customer doorsteps).
-- **NOT** a 10-minute dark-store quick-commerce courier (cutting and descaling whole fish safely takes 15–20 minutes per order).
+- **NOT** a 10-minute dark-store quick-commerce courier (cutting and descaling whole fish safely takes time).
 - **NOT** an enterprise aggregator with 10,000+ customer reviews per SKU.
-
-### 5.2 Four-Tier Classification Framework
-Every identified occurrence of questionable copy or simulated behavior is classified into one of four categories:
-1. **Category 1 (Customer-Facing False Claims — Remove Immediately)**: Deceptive marketing claims, fake ratings, fake countdown timers, or fake delivery speeds that actively mislead users.
-2. **Category 2 (Internal Historical Documentation/Schemas — Deprecate/Preserve)**: Database columns, enum values, or architecture docs referencing cold-chain logistics that do not directly deceive consumers in the UI.
-3. **Category 3 (Genuine Technical Functionality — Reskin & Preserve)**: Real backend endpoints and UI features (such as tracking the morning supply replenishment truck from coastal harbors to the retail store) that should be preserved but re-worded honestly.
-4. **Category 4 (Unclear Claims — Business Stakeholder Confirmation)**: Claims regarding chemical-free certifications, antibiotic testing, or farm partnerships that require business sign-off before modification.
 
 ---
 
-### 5.3 Comprehensive Occurrence Inventory & Remediation Table
+### 5.2 Comprehensive Occurrence Inventory & Remediation Table
 
 | File Path | Line Range | Current Text / Behavior | Remediation / Replacement | Category |
 | :--- | :--- | :--- | :--- | :--- |
-| `FishCard.jsx` | L128 | `<Text style={styles.gridRatingStar}>★ 4.8</Text>` | Remove hardcoded star rating. Replace with fish freshness badge (`Live Tank` or `Daily Catch`). | **Cat 1** |
-| `FishCard.jsx` | L129 | `<Text style={styles.gridRatingCount}>({item.ratingCount \|\| '1,420'})</Text>` | Remove hardcoded review count. Do not display fake review volume. | **Cat 1** |
-| `FishCard.jsx` | L134 | `<Text style={styles.gridDeliveryText}>⚡ 8 mins • </Text>` | Remove "8 mins". Replace with realistic prep note: `Cut to order: 20m` or `Pickup in 30m`. | **Cat 1** |
-| `FishDetailsScreen.jsx` | L224–227 | `<View style={styles.minsBadge}><Text style={styles.minsBadgeText}>⚡ 8 MINS</Text></View>` | Remove floating 8-minute badge. Replace with `Live in Store Tank` badge. | **Cat 1** |
+| `FishCard.jsx` | L128 | `<Text style={styles.gridRatingStar}>★ 4.8</Text>` | Remove hardcoded star rating. Replace with verified availability status. | **Cat 1** |
+| `FishCard.jsx` | L129 | `<Text style={styles.gridRatingCount}>({item.ratingCount \|\| '1,420'})</Text>` | Remove hardcoded review count. Do not display fabricated review numbers. | **Cat 1** |
+| `FishCard.jsx` | L134 | `<Text style={styles.gridDeliveryText}>⚡ 8 mins • </Text>` | Remove "8 mins". Replace with operational status: `Cut fresh to order`. | **Cat 1** |
+| `FishDetailsScreen.jsx` | L224–227 | `<View style={styles.minsBadge}><Text style={styles.minsBadgeText}>⚡ 8 MINS</Text></View>` | Remove floating 8-minute badge. | **Cat 1** |
 | `FishDetailsScreen.jsx` | L280–281 | `<Text style={styles.ratingStar}>★ 4.8</Text><Text style={styles.ratingCount}>(1,323)</Text>` | Remove hardcoded rating and review count. | **Cat 1** |
-| `HomeScreen.jsx` | L639–644 | `Gold Plan: 0.6 kg remaining for today · Resets in 2 days` (rendered when unsubscribed) | Remove fake fallback. Render an honest onboarding banner: `Join PondFish Club • Save up to 20% on weekly fresh fish`. | **Cat 1** |
+| `FishDetailsScreen.jsx` | L248 | `<Text style={styles.trustPillNavyText}>✓ 100% CHEMICAL-FREE</Text>` | Omit pending documented chemical testing protocol sign-off. | **Cat 4** |
+| `HomeScreen.jsx` | L639–644 | `Gold Plan: 0.6 kg remaining for today · Resets in 2 days` (rendered when unsubscribed) | Remove fake fallback. Render clean onboarding pitch for PondFish Club. | **Cat 1** |
 | `HomeScreen.jsx` | L704–733 | Fake truck card: `Fresh Catch Truck #OD-04 Published Live, ETA 18 mins, Destination: Madhapur Cold Hub` | Remove fake fallback truck card completely when no replenishment delivery is active. | **Cat 1** |
 | `HomeScreen.jsx` | L692, L729 | `<Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>` | Replace with: `Live Tank Freshness • Cleaned & Packed to Order`. | **Cat 1** |
-| `HomeScreen.jsx` | L788 | `<Text style={styles.timerBadgeText}>⏱ Ends in 03h:24m</Text>` | Remove fake countdown timer. If genuine flash sale exists, display static valid date (`Today's Special`). | **Cat 1** |
+| `HomeScreen.jsx` | L788 | `<Text style={styles.timerBadgeText}>⏱ Ends in 03h:24m</Text>` | Remove fake countdown timer. | **Cat 1** |
 | `HomeScreen.jsx` | L869 | `<Text style={styles.ratingText}>★ 4.8</Text>` | Remove hardcoded rating star. | **Cat 1** |
 | `HomeScreen.jsx` | L873 | `<Text style={styles.flameText}>🔥 Only 3 left</Text>` | Remove fake scarcity text unless backed by authoritative backend inventory count. | **Cat 1** |
 | `HomeScreen.jsx` | L955–959 | `★ 4.8 (1,323) • ⚡ 8 mins` in previously bought carousel | Remove fake rating, reviews, and 8-min badge. | **Cat 1** |
-| `CartScreen.jsx` | L331 | `<Text style={styles.summaryLabel}>Cold-Chain Packaging</Text>` | Replace with: `Bio-Insulated Fresh Packaging` or `Counter Dressing & Packaging`. | **Cat 1** |
-| `CheckoutScreen.jsx` | L245–248 | `<Text style={styles.arrivingTitle}>Arriving in 8 mins</Text>` with `SUPERFAST` pill | Replace with: `Estimated Prep & Pickup: 25–35 mins` or `Delivery Window: 45–60 mins`. | **Cat 1** |
-| `CheckoutScreen.jsx` | L251 | `Delivering to Home • Flat 302, Madhapur, Hyd` | Replace with dynamic selected address from user profile or pickup counter address. | **Cat 1** |
+| `CartScreen.jsx` | L331 | `<Text style={styles.summaryLabel}>Cold-Chain Packaging</Text>` | Replace with config-driven packaging line item. | **Cat 1** |
+| `CheckoutScreen.jsx` | L245–248 | `<Text style={styles.arrivingTitle}>Arriving in 8 mins</Text>` with `SUPERFAST` pill | Remove fake 8-minute claim; display customer-selected slot. | **Cat 1** |
+| `CheckoutScreen.jsx` | L251 | `Delivering to Home • Flat 302, Madhapur, Hyd` | Replace with dynamic selected address from user profile or pickup counter. | **Cat 1** |
 | `CheckoutScreen.jsx` | L255–258 | `onPress={() => Alert.alert('Delivery Address', 'Current delivery route locked...')}` | Wire button to open real address selector modal or screen. | **Cat 1** |
 | `CheckoutScreen.jsx` | L274 | `<Text style={styles.coldChainTag}>PRISTINE COLD-CHAIN GUARANTEED</Text>` | Replace with: `HYGIENIC COUNTER CUTTING GUARANTEED`. | **Cat 1** |
 | `SubscriptionScreen.jsx` | L400–401 | Default fallback: `'PondFish Club Pass • Madhapur'` | Use real subscribed store location or omit location label if null. | **Cat 1** |
-| `SubscriptionScreen.jsx` | L648 | `<Text style={styles.featureItemText}>Free 8-min Express</Text>` | Replace with: `Priority Counter Prep & Free Delivery`. | **Cat 1** |
-| `SubscriptionScreen.jsx` | L823 | `8-min delivery or instant scan at retail.` | Replace with: `Prompt local delivery or instant scan at retail counter.` | **Cat 1** |
-| `PhoneAuthScreen.jsx` | L189 | `Direct farm-gate harvests • Continuous cold chain • Bengaluru counter` | Replace with: `Live tank harvests • Custom cut at counter • Zero chemicals`. | **Cat 1** |
+| `SubscriptionScreen.jsx` | L648 | `<Text style={styles.featureItemText}>Free 8-min Express</Text>` | Replace with verified subscription benefits (e.g. priority prep). | **Cat 1** |
+| `SubscriptionScreen.jsx` | L823 | `8-min delivery or instant scan at retail.` | Replace with: `Local delivery or instant scan at retail counter.` | **Cat 1** |
+| `PhoneAuthScreen.jsx` | L189 | `Direct farm-gate harvests • Continuous cold chain • Bengaluru counter` | Replace with: `Fresh catches • Cut fresh at counter • Zero artificial preservatives`. | **Cat 1** |
 | `ProfileScreen.jsx` | L387 | Fallback string `{profile?.area \|\| 'Madhapur, HYD'}` | Replace with `{profile?.area \|\| 'Select your area'}`. | **Cat 1** |
-| `ProfileScreen.jsx` | L415 | `Madhapur Dock #04 • Ready in 12m` | Replace with real store counter location: `PondFish Retail Store #01 • Open until 9 PM`. | **Cat 1** |
+| `ProfileScreen.jsx` | L415 | `Madhapur Dock #04 • Ready in 12m` | Replace with real store counter location: `PondFish Retail Store #01`. | **Cat 1** |
 | `ProfileScreen.jsx` | L501 | Subtitle: `Harbor Reefer Van #08 reaching Hub in 22 mins` | Re-skin to store replenishment tracker: `Morning catch arriving from Harbor at 6:30 AM`. | **Cat 3** |
 | `ProfileScreen.jsx` | L580–588 | Hardcoded alert showing dummy Madhapur address | Replace with real Address Management screen navigation. | **Cat 1** |
 | `ProfileScreen.jsx` | L651–661 | Menu item: `Cold-Chain Certificate & Lab Audits` | Re-skin to: `Daily Water & Freshness Quality Audits`. | **Cat 3** |
@@ -761,55 +710,48 @@ Every identified occurrence of questionable copy or simulated behavior is classi
 | `SplashScreen.jsx` | L64 | `<Text style={styles.subTagline}>Dedicated Cold-Chain to Bangalore Counter</Text>` | Replace with: `Fresh & Live Fish Retail • Cut Fresh at Counter`. | **Cat 1** |
 | `LiveTrackingScreen.jsx` | L284–286 | Text: "dedicated GPS-tracked refrigerated truck delivers fresh catch directly from local fishing harbors" | Re-skin copy to describe live harbor catch replenishment arriving at store tanks. | **Cat 3** |
 | `LiveTrackingScreen.jsx` | Architecture | Backend endpoint `GET /api/v1/customer/live-tracking` | PRESERVE backend tracking functionality; it represents genuine harbor-to-store logistics. | **Cat 3** |
-| `FishDetailsScreen.jsx` | L248 | `✓ 100% CHEMICAL-FREE` | Retain pending business confirmation of formalin/ammonia testing certificates. | **Cat 4** |
 | Historical DB Migrations | All files | `lib/db/` historical references to cold chain | Retain existing schema columns/indexes to prevent database migration breakage. | **Cat 2** |
+
+---
+
+### 5.3 Unresolved Business Assumptions Ledger
+
+| Domain | Unresolved Assumption in Current Code | Engineering & UI Guidance |
+| :--- | :--- | :--- |
+| **Dressed Yields** | Hardcoded ~70–75% yield across all fish | **Unresolved**: Different species (e.g. Pomfret vs Rohu vs Prawns) and cuts have wildly different yields. Only display yield if backend species config specifies a yield ratio. |
+| **Preparation SLA** | "Ready in 20 mins" cutting time | **Unresolved**: Cutting time depends on store rush and queue. State "Cut fresh to order" without unverified minute promises. |
+| **Pickup SLA** | "Pickup in 25–35 mins" | **Unresolved**: State selected pickup time slot; do not hardcode fixed pickup turnaround times. |
+| **Delivery SLA** | "Delivery in 45–60 mins" | **Unresolved**: Delivery capability depends on local courier partner contracts. State delivery slot selected by customer. |
+| **Packaging Standards** | "Bio-Insulated Cold Packaging" | **Unresolved**: Packaging type and fee must come from backend settings. Do not advertise unverified materials. |
+| **Fee Structure** | Specific cutting (₹20) or delivery fees (₹35) | **Unresolved**: All fee line items must be driven dynamically by backend order summary API responses. |
+| **Live Tank Availability** | Guaranteed live-tank inventory for all species | **Unresolved**: Marine fish (e.g. Seer/Surmai) are typically iced at sea, not held in live freshwater tanks. Use species-specific availability tags. |
+| **Quality Certifications**| "100% Chemical Free" / "Lab Audited" | **Unresolved**: Omit until formal laboratory testing protocols and certificates are legally signed off. |
 
 ---
 
 ## 6. Location and Address Onboarding Feasibility Report
 
 ### 6.1 Requirements Overview
-For PondFish to operate accurate counter pickup assignments and neighborhood deliveries, the customer application requires a modern **Location & Address Onboarding Flow**:
+For PondFish to operate accurate counter pickup assignments and neighborhood deliveries, the customer application requires a structured **Location & Address Onboarding Flow**:
 1. Prompt customer for location permission (`ACCESS_FINE_LOCATION`).
 2. Obtain current GPS latitude and longitude via device hardware.
 3. Call a reverse-geocoding service to resolve coordinates into structured components: House/Flat, Street, Landmark, Area, City, State, and PIN Code.
 4. Provide a pin-adjustment map UI or manual address entry fallback for users who deny permission or order for another address.
 5. Persist addresses to a structured backend database table with a default address flag.
 
----
-
-### 6.2 Current Dependency & Permission Audit
+### 6.2 Dependency & Permission Audit
 - **Android Manifest (`customer-app/android/app/src/main/AndroidManifest.xml`)**:
   - Currently declared: `INTERNET`, `ACCESS_NETWORK_STATE`, `CAMERA`.
   - **Missing**: `android.permission.ACCESS_FINE_LOCATION`, `android.permission.ACCESS_COARSE_LOCATION`.
 - **Node Dependencies (`customer-app/package.json`)**:
-  - Currently installed: `@react-native-firebase/app`, `@react-native-firebase/auth`, `react`, `react-native`, `react-native-image-picker`, `react-native-keychain`, `react-native-razorpay`.
-  - **Missing Location Libraries**: Neither `react-native-geolocation-service` nor `@react-native-community/geolocation` is installed.
-  - **Missing Map Libraries**: No native map SDK (`react-native-maps`) is installed.
+  - Recommended library: `react-native-geolocation-service` (lightweight, zero unnecessary dependencies).
 
----
-
-### 6.3 Reverse Geocoding Service Evaluation
-
-| Service | Accuracy in India (Urban/Semi-Urban) | Cost / Quota | Key Management & Security | Recommendation |
-| :--- | :--- | :--- | :--- | :--- |
-| **Google Maps Geocoding API** | **Exceptional** (pinpoint house numbers, colony names, PIN codes) | $5.00 per 1,000 requests ($200 free monthly credit) | Must be proxied through backend Next.js API route to prevent exposing raw API key in Android APK. | **Recommended for Production** |
-| **Mapbox Geocoding API** | **Good** (excellent road networks, moderate house-level detail) | 100,000 free requests/month, then $0.75 per 1,000 | Can use restricted public tokens, but backend proxy is still preferred. | Viable Alternative |
-| **OpenStreetMap / Nominatim** | **Poor to Moderate** (frequent missing PIN codes and unmapped lanes) | Free (strict 1 req/sec rate limit, commercial usage restricted) | Open, no keys required. | Dev / Prototype Only |
-
-**Security Architecture Invariant**:
+### 6.3 Secure Backend Reverse-Geocoding Proxy
 The Android mobile client must **never** call third-party geocoding APIs directly with embedded API keys. All geocoding requests must route through a dedicated backend API route: `POST /api/v1/geo/reverse-geocode`.
 
----
-
 ### 6.4 Backend Database Schema Requirements
-Currently, the `customers` table (`lib/db/repositories/customerRepository.js`) contains only:
-`id`, `mobile_number`, `name`, `age`, `area`, `created_at`, `updated_at`.
-
 A dedicated `customer_addresses` table must be introduced via a new migration (`0019_add_customer_addresses.sql`):
-
 ```sql
--- Migration: 0019_add_customer_addresses.sql
 CREATE TABLE IF NOT EXISTS customer_addresses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -827,65 +769,111 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX IF NOT EXISTS idx_customer_addresses_customer_id ON customer_addresses(customer_id);
-CREATE INDEX IF NOT EXISTS idx_customer_addresses_default ON customer_addresses(customer_id, is_default) WHERE is_default = true;
 ```
 
 ---
 
-### 6.5 API Endpoint Requirements
-The backend must expose four REST endpoints adhering to the existing token-authenticated security architecture:
-1. `GET /api/v1/customer/addresses`: List all saved addresses for the authenticated customer.
-2. `POST /api/v1/customer/addresses`: Create a new structured address record (with automatic `is_default` handling).
-3. `PUT /api/v1/customer/addresses/:id`: Update an existing address.
-4. `DELETE /api/v1/customer/addresses/:id`: Soft-delete or remove an address.
-5. `POST /api/v1/geo/reverse-geocode`: Accept `{ latitude, longitude }` and return `{ houseFlat, street, area, city, state, pincode, formattedAddress }` using server-side Google Maps API.
+## 7. Technical Debt & Navigation Architecture Evaluation
+
+### 7.1 Balanced Evaluation: React Navigation vs Existing State Machine
+
+| Evaluation Criteria | React Navigation Migration | Preserving Existing State Machine (`App.jsx`) | Engineering Verdict |
+| :--- | :--- | :--- | :--- |
+| **Screen-State Loss** | Retains screen state automatically across tab switches via native container views. | Unmounted screens lose local scroll state, but critical commerce data (cart, auth, profile) is centralized in `api.js` cache and `App.jsx`. | **Manageable in State Machine** (lifting scroll keys or caching catalogue in API eliminates noticeable reload). |
+| **Back-Button Behavior** | Automatic hardware back handling via native stack history. | Handled via custom `BackHandler` switch statement (App.jsx:214-250) with strict auth boundary enforcement. | **Existing State Machine is Superior for Security**: Back handler is battle-tested with 54 passing security tests. |
+| **Deep-Linking Requirements** | Full support for URL routing and deep links. | Custom URL parser required if deep linking needed. | **Neutral**: PondFish currently does not use external web deep linking; all traffic is native direct interaction. |
+| **Navigation Transitions** | Native sliding transitions between push/pop screens. | Instantaneous conditional swap without native slide animations. | **React Navigation has visual edge**, but state machine can incorporate lightweight cross-fades. |
+| **Existing Navigation Bugs** | Fixes screen history tracking. | Minor inconsistencies in back navigation, easily fixable in existing switch statement. | **Easily resolved in current architecture**. |
+| **Build & APK Performance** | Adds 5+ native npm packages, increases APK size by ~2.5MB, requires native Gradle rebuilds. | Zero native dependencies, minimal bundle size, fast cold start, zero build risk. | **State Machine is Significantly Lighter and Safer**. |
+| **Test Suite Compatibility** | May require complex native mocking in Node.js test runner for unit tests. | Pure React Native components easily rendered and verified in Node.js unit tests (258 passing tests). | **State Machine maintains 100% test pass rate without native mocks**. |
+
+### 7.2 Architecture Recommendation
+**Recommendation: Preserve and harden the existing state machine in `App.jsx`**.
+Do not perform a full React Navigation rewrite solely for visual polish. The current state machine is secure, lightweight, thoroughly covered by unit tests, and capable of supporting the agreed 5-action bottom navigation (`Home`, `Track`, `Scan Bill`, `Bookings`, `Profile`) with SVG icons, safe-area insets, and sticky cart bars. A migration to React Navigation should only be undertaken if future product requirements (such as universal deep-linking across web and mobile) provide clear functional justification for the engineering cost and regression risk.
 
 ---
 
-### 6.6 Step-by-Step Implementation Plan
-1. **Step 1 (Dependencies & Permissions)**:
-   - Add `react-native-geolocation-service` to `customer-app/package.json`.
-   - Add `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` to `AndroidManifest.xml`.
-2. **Step 2 (Database Migration & Repository)**:
-   - Apply `0019_add_customer_addresses.sql`.
-   - Create `lib/db/repositories/addressRepository.js` using parameterized SQL with bounded pg pool.
-3. **Step 3 (Backend API Route Proxy)**:
-   - Create `pages/api/v1/geo/reverse-geocode.js` and `pages/api/v1/customer/addresses.js`.
-4. **Step 4 (Mobile Address & Location Screens)**:
-   - Build `customer-app/src/screens/LocationSelectScreen.jsx` with GPS auto-detect button and address form.
-   - Integrate saved address selection card into `CheckoutScreen.jsx`.
-   - Update `ProfileCompletionScreen.jsx` to transition from basic name/age entry directly to location selection.
+## 8. Protected Features Ledger (Must Not Be Removed)
+
+The following core business capabilities are verified, operational, and **must not be removed or disabled** during any mobile UI refactoring:
+
+1. **Scan Bill Workflow**: Camera capture, thermal receipt OCR review, item editing, and subscription quota/credit claims.
+2. **Subscription Quota & Credit Engine**: Weekly allowance tracking, quota deduction, rollover/reset schedules, and plan upgrades.
+3. **Booking & Counter Pickup System**: Time-slot reservations, unique digital token generation (`#PF-XXXX`), and store counter verification QR codes.
+4. **Razorpay Payment Integration**: Native SDK checkout, order creation, signature verification, and transaction outcome handling.
+5. **Harbor Replenishment Supply Tracking**: Backend endpoint `GET /api/v1/customer/live-tracking` representing morning fresh catch transport from harbors/farms to store retail counters.
+6. **Authentication & Session Security**: Fail-closed Keychain tombstone handling, sanitized credential error cause chains, and account isolation.
+7. **Genuine GPS Geofencing**: Distance calculations to retail stores and geofence verification.
 
 ---
 
-## 7. Technical Debt, Risks & Backend Dependencies
+## 9. Root Test Failure Investigation & Analysis
 
-### 7.1 Navigation Architecture Fragility
-- **Problem**: `App.jsx` handles routing via conditional rendering (`currentScreen === 'NAME'`).
-- **Risk**: Back button handling is fragile; deep links cannot be resolved; screen push/pop transitions cannot be animated; screens lose state upon tab switches.
-- **Remediation**: Migrate to React Navigation v6.
+### 9.1 Test Execution Facts
+During the validation run of the root repository test suite (`npm test`), the command exited with **code 1**.
+- **Total Test Suites Executed**: 55 suites.
+- **Total Tests Executed**: 445 tests.
+- **Passing Tests**: 442 tests.
+- **Failing Tests**: 3 tests.
 
-### 7.2 Lack of Centralized Cart Context
-- **Problem**: Cart state is partially owned by `App.jsx` (`cartSummary`), partially fetched inside `HomeScreen.jsx`, and independently mutated inside `FishCard.jsx`, `FishDetailsScreen.jsx`, and `CartScreen.jsx`.
-- **Risk**: Cart counts become desynchronized across screens, causing stale totals or ghost items during navigation.
-- **Remediation**: Implement a unified `CartContext` with optimistic updates, local storage hydration, and backend synchronization.
+### 9.2 Exact Failed Test Names, Locations & Error Stacks
 
-### 7.3 Unvirtualized List Bloat in `HomeScreen.jsx`
-- **Problem**: `HomeScreen.jsx` is 2,315 lines long with nested carousels and complex header components.
-- **Risk**: Memory spikes, dropped frames during rapid scrolling, and high battery consumption on low-end Android devices.
-- **Remediation**: Decompose `HomeScreen.jsx` into standalone sub-components (`HomeHeader`, `SearchBar`, `ProductGrid`, `CategoriesBar`). Ensure strict `FlatList` virtualization.
+#### Failure 1: Bill Concurrency & Scoping Suite
+- **File**: `tests/integration/postgres-bill-concurrency-and-scoping.test.js:39:1`
+- **Suite**: `PostgreSQL Phase 4: Migration 0020, Store Scoping, and Concurrency Suite`
+- **Error Code**: `ERR_TEST_FAILURE`
+- **Error Message**: `Connection terminated due to connection timeout`
+- **Stack Trace**:
+  ```
+  C:\Users\steva\OneDrive\Documents\Sprojectx\PONDFISH\POND_FISH\node_modules\pg-pool\index.js:45:11
+  process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  async TestContext.<anonymous> (tests/integration/postgres-bill-concurrency-and-scoping.test.js:64:19)
+  ```
 
-### 7.4 Image Asset Pipeline
-- **Problem**: Product images are loaded directly from remote Supabase storage URLs without on-the-fly resizing, WebP conversion, or local disk caching.
-- **Risk**: Excessive network data consumption (as demonstrated in Phase 3B.6 diagnostic audits) and sluggish image rendering.
-- **Remediation**: Serve images through a CDN image optimization pipeline (e.g., Next.js Image Optimization or Cloudflare Images) with WebP compression and preset thumbnails (200x200dp for grid cards).
+#### Failure 2: Subscription Concurrent Purchase Subtest
+- **File**: `tests/integration/postgres-subscription-lifecycle.test.js:392:13`
+- **Subtest**: `7. Concurrency: concurrent first-time purchases commit exactly one credit, subscription, payment, and ledger entry`
+- **Error Code**: `ERR_TEST_FAILURE`
+- **Error Message**: `Connection terminated due to connection timeout`
+- **Stack Trace**:
+  ```
+  C:\Users\steva\OneDrive\Documents\Sprojectx\PONDFISH\POND_FISH\node_modules\pg-pool\index.js:45:11
+  process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  async TestContext.<anonymous> (tests/integration/postgres-subscription-lifecycle.test.js:392:13)
+  ```
+
+#### Failure 3: Parent Subscription Lifecycle Suite Failure
+- **File**: `tests/integration/postgres-subscription-lifecycle.test.js:36:1`
+- **Suite**: `PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)`
+- **Error**: `1 subtest failed` (due to Failure 2 above).
+
+### 9.3 Skipped Tests & Environment Root Cause
+1. **Skipped Tests**:
+   The test output explicitly logged:
+   ```
+   # === REAL POSTGRESQL INTEGRATION TEST SUITE (PHASE 2J-L) ===
+   # Database: pondfish_test_db (local port 5433)
+   # Engine: PostgreSQL 17 (Isolated Test Instance)
+   #   [SKIP] Dedicated local PostgreSQL test instance (localhost:5433) is not running.
+   #   Isolated synthetic unit test suites cover all checkout and recovery behaviors.
+   ```
+2. **Environment Root Cause**:
+   - The test runner attempts to connect to a remote PostgreSQL / Supabase instance when the local port 5433 instance is absent.
+   - During concurrent connection pool acquisition under high concurrency tests (5+ simultaneous transactions), the remote database connection timed out (`Connection terminated due to connection timeout`).
+3. **Independence from UI/UX Changes**:
+   - The UI/UX audit and skill files (`.agent/skills/pondfish-mobile-ui-ux/SKILL.md` and `Documentation/audit/CUSTOMER_APP_UI_UX_AUDIT.md`) are documentation artifacts that have zero code interaction with backend database connection pools.
+   - All customer-app unit tests passed with **100% success** (258/258 tests across 14 suites in `npm --prefix customer-app test`, and 54/54 tests in `customer-app-phase3b7-logout-security.test.js`).
+   - The root Next.js production build (`npm run build`) succeeded with **0 errors**, compiling all 42/42 static and dynamic routes.
 
 ---
 
-## 8. Conclusion & Sign-Off
+## 10. Conclusion & Next Steps
 
-The PondFish customer mobile application possesses strong core security, reliable authentication handling, and an established catalogue API. However, its visual experience, navigation architecture, and marketing copy do not reflect the operational reality of PondFish’s live-fish retail trade or the standards expected of modern quick commerce.
+This validated design specification:
+1. Locks in the agreed 5-action navigation: `Home`, `Track`, `Scan Bill` (Center Elevated), `Bookings`, `Profile`.
+2. Purges all fake ratings, fake urgency countdowns, fake 8-minute delivery promises, and unverified cold-chain claims.
+3. Removes unsupported business assumptions (yield ratios, cutting turnaround times, and bio-packaging claims) to ensure the UI remains strictly data-driven.
+4. Confirms that the existing hardened state machine in `App.jsx` should be preserved and visually refined.
+5. Documents the pre-existing environment-based root test timeout failures with full technical fidelity.
 
-By executing the prioritized roadmap—purging misleading claims in Phase P0, re-architecting the core commerce experience in Phase P1, implementing location onboarding in Phase P2, and adding visual polish in Phase P3—PondFish will achieve a high-conversion, Blinkit-grade customer application that builds enduring customer trust.
+The specification is now complete, verified, and ready to guide the first Home screen redesign in subsequent tasks without beginning implementation prematurely.
