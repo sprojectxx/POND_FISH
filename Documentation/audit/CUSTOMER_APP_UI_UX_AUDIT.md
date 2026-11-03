@@ -2,7 +2,7 @@
 
 **Target Application:** `customer-app/`  
 **Repository:** `https://github.com/sprojectxx/POND_FISH`  
-**Approved Baseline / HEAD:** `a972a7626e386bc2450cfc28b1e22707b08c445b`  
+**Approved Baseline / HEAD:** `a3831bd0788cdf216dd2c8a00b50b8e5257d6084`  
 **Audit Validation Date:** November 3, 2026  
 **Auditor:** Antigravity Mobile UI/UX & Systems Architecture Engineering  
 
@@ -11,14 +11,17 @@
 ## 1. Executive Summary & Usability Benchmarking
 
 ### 1.1 Executive Summary
-The PondFish customer mobile application is a React Native Android application (React 18.3.1, React Native 0.75.4) built for retail fresh-fish commerce, customer subscriptions, counter bill scanning, and scheduled order reservations. While the application features robust low-level authentication security (such as fail-closed Keychain tombstone management, sanitized credential error cause chains, and bounded connection pooling), its user experience and presentation layers contain several friction points and misleading patterns that require systematic engineering correction before any visual redesign.
+The PondFish customer mobile application is a React Native Android application (React 18.3.1, React Native 0.75.4) built for retail live-fish commerce, customer subscriptions, counter bill scanning, and scheduled order reservations. While the application features robust low-level authentication security (such as fail-closed Keychain tombstone management, sanitized credential error cause chains, and bounded connection pooling), its user experience and presentation layers contain several friction points and misleading patterns that require systematic engineering correction before any visual redesign.
 
 This validation audit establishes the foundational design system and operational parameters by addressing five core areas:
 1. **Preserving the Agreed Navigation Model**: Validating and standardizing the existing 5-action bottom navigation (`Home`, `Track`, `Scan Bill` [Center Elevated], `Bookings`, `Profile`) rather than imposing an unapproved generic e-commerce tab structure.
 2. **Purging Deceptive Marketing & Dark Patterns**: Removing hardcoded ratings (`★ 4.8`), fake review counts (`(1,420)`), unachievable `⚡ 8 mins` delivery promises, fake urgency countdowns (`⏱ Ends in 03h:24m`), and deceptive `Continuous 0-4°C Cold Chain` banners.
-3. **Eliminating Unsupported Business Assumptions**: Removing rigid, unverified assumptions regarding fish dressing yields (e.g. 720g/750g), cutting turnaround times (20m), delivery windows (45–60m), bio-insulated packaging, and arbitrary fee structures. All operational figures must be configuration-driven and backed by backend data.
+3. **Eliminating Unsupported Business Assumptions**:
+   - Removing rigid, unverified assumptions regarding fish dressing yields (e.g. 720g/750g), cutting turnaround times (20m), delivery windows (45–60m), and bio-insulated packaging.
+   - Removing unverified assumptions regarding species-specific storage (e.g. assumptions that marine fish are iced while freshwater fish are live). PondFish's stated business model is live-fish retail with preparation at the counter; species-specific handling is documented as an unresolved business question until confirmed by the business owner.
+   - Replacing unverified marketing guarantees ("Quality assured", "Hygienic cutting guaranteed", "Zero artificial preservatives") with factual descriptions of actual customer workflows.
 4. **Pragmatic Navigation Architecture**: Recommending that the current hardened state machine in `App.jsx` be preserved and visually upgraded rather than risking an expensive, high-risk migration to React Navigation solely for UI polish.
-5. **Rigorous Root Test Failure Investigation**: Thoroughly investigating and documenting the pre-existing database connection timeouts responsible for root `npm test` exiting with code 1.
+5. **Rigorous Root Test Failure Investigation**: Preserving exact failed test names, file locations, error messages, and stack traces from the root `npm test` exit code 1, documenting that the root cause remains unconfirmed pending dedicated database connection diagnostics, and strictly separating independently executed test suites.
 
 ### 1.2 Usability Benchmarking: Current State vs Target Standard
 
@@ -29,8 +32,8 @@ This validation audit establishes the foundational design system and operational
 | **Customization** | Lightweight modal/sheet for cut selection without leaving browsing context. | Redirects to a heavy 1,124-line screen; cut choices do not update live net weight or price. | Lightweight bottom sheet showing verified cuts and dynamic configuration-backed yield calculator. |
 | **Cart Interaction** | Persistent floating sticky cart bar at viewport bottom (`3 items • ₹640 [View Basket]`). | No floating cart bar. Cart count is hidden in a small top header icon (`CartBadgeButton`) on 2 screens only. | Global sticky cart bar sliding up smoothly when `items.length > 0`, anchored above bottom navigation. |
 | **Navigation Model** | Clear icons, clean labels, $\ge 48\text{dp}$ touch targets, safe-area compliance. | Unicode emojis (`🏪`, `🧭`, `▣`, `📅`, `👤`), small tap targets on narrow screens. | Preserved 5-action navigation with consistent SVG icon family, elevated center Scan Bill, safe-area insets. |
-| **Operational Honesty**| Realistic delivery/pickup windows based on actual store prep capacity. | Claims "⚡ 8 mins" and "Continuous 0-4°C Cold Chain" despite being a counter-cut store business. | Operational data-driven preparation windows; honest counter-cut retail presentation. |
-| **Location & Address**| Instant GPS detection, reverse-geocoded street address, saved address switcher. | None. Single freeform `area` string in profile. Address in checkout is hardcoded dummy text. | GPS permission, reverse geocoding proxy, structured address cards (`House`, `Street`, `Landmark`). |
+| **Operational Honesty**| Realistic delivery/pickup windows based on actual store prep capacity. | Claims "⚡ 8 mins" and "Continuous 0-4°C Cold Chain" despite being a counter-cut store business. | Operational data-driven preparation windows; factual descriptions of customer workflows. |
+| **Location & Address**| Instant GPS detection, reverse-geocoded street address, saved address switcher. | None. Single freeform `area` string in profile. Address in checkout is hardcoded dummy text. | Proposed: GPS permission, reverse geocoding proxy, structured address cards (`House`, `Street`, `Landmark`). |
 
 ---
 
@@ -225,7 +228,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - `PhoneAuthScreen.jsx:189`: Footer tagline claims `Direct farm-gate harvests • Continuous cold chain • Bengaluru counter`.
 - **Actionable Redesign Recommendations**:
-  1. Update footer tagline to reflect live/fresh fish retail: `Fresh catches • Prepared to order at retail counter • Quality assured`.
+  1. Update footer tagline to describe actual customer workflow: `Select fish • Custom cut at store counter • Store pickup or delivery`.
 - **Scores**:
   - VH: 8/10 | TY: 8/10 | SP: 8/10 | CS: 7/10 | NV: 7/10 | AX: 8/10 | IQ: 8/10 | PR: 9/10 | **OVR: 7.9/10**
 
@@ -293,12 +296,12 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
   - `ProfileScreen.jsx:415`: `Madhapur Dock #04 • Ready in 12m`.
   - `ProfileScreen.jsx:501`: Menu item claims `Harbor Reefer Van #08 reaching Hub in 22 mins`.
   - `ProfileScreen.jsx:580`: Hardcoded alert `Current Primary Address: Flat 302, Cyber Heights, Madhapur, Hyderabad`.
-  - `ProfileScreen.jsx:651-661`: Menu item `Cold-Chain Certificate & Lab Audits`.
+  - `ProfileScreen.jsx:651-661`: Menu item `Cold-Chain Certificate & Lab Audits` displaying simulated testing alert.
   - `ProfileScreen.jsx:701`: Footer build string `Build 204 • Pure Ocean Cold Chain Distribution`.
 - **Actionable Redesign Recommendations**:
   1. Remove cold-chain and reefer van claims.
   2. Implement real saved address manager.
-  3. Replace dead alerts with dedicated sub-screens or remove the dead menu items.
+  3. Remove simulated lab test menu item or replace with factual store counter details, as chemical testing claims are unverified.
 - **Scores**:
   - VH: 6/10 | TY: 6/10 | SP: 7/10 | CS: 6/10 | NV: 6/10 | AX: 7/10 | IQ: 5/10 | PR: 7/10 | **OVR: 6.2/10**
 
@@ -320,7 +323,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - Store directions button triggers generic map intent with static coordinates.
 - **Actionable Redesign Recommendations**:
-  1. Add counter preparation status: `Order Received → Cleaning in Progress → Packed & Ready in Tank`.
+  1. Add counter preparation workflow status: `Order Received → Dressed at Counter → Packed for Pickup`.
 - **Scores**:
   - VH: 8/10 | TY: 8/10 | SP: 8/10 | CS: 8/10 | NV: 8/10 | AX: 7/10 | IQ: 8/10 | PR: 9/10 | **OVR: 8.0/10**
 
@@ -366,7 +369,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
   - `SubscriptionScreen.jsx:648`: Feature item claims `Free 8-min Express`.
   - `SubscriptionScreen.jsx:823`: Subtext claims `8-min delivery or instant scan at retail`.
 - **Actionable Redesign Recommendations**:
-  1. Replace "Free 8-min Express" with verified subscription benefits (e.g. "Priority Counter Preparation & Free Delivery over threshold").
+  1. Replace "Free 8-min Express" with verified subscription benefits (e.g. `Subscription Quota Allocation`).
   2. Modularize tier cards into separate subcomponents.
 - **Scores**:
   - VH: 6/10 | TY: 6/10 | SP: 6/10 | CS: 6/10 | NV: 6/10 | AX: 6/10 | IQ: 6/10 | PR: 5/10 | **OVR: 5.9/10**
@@ -389,7 +392,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - `LiveTrackingScreen.jsx:284-286`: Empty state copy mentions "dedicated GPS-tracked refrigerated truck delivers fresh catch directly from local fishing harbors".
 - **Actionable Redesign Recommendations**:
-  1. Contextualize this cleanly as *Store Replenishment Tracking* (showing when the morning's fresh catch arrives at the live tanks), rather than customer home courier dispatch.
+  1. Contextualize this cleanly as *Store Replenishment Tracking* (showing when the morning's fresh catch arrives at the store tanks), rather than customer courier dispatch.
 - **Scores**:
   - VH: 7/10 | TY: 7/10 | SP: 7/10 | CS: 7/10 | NV: 7/10 | AX: 7/10 | IQ: 7/10 | PR: 8/10 | **OVR: 7.1/10**
 
@@ -509,7 +512,7 @@ This audit evaluates all 20 screens and 6 shared components currently implemente
 - **Concrete Defects**:
   - `SplashScreen.jsx:64`: Sub-tagline claims `Dedicated Cold-Chain to Bangalore Counter`.
 - **Actionable Redesign Recommendations**:
-  1. Replace tagline with verified brand identity: `Fresh Fish Retail • Cleaned & Dressed to Order`.
+  1. Replace tagline with verified brand identity: `Live Fish Retail • Counter Cut & Dressing`.
 - **Scores**:
   - VH: 8/10 | TY: 7/10 | SP: 8/10 | CS: 7/10 | NV: 8/10 | AX: 8/10 | IQ: 8/10 | PR: 9/10 | **OVR: 7.9/10**
 
@@ -631,7 +634,7 @@ Android uses system `Roboto` / `sans-serif` fonts with explicit weights and line
 flowchart TD
     P0["Phase P0: Critical Usability & False Claims Removal\n(Purge fake urgency, fake ratings, fake 8-min SLA, fake cold chain;\nUnlock address button)"]
     P1["Phase P1: Core Commerce Flow Redesign\n(Home screen product visibility, FishCard stepper, sticky cart bar,\nconfig-driven cuts)"]
-    P2["Phase P2: Navigation Visual Polish & Location Flow\n(Vector SVG icons for agreed 5 tabs, safe area insets,\nGPS reverse-geocoded address manager)"]
+    P2["Phase P2: Navigation Visual Polish & Location Flow\n(Vector SVG icons for agreed 5 tabs, safe area insets,\nGPS reverse-geocoded address proposal)"]
     P3["Phase P3: Visual Polish & Delight\n(Haptic feedback, animated transitions, native driver performance)"]
 
     P0 --> P1 --> P2 --> P3
@@ -642,7 +645,7 @@ flowchart TD
 - Remove fake `⚡ 8 mins` delivery badges from `FishCard.jsx`, `FishDetailsScreen.jsx`, `CheckoutScreen.jsx`, and `SubscriptionScreen.jsx`.
 - Purge fake urgency timers (`⏱ Ends in 03h:24m`) and fake scarcity counters (`🔥 Only 3 left`) from `HomeScreen.jsx`.
 - Remove fake subscription fallback (`Gold Plan: 0.6 kg remaining`) and fake truck fallback (`Fresh Catch Truck #OD-04`) from `HomeScreen.jsx`.
-- Replace misleading "Cold-Chain" copy with honest "Live Tank & Fresh Counter Retail" descriptions.
+- Replace misleading "Cold-Chain" copy with factual customer workflow descriptions.
 - Unlock the dead `CHANGE` address button in `CheckoutScreen.jsx`.
 
 ### Phase P1: Core Commerce Flow Redesign (Sprint 2)
@@ -666,7 +669,7 @@ flowchart TD
 ## 5. Business Reality & Misleading Claims Audit
 
 ### 5.1 Business Reality Definition
-PondFish operates a **live-tank retail store business**. Live freshwater and marine fish are held in aerated retail store tanks and cut/cleaned to order at the customer counter. Orders placed through the mobile app are either prepared for **store counter pickup** or dispatched via **local neighborhood delivery couriers**.
+PondFish operates a **live-fish retail store business** where live fish are held in tanks and dressed/cut to order at retail counters. Orders placed through the mobile app are either prepared for **store counter pickup** or dispatched via **local neighborhood delivery couriers**.
 
 PondFish is:
 - **NOT** a cold-chain logistics operation (it does not operate a fleet of 0–4°C refrigerated reefer trucks delivering direct to customer doorsteps).
@@ -681,13 +684,13 @@ PondFish is:
 | :--- | :--- | :--- | :--- | :--- |
 | `FishCard.jsx` | L128 | `<Text style={styles.gridRatingStar}>★ 4.8</Text>` | Remove hardcoded star rating. Replace with verified availability status. | **Cat 1** |
 | `FishCard.jsx` | L129 | `<Text style={styles.gridRatingCount}>({item.ratingCount \|\| '1,420'})</Text>` | Remove hardcoded review count. Do not display fabricated review numbers. | **Cat 1** |
-| `FishCard.jsx` | L134 | `<Text style={styles.gridDeliveryText}>⚡ 8 mins • </Text>` | Remove "8 mins". Replace with operational status: `Cut fresh to order`. | **Cat 1** |
+| `FishCard.jsx` | L134 | `<Text style={styles.gridDeliveryText}>⚡ 8 mins • </Text>` | Remove "8 mins". Replace with operational status: `Cut to order at counter`. | **Cat 1** |
 | `FishDetailsScreen.jsx` | L224–227 | `<View style={styles.minsBadge}><Text style={styles.minsBadgeText}>⚡ 8 MINS</Text></View>` | Remove floating 8-minute badge. | **Cat 1** |
 | `FishDetailsScreen.jsx` | L280–281 | `<Text style={styles.ratingStar}>★ 4.8</Text><Text style={styles.ratingCount}>(1,323)</Text>` | Remove hardcoded rating and review count. | **Cat 1** |
 | `FishDetailsScreen.jsx` | L248 | `<Text style={styles.trustPillNavyText}>✓ 100% CHEMICAL-FREE</Text>` | Omit pending documented chemical testing protocol sign-off. | **Cat 4** |
 | `HomeScreen.jsx` | L639–644 | `Gold Plan: 0.6 kg remaining for today · Resets in 2 days` (rendered when unsubscribed) | Remove fake fallback. Render clean onboarding pitch for PondFish Club. | **Cat 1** |
 | `HomeScreen.jsx` | L704–733 | Fake truck card: `Fresh Catch Truck #OD-04 Published Live, ETA 18 mins, Destination: Madhapur Cold Hub` | Remove fake fallback truck card completely when no replenishment delivery is active. | **Cat 1** |
-| `HomeScreen.jsx` | L692, L729 | `<Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>` | Replace with: `Live Tank Freshness • Cleaned & Packed to Order`. | **Cat 1** |
+| `HomeScreen.jsx` | L692, L729 | `<Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>` | Replace with: `Fish dressed and cut to order at retail counter`. | **Cat 1** |
 | `HomeScreen.jsx` | L788 | `<Text style={styles.timerBadgeText}>⏱ Ends in 03h:24m</Text>` | Remove fake countdown timer. | **Cat 1** |
 | `HomeScreen.jsx` | L869 | `<Text style={styles.ratingText}>★ 4.8</Text>` | Remove hardcoded rating star. | **Cat 1** |
 | `HomeScreen.jsx` | L873 | `<Text style={styles.flameText}>🔥 Only 3 left</Text>` | Remove fake scarcity text unless backed by authoritative backend inventory count. | **Cat 1** |
@@ -696,18 +699,18 @@ PondFish is:
 | `CheckoutScreen.jsx` | L245–248 | `<Text style={styles.arrivingTitle}>Arriving in 8 mins</Text>` with `SUPERFAST` pill | Remove fake 8-minute claim; display customer-selected slot. | **Cat 1** |
 | `CheckoutScreen.jsx` | L251 | `Delivering to Home • Flat 302, Madhapur, Hyd` | Replace with dynamic selected address from user profile or pickup counter. | **Cat 1** |
 | `CheckoutScreen.jsx` | L255–258 | `onPress={() => Alert.alert('Delivery Address', 'Current delivery route locked...')}` | Wire button to open real address selector modal or screen. | **Cat 1** |
-| `CheckoutScreen.jsx` | L274 | `<Text style={styles.coldChainTag}>PRISTINE COLD-CHAIN GUARANTEED</Text>` | Replace with: `HYGIENIC COUNTER CUTTING GUARANTEED`. | **Cat 1** |
+| `CheckoutScreen.jsx` | L274 | `<Text style={styles.coldChainTag}>PRISTINE COLD-CHAIN GUARANTEED</Text>` | Replace with: `Prepared and packed to order at store counter`. | **Cat 1** |
 | `SubscriptionScreen.jsx` | L400–401 | Default fallback: `'PondFish Club Pass • Madhapur'` | Use real subscribed store location or omit location label if null. | **Cat 1** |
-| `SubscriptionScreen.jsx` | L648 | `<Text style={styles.featureItemText}>Free 8-min Express</Text>` | Replace with verified subscription benefits (e.g. priority prep). | **Cat 1** |
+| `SubscriptionScreen.jsx` | L648 | `<Text style={styles.featureItemText}>Free 8-min Express</Text>` | Replace with verified subscription benefits (e.g. `Subscription Quota Allocation`). | **Cat 1** |
 | `SubscriptionScreen.jsx` | L823 | `8-min delivery or instant scan at retail.` | Replace with: `Local delivery or instant scan at retail counter.` | **Cat 1** |
-| `PhoneAuthScreen.jsx` | L189 | `Direct farm-gate harvests • Continuous cold chain • Bengaluru counter` | Replace with: `Fresh catches • Cut fresh at counter • Zero artificial preservatives`. | **Cat 1** |
+| `PhoneAuthScreen.jsx` | L189 | `Direct farm-gate harvests • Continuous cold chain • Bengaluru counter` | Replace with: `Select fish • Custom cut at store counter • Store pickup or delivery`. | **Cat 1** |
 | `ProfileScreen.jsx` | L387 | Fallback string `{profile?.area \|\| 'Madhapur, HYD'}` | Replace with `{profile?.area \|\| 'Select your area'}`. | **Cat 1** |
 | `ProfileScreen.jsx` | L415 | `Madhapur Dock #04 • Ready in 12m` | Replace with real store counter location: `PondFish Retail Store #01`. | **Cat 1** |
 | `ProfileScreen.jsx` | L501 | Subtitle: `Harbor Reefer Van #08 reaching Hub in 22 mins` | Re-skin to store replenishment tracker: `Morning catch arriving from Harbor at 6:30 AM`. | **Cat 3** |
 | `ProfileScreen.jsx` | L580–588 | Hardcoded alert showing dummy Madhapur address | Replace with real Address Management screen navigation. | **Cat 1** |
-| `ProfileScreen.jsx` | L651–661 | Menu item: `Cold-Chain Certificate & Lab Audits` | Re-skin to: `Daily Water & Freshness Quality Audits`. | **Cat 3** |
+| `ProfileScreen.jsx` | L651–661 | Menu item: `Cold-Chain Certificate & Lab Audits` | Remove simulated lab test menu item or replace with factual store counter details, as chemical testing claims are unverified. | **Cat 1** |
 | `ProfileScreen.jsx` | L701 | Footer text: `Build 204 • Pure Ocean Cold Chain Distribution` | Replace with: `Build 204 • PondFish Retail Technologies`. | **Cat 1** |
-| `SplashScreen.jsx` | L64 | `<Text style={styles.subTagline}>Dedicated Cold-Chain to Bangalore Counter</Text>` | Replace with: `Fresh & Live Fish Retail • Cut Fresh at Counter`. | **Cat 1** |
+| `SplashScreen.jsx` | L64 | `<Text style={styles.subTagline}>Dedicated Cold-Chain to Bangalore Counter</Text>` | Replace with: `Live Fish Retail • Counter Cut & Dressing`. | **Cat 1** |
 | `LiveTrackingScreen.jsx` | L284–286 | Text: "dedicated GPS-tracked refrigerated truck delivers fresh catch directly from local fishing harbors" | Re-skin copy to describe live harbor catch replenishment arriving at store tanks. | **Cat 3** |
 | `LiveTrackingScreen.jsx` | Architecture | Backend endpoint `GET /api/v1/customer/live-tracking` | PRESERVE backend tracking functionality; it represents genuine harbor-to-store logistics. | **Cat 3** |
 | Historical DB Migrations | All files | `lib/db/` historical references to cold chain | Retain existing schema columns/indexes to prevent database migration breakage. | **Cat 2** |
@@ -718,40 +721,44 @@ PondFish is:
 
 | Domain | Unresolved Assumption in Current Code | Engineering & UI Guidance |
 | :--- | :--- | :--- |
-| **Dressed Yields** | Hardcoded ~70–75% yield across all fish | **Unresolved**: Different species (e.g. Pomfret vs Rohu vs Prawns) and cuts have wildly different yields. Only display yield if backend species config specifies a yield ratio. |
-| **Preparation SLA** | "Ready in 20 mins" cutting time | **Unresolved**: Cutting time depends on store rush and queue. State "Cut fresh to order" without unverified minute promises. |
+| **Species-Specific Inventory & Handling** | Assumptions regarding how different species are stored or displayed (e.g. assumptions that some species are kept live while others are iced) | **Unresolved**: PondFish's stated business model is live-fish retail with preparation at the counter. Record species-specific handling as an unresolved business question until the business owner confirms it. Do not invent inventory or handling rules. |
+| **Dressed Yields** | Hardcoded ~70–75% yield across all fish | **Unresolved**: Different species and cuts have variable yields. Only display yield if backend species config specifies a yield ratio. |
+| **Preparation SLA** | "Ready in 20 mins" cutting time | **Unresolved**: Cutting time depends on store rush and queue. State "Cut to order at counter" without unverified minute promises. |
 | **Pickup SLA** | "Pickup in 25–35 mins" | **Unresolved**: State selected pickup time slot; do not hardcode fixed pickup turnaround times. |
 | **Delivery SLA** | "Delivery in 45–60 mins" | **Unresolved**: Delivery capability depends on local courier partner contracts. State delivery slot selected by customer. |
 | **Packaging Standards** | "Bio-Insulated Cold Packaging" | **Unresolved**: Packaging type and fee must come from backend settings. Do not advertise unverified materials. |
 | **Fee Structure** | Specific cutting (₹20) or delivery fees (₹35) | **Unresolved**: All fee line items must be driven dynamically by backend order summary API responses. |
-| **Live Tank Availability** | Guaranteed live-tank inventory for all species | **Unresolved**: Marine fish (e.g. Seer/Surmai) are typically iced at sea, not held in live freshwater tanks. Use species-specific availability tags. |
-| **Quality Certifications**| "100% Chemical Free" / "Lab Audited" | **Unresolved**: Omit until formal laboratory testing protocols and certificates are legally signed off. |
+| **Quality & Safety Certifications**| Claims such as "Quality assured", "Hygienic cutting guaranteed", "Zero artificial preservatives", "100% Chemical Free", "Lab Audited" | **Unresolved**: Do not replace unverified claims with other unverified guarantees. Prefer factual descriptions of actual customer workflows. |
 
 ---
 
 ## 6. Location and Address Onboarding Feasibility Report
 
-### 6.1 Requirements Overview
+### 6.1 Requirements & Proposal Notice
 For PondFish to operate accurate counter pickup assignments and neighborhood deliveries, the customer application requires a structured **Location & Address Onboarding Flow**:
 1. Prompt customer for location permission (`ACCESS_FINE_LOCATION`).
 2. Obtain current GPS latitude and longitude via device hardware.
 3. Call a reverse-geocoding service to resolve coordinates into structured components: House/Flat, Street, Landmark, Area, City, State, and PIN Code.
-4. Provide a pin-adjustment map UI or manual address entry fallback for users who deny permission or order for another address.
+4. Provide a manual address entry fallback for users who deny permission or order for another address.
 5. Persist addresses to a structured backend database table with a default address flag.
 
-### 6.2 Dependency & Permission Audit
-- **Android Manifest (`customer-app/android/app/src/main/AndroidManifest.xml`)**:
-  - Currently declared: `INTERNET`, `ACCESS_NETWORK_STATE`, `CAMERA`.
-  - **Missing**: `android.permission.ACCESS_FINE_LOCATION`, `android.permission.ACCESS_COARSE_LOCATION`.
-- **Node Dependencies (`customer-app/package.json`)**:
-  - Recommended library: `react-native-geolocation-service` (lightweight, zero unnecessary dependencies).
+> [!NOTE]
+> **Technical Proposal Status**: The reverse-geocoding endpoint and customer-address database schema described below are **proposals for future implementation**, NOT existing functionality.
 
-### 6.3 Secure Backend Reverse-Geocoding Proxy
-The Android mobile client must **never** call third-party geocoding APIs directly with embedded API keys. All geocoding requests must route through a dedicated backend API route: `POST /api/v1/geo/reverse-geocode`.
+### 6.2 Existing Database Migration History & Numbering Invariant
+An audit of `Documentation/database/migrations/` confirms the existing migration history:
+- `0011_gps_journeys_slice11.sql`
+- `0015_subscription_credit_ledger_adjustment.sql`
+- `0017_admin_broadcasts_lifecycle.sql`
+- `0018_checkout_intents.sql`
+- `0019_payments_subscription_id.sql` (Occupied, Applied & Verified 2026-10-23)
+- `0020_bill_review_and_store_scoping.sql` (Occupied, Applied & Verified 2026-10-26)
 
-### 6.4 Backend Database Schema Requirements
-A dedicated `customer_addresses` table must be introduced via a new migration (`0019_add_customer_addresses.sql`):
+Because migration versions `0019` and `0020` are already occupied by applied historical migrations, the proposed customer-address migration **must use the next unused version: 0021** (`0021_customer_addresses.sql`).
+*Do not overwrite, rename, or reuse historical migrations. Do not create the migration file in this task.*
+
 ```sql
+-- Proposed Migration: 0021_customer_addresses.sql (DO NOT CREATE YET)
 CREATE TABLE IF NOT EXISTS customer_addresses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -769,7 +776,36 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_customer_addresses_customer_id ON customer_addresses(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_addresses_default ON customer_addresses(customer_id, is_default) WHERE is_default = true;
 ```
+
+### 6.3 Existing API Conventions & Proposed Technical Design
+Inspection of the existing backend API confirms the use of Next.js 14 App Router conventions (`app/api/v1/.../route.js`) with Bearer token authentication via `authenticateRequest(request)` and `verifySessionToken(token)`.
+
+The proposed address and geocoding endpoints must adhere to these established conventions:
+1. `app/api/v1/customer/addresses/route.js`:
+   - `GET`: Return all addresses for authenticated customer.
+   - `POST`: Create a new structured address record (with `is_default` handling).
+2. `app/api/v1/customer/addresses/[id]/route.js`:
+   - `PUT`: Update existing address.
+   - `DELETE`: Remove address record.
+3. `app/api/v1/geo/reverse-geocode/route.js`:
+   - `POST`: Accept `{ latitude, longitude }` and query backend Google Maps API proxy to return `{ houseFlat, street, area, city, state, pincode, formattedAddress }`.
+
+### 6.4 Required Backend & Client Dependencies Documented Separately
+The proposed location implementation requires the following dependencies to be planned and provisioned:
+1. **Server-Side Environment & SDK**:
+   - `GOOGLE_MAPS_SERVER_API_KEY` defined in backend environment variables.
+   - Server-side HTTP client or `@googlemaps/google-maps-services-js` for geocoding queries with server-side caching and rate limiting.
+2. **Database Persistence**:
+   - Migration `0021_customer_addresses.sql` applied to PostgreSQL.
+   - Persistence repository `lib/db/repositories/addressRepository.js` using parameterized SQL and bounded connection pooling.
+3. **Mobile Client Dependencies**:
+   - `react-native-geolocation-service` in `customer-app/package.json`.
+   - Android permissions declared in `customer-app/android/app/src/main/AndroidManifest.xml`:
+     `android.permission.ACCESS_FINE_LOCATION`, `android.permission.ACCESS_COARSE_LOCATION`.
 
 ---
 
@@ -789,7 +825,7 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
 
 ### 7.2 Architecture Recommendation
 **Recommendation: Preserve and harden the existing state machine in `App.jsx`**.
-Do not perform a full React Navigation rewrite solely for visual polish. The current state machine is secure, lightweight, thoroughly covered by unit tests, and capable of supporting the agreed 5-action bottom navigation (`Home`, `Track`, `Scan Bill`, `Bookings`, `Profile`) with SVG icons, safe-area insets, and sticky cart bars. A migration to React Navigation should only be undertaken if future product requirements (such as universal deep-linking across web and mobile) provide clear functional justification for the engineering cost and regression risk.
+Do not perform a full React Navigation rewrite solely for visual polish. The current state machine is secure, lightweight, thoroughly covered by unit tests, and capable of supporting the agreed 5-action bottom navigation (`Home`, `Track`, `Scan Bill`, `Bookings`, `Profile`) with SVG icons, safe-area insets, and sticky cart bars. A migration to React Navigation should only be undertaken if future product requirements provide clear functional justification for the engineering cost and regression risk.
 
 ---
 
@@ -811,6 +847,7 @@ The following core business capabilities are verified, operational, and **must n
 
 ### 9.1 Test Execution Facts
 During the validation run of the root repository test suite (`npm test`), the command exited with **code 1**.
+- **Command Executed**: `npm test` (`node --test "tests/**/*.test.js"`)
 - **Total Test Suites Executed**: 55 suites.
 - **Total Tests Executed**: 445 tests.
 - **Passing Tests**: 442 tests.
@@ -847,7 +884,7 @@ During the validation run of the root repository test suite (`npm test`), the co
 - **Suite**: `PostgreSQL Subscription Lifecycle & Payment Replay Suite (Migration 0019)`
 - **Error**: `1 subtest failed` (due to Failure 2 above).
 
-### 9.3 Skipped Tests & Environment Root Cause
+### 9.3 Skipped Tests & Root Cause Analysis
 1. **Skipped Tests**:
    The test output explicitly logged:
    ```
@@ -857,13 +894,17 @@ During the validation run of the root repository test suite (`npm test`), the co
    #   [SKIP] Dedicated local PostgreSQL test instance (localhost:5433) is not running.
    #   Isolated synthetic unit test suites cover all checkout and recovery behaviors.
    ```
-2. **Environment Root Cause**:
-   - The test runner attempts to connect to a remote PostgreSQL / Supabase instance when the local port 5433 instance is absent.
-   - During concurrent connection pool acquisition under high concurrency tests (5+ simultaneous transactions), the remote database connection timed out (`Connection terminated due to connection timeout`).
-3. **Independence from UI/UX Changes**:
-   - The UI/UX audit and skill files (`.agent/skills/pondfish-mobile-ui-ux/SKILL.md` and `Documentation/audit/CUSTOMER_APP_UI_UX_AUDIT.md`) are documentation artifacts that have zero code interaction with backend database connection pools.
-   - All customer-app unit tests passed with **100% success** (258/258 tests across 14 suites in `npm --prefix customer-app test`, and 54/54 tests in `customer-app-phase3b7-logout-security.test.js`).
-   - The root Next.js production build (`npm run build`) succeeded with **0 errors**, compiling all 42/42 static and dynamic routes.
+2. **Timeout Cause Analysis**:
+   - Both failing tests threw `Connection terminated due to connection timeout` originating inside `pg-pool` when connecting to the database specified in `DATABASE_URL`.
+   - The test output indicates that a dedicated local PostgreSQL test instance on localhost:5433 was skipped.
+   - **Root Cause Determination**: Whether the connection timeouts are caused by remote network latency, database connection limits, pool contention under concurrency, or server-side resource constraints is **unconfirmed pending dedicated database connection diagnostics**. We do not speculate or label remote database timeouts as definitively environmental without empirical proof.
+
+### 9.4 Independent Execution Results
+To ensure clear separation of results across domains:
+- **Root Ecosystem Suite (`npm test`)**: Exited with code 1 (442 pass, 3 fail across 55 suites due to the PostgreSQL connection timeouts detailed above).
+- **Customer App Unit Test Suite (`npm --prefix customer-app test`)**: **258 / 258 tests passed** across 14 suites (duration: 15.9s).
+- **Customer App Logout Security Suite (`node --test tests/unit/customer-app-phase3b7-logout-security.test.js`)**: **54 / 54 tests passed** (duration: 15.2s).
+- **Next.js Production Build (`npm run build`)**: **Compiled successfully with 0 errors**, generating all 42/42 static and dynamic routes.
 
 ---
 
@@ -872,8 +913,9 @@ During the validation run of the root repository test suite (`npm test`), the co
 This validated design specification:
 1. Locks in the agreed 5-action navigation: `Home`, `Track`, `Scan Bill` (Center Elevated), `Bookings`, `Profile`.
 2. Purges all fake ratings, fake urgency countdowns, fake 8-minute delivery promises, and unverified cold-chain claims.
-3. Removes unsupported business assumptions (yield ratios, cutting turnaround times, and bio-packaging claims) to ensure the UI remains strictly data-driven.
-4. Confirms that the existing hardened state machine in `App.jsx` should be preserved and visually refined.
-5. Documents the pre-existing environment-based root test timeout failures with full technical fidelity.
+3. Removes unsupported business assumptions (yield ratios, cutting turnaround times, bio-packaging claims, species-specific storage assumptions, and ungrounded marketing guarantees), recording open questions in the Unresolved Business Assumptions Ledger.
+4. Identifies the next unused database migration number as **0021** (`0021_customer_addresses.sql`) and documents location reverse-geocoding as a technical proposal with separate backend dependencies.
+5. Confirms that the existing hardened state machine in `App.jsx` should be preserved and visually refined.
+6. Documents the exact root test timeout failure details without unsubstantiated environmental attribution, maintaining strict separation from passing customer-app test results.
 
 The specification is now complete, verified, and ready to guide the first Home screen redesign in subsequent tasks without beginning implementation prematurely.
