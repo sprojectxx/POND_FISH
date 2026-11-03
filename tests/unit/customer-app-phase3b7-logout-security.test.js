@@ -217,8 +217,11 @@ function createAppHarness(mockAuthStorage, mockApi) {
 }
 
 /**
- * Loads and renders the actual production App.jsx component via Babel transformation.
- * Connects directly to production App state, hooks, and screen props without duplicating component logic.
+ * Loads and evaluates the actual production App.jsx component via Babel transformation.
+ * This harness is a synchronous headless hook runner simulating React hook dispatching
+ * (useState, useRef, useCallback, useEffect) and React Native UI stubs, connecting directly
+ * to production App state, hook slots, and screen props without running a native React Native bridge
+ * or full Fiber reconciler.
  */
 function loadTransformedApp(mockDependencies = {}) {
   const babel = require('@babel/core');
@@ -911,52 +914,93 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
     assert.equal(res, true, 'Primary logout must succeed even if device-token reset failed');
   });
 
-  await t.test('1.18. Save credentials fault injection: Write returns true but read-back returns wrong token throws error', async () => {
+  await t.test('1.18. Save credentials fault injection: Token mismatch fails with redacted error and zero credential leakage', async () => {
+    const expectedToken = 'SECRET_EXPECTED_TOKEN_A1B2C3D4E5';
+    const storedWrongToken = 'SECRET_STORED_TOKEN_Z9Y8X7W6V5';
+    const expectedRefresh = 'SECRET_EXPECTED_REFRESH_112233';
+    const storedRefresh = 'SECRET_STORED_REFRESH_998877';
+
     const customKeychain = {
       SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
       STORAGE_TYPE: { KEYSTORE: 1 },
       resetGenericPassword: async () => true,
       getGenericPassword: async (opts = {}) => {
         if (opts.service === 'com.pondfish.customer.logout_pending') {
-          return false; // No tombstone
+          return false;
         }
         if (opts.service === 'com.pondfish.customer.auth') {
-          // Fault injection: returns wrong token
-          return { username: 'authToken', password: JSON.stringify({ token: 'wrong-token-corrupted', refreshToken: '' }) };
+          return { username: 'authToken', password: JSON.stringify({ token: storedWrongToken, refreshToken: storedRefresh }) };
         }
         return false;
       },
-      setGenericPassword: async () => true, // write reports true
+      setGenericPassword: async () => true,
     };
+
+    const capturedLogs = [];
+    const origWarn = console.warn;
+    const origError = console.error;
+    const origLog = console.log;
+    console.warn = (...args) => capturedLogs.push(args.join(' '));
+    console.error = (...args) => capturedLogs.push(args.join(' '));
+    console.log = (...args) => capturedLogs.push(args.join(' '));
+
     const { authStorage } = loadAuthStorageModule(customKeychain);
-    await assert.rejects(
-      authStorage.saveAuthTokens('expected-token-123'),
-      (err) => {
-        assert.ok(err.message.includes('Verification failed: Saved token mismatch'), `Must throw token mismatch error, got: ${err.message}`);
-        return true;
-      }
-    );
+
+    try {
+      await assert.rejects(
+        authStorage.saveAuthTokens(expectedToken, expectedRefresh),
+        (err) => {
+          // 1. Error identifies the failed field safely
+          assert.equal(err.message, 'Credential verification failed: token mismatch');
+          // 2. Error does not contain expected or actual token values
+          assert.equal(err.message.includes(expectedToken), false, 'Error message must not contain expected token');
+          assert.equal(err.message.includes(storedWrongToken), false, 'Error message must not contain stored token');
+          // 3. Error does not contain refresh token values
+          assert.equal(err.message.includes(expectedRefresh), false, 'Error message must not contain expected refresh token');
+          assert.equal(err.message.includes(storedRefresh), false, 'Error message must not contain stored refresh token');
+          return true;
+        }
+      );
+
+      // 4. Assert zero console leakage
+      const allLogs = capturedLogs.join('\n');
+      assert.equal(allLogs.includes(expectedToken), false, 'Console output must not contain expected token');
+      assert.equal(allLogs.includes(storedWrongToken), false, 'Console output must not contain stored token');
+      assert.equal(allLogs.includes(expectedRefresh), false, 'Console output must not contain expected refresh token');
+      assert.equal(allLogs.includes(storedRefresh), false, 'Console output must not contain stored refresh token');
+    } finally {
+      console.warn = origWarn;
+      console.error = origError;
+      console.log = origLog;
+    }
   });
 
-  await t.test('1.19. Save credentials fault injection: Write returns true but read-back returns no credentials throws error', async () => {
+  await t.test('1.19. Save credentials fault injection: Missing credentials fails with redacted error', async () => {
+    const distinctiveToken = 'SECRET_DISTINCTIVE_TOKEN_MISSING_123';
+    const distinctiveRefresh = 'SECRET_DISTINCTIVE_REFRESH_MISSING_456';
+
     const customKeychain = {
       SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
       STORAGE_TYPE: { KEYSTORE: 1 },
       resetGenericPassword: async () => true,
-      getGenericPassword: async () => false, // returns nothing
-      setGenericPassword: async () => true, // write reports true
+      getGenericPassword: async () => false, // missing credentials
+      setGenericPassword: async () => true,
     };
     const { authStorage } = loadAuthStorageModule(customKeychain);
+
     await assert.rejects(
-      authStorage.saveAuthTokens('expected-token-123'),
+      authStorage.saveAuthTokens(distinctiveToken, distinctiveRefresh),
       (err) => {
-        assert.ok(err.message.includes('Verification failed: Credentials missing or empty after save'), `Must throw missing credentials error, got: ${err.message}`);
+        assert.equal(err.message, 'Credential verification failed: credentials missing');
+        assert.equal(err.message.includes(distinctiveToken), false);
+        assert.equal(err.message.includes(distinctiveRefresh), false);
         return true;
       }
     );
   });
 
-  await t.test('1.20. Save credentials fault injection: Write returns true but read-back returns malformed credentials throws error', async () => {
+  await t.test('1.20. Save credentials fault injection: Malformed credentials fails with redacted error', async () => {
+    const distinctiveToken = 'SECRET_DISTINCTIVE_TOKEN_MALFORMED_123';
     const customKeychain = {
       SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
       STORAGE_TYPE: { KEYSTORE: 1 },
@@ -971,16 +1015,22 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       setGenericPassword: async () => true,
     };
     const { authStorage } = loadAuthStorageModule(customKeychain);
+
     await assert.rejects(
-      authStorage.saveAuthTokens('expected-token-123'),
+      authStorage.saveAuthTokens(distinctiveToken),
       (err) => {
-        assert.ok(err.message.includes('Verification failed: Saved credentials corrupted or unparseable'), `Must throw unparseable error, got: ${err.message}`);
+        assert.equal(err.message, 'Credential verification failed: stored credentials malformed');
+        assert.equal(err.message.includes(distinctiveToken), false);
         return true;
       }
     );
   });
 
-  await t.test('1.21. Save credentials fault injection: Write returns true but read-back returns mismatched refresh token throws error', async () => {
+  await t.test('1.21. Save credentials fault injection: Refresh token mismatch fails with redacted error and zero credential leakage', async () => {
+    const validToken = 'SECRET_TOKEN_VALID_MATCH_000';
+    const expectedRefresh = 'SECRET_EXPECTED_REFRESH_TOKEN_AAA111';
+    const storedWrongRefresh = 'SECRET_STORED_REFRESH_TOKEN_BBB222';
+
     const customKeychain = {
       SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
       STORAGE_TYPE: { KEYSTORE: 1 },
@@ -988,23 +1038,74 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
       getGenericPassword: async (opts = {}) => {
         if (opts.service === 'com.pondfish.customer.logout_pending') return false;
         if (opts.service === 'com.pondfish.customer.auth') {
-          return { username: 'authToken', password: JSON.stringify({ token: 'jwt-123', refreshToken: 'corrupted-refresh' }) };
+          return { username: 'authToken', password: JSON.stringify({ token: validToken, refreshToken: storedWrongRefresh }) };
+        }
+        return false;
+      },
+      setGenericPassword: async () => true,
+    };
+
+    const capturedLogs = [];
+    const origWarn = console.warn;
+    const origError = console.error;
+    const origLog = console.log;
+    console.warn = (...args) => capturedLogs.push(args.join(' '));
+    console.error = (...args) => capturedLogs.push(args.join(' '));
+    console.log = (...args) => capturedLogs.push(args.join(' '));
+
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+
+    try {
+      await assert.rejects(
+        authStorage.saveAuthTokens(validToken, expectedRefresh),
+        (err) => {
+          assert.equal(err.message, 'Credential verification failed: refresh token mismatch');
+          assert.equal(err.message.includes(validToken), false);
+          assert.equal(err.message.includes(expectedRefresh), false);
+          assert.equal(err.message.includes(storedWrongRefresh), false);
+          return true;
+        }
+      );
+
+      const allLogs = capturedLogs.join('\n');
+      assert.equal(allLogs.includes(validToken), false);
+      assert.equal(allLogs.includes(expectedRefresh), false);
+      assert.equal(allLogs.includes(storedWrongRefresh), false);
+    } finally {
+      console.warn = origWarn;
+      console.error = origError;
+      console.log = origLog;
+    }
+  });
+
+  await t.test('1.22. Save credentials fault injection: Keystore read-back exception fails with redacted error without credential leakage', async () => {
+    const distinctiveToken = 'SECRET_READBACK_THROW_TOKEN_999';
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      resetGenericPassword: async () => true,
+      getGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.logout_pending') return false;
+        if (opts.service === 'com.pondfish.customer.auth') {
+          throw new Error('Native Keystore hardware driver I/O failure');
         }
         return false;
       },
       setGenericPassword: async () => true,
     };
     const { authStorage } = loadAuthStorageModule(customKeychain);
+
     await assert.rejects(
-      authStorage.saveAuthTokens('jwt-123', 'expected-refresh-456'),
+      authStorage.saveAuthTokens(distinctiveToken),
       (err) => {
-        assert.ok(err.message.includes('Verification failed: Saved refreshToken mismatch'), `Must throw refresh token mismatch error, got: ${err.message}`);
+        assert.equal(err.message, 'Credential verification failed: error reading back from Keystore');
+        assert.equal(err.message.includes(distinctiveToken), false);
         return true;
       }
     );
   });
 
-  await t.test('1.22. Successful save writes credentials, reads back matching credentials, and returns true', async () => {
+  await t.test('1.23. Successful save writes credentials, reads back matching credentials, and returns true', async () => {
     const { authStorage } = loadAuthStorageModule();
     const result = await authStorage.saveAuthTokens('valid-jwt-token-999', 'valid-refresh-token-888');
     assert.equal(result, true, 'saveAuthTokens must return true when write and read-back verification succeed');
@@ -1639,9 +1740,15 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
     // 5. Fail-closed locking in LOGOUT_FAILURE upon hardware Keystore failure and retry execution.
     // 6. In-memory cart state reset and session isolation between sequential user accounts.
     //
-    // What is NOT tested (due to React Native headless environment limitations):
-    // 1. Native Android Activity / JVM thread transitions and Choreographer vsync dropped frame counts.
-    // 2. Android hardware Keystore secure element cryptographic operations on a physical ARM processor.
+    // Execution Environment Boundary:
+    // loadTransformedApp() is a synchronous headless hook runner with sequential slot tracking
+    // for useState, useRef, useCallback, useEffect, and minimal React Native component stubs.
+    // It verifies App.jsx component logic, state transitions, and callback wiring.
+    //
+    // What is NOT simulated:
+    // 1. React 18 concurrent Fiber reconciliation, lane scheduling, and priority-based interruptible rendering.
+    // 2. Native React Native Fabric / Paper UI shadow trees, yoga flexbox layout measurement, and Choreographer vsync dropped frame counts.
+    // 3. Physical Android hardware Keystore secure element cryptographic operations on an ARM processor.
     assert.ok(fs.existsSync(appSourcePath), 'App.jsx production source must exist');
   });
 
@@ -1909,6 +2016,87 @@ test('Phase 3B.7B: Final Logout Security Corrections Suite', async (t) => {
     });
     assert.equal(harness.getCurrentScreen(), 'HOME');
     assert.equal(harness.getCartSummary().totalItems, 0, 'User B must not see User A cart items');
+  });
+
+  await t.test('4.7. Actual App.jsx: React 18 production smoke test via standard react and react-dom/server renderToString', () => {
+    const React = require('react');
+    const ReactDOMServer = require('react-dom/server');
+    const babel = require('@babel/core');
+    const preset = require.resolve('metro-react-native-babel-preset');
+
+    const code = fs.readFileSync(appSourcePath, 'utf8');
+    const transformed = babel.transformSync(code, {
+      presets: [preset],
+      configFile: false,
+      babelrc: false,
+      filename: 'App.jsx',
+    }).code;
+
+    const customRequire = (id) => {
+      if (id.startsWith('@babel/runtime')) return require(id);
+      if (id === 'react') return React;
+      if (id === 'react/jsx-runtime') return require('react/jsx-runtime');
+      if (id === 'react-native') {
+        return {
+          StyleSheet: { create: (obj) => obj },
+          BackHandler: { addEventListener: () => ({ remove: () => {} }), exitApp: () => {} },
+          StatusBar: () => null,
+          SafeAreaView: ({ children }) => React.createElement('div', { 'data-native': 'SafeAreaView' }, children),
+          View: ({ children }) => React.createElement('div', { 'data-native': 'View' }, children),
+          Text: ({ children }) => React.createElement('span', { 'data-native': 'Text' }, children),
+          ActivityIndicator: () => React.createElement('div', { 'data-native': 'ActivityIndicator' }),
+          TouchableOpacity: ({ children, onPress }) => React.createElement('button', { onClick: onPress }, children),
+        };
+      }
+      if (id === './src/utils/session-controller') return require(sessionControllerPath);
+      if (id === './src/utils/navigation-guard') return require(navigationGuardPath);
+      if (id === './src/theme/colors') return { colors: {} };
+      if (id.startsWith('./src/screens/')) {
+        const name = path.basename(id, path.extname(id));
+        return function MockScreen(props) {
+          return React.createElement('div', { 'data-screen': name });
+        };
+      }
+      if (id === './src/services/api') {
+        return {
+          api: {
+            clearInFlightRequests: () => {},
+            clearResponseCache: () => {},
+            resetSession: () => {},
+            getCart: async () => ({ data: { summary: { totalItems: 0 } } }),
+          },
+          setUnauthorizedHandler: () => {},
+        };
+      }
+      if (id === './src/services/auth-storage') {
+        return {
+          getAuthTokens: async () => ({ token: 'default-jwt' }),
+          clearAuthTokens: async () => true,
+        };
+      }
+      return {};
+    };
+
+    const vm = require('vm');
+    const moduleObj = { exports: {} };
+    const context = vm.createContext({
+      require: customRequire,
+      module: moduleObj,
+      exports: moduleObj.exports,
+      console,
+      process,
+      global: {},
+    });
+
+    vm.runInContext(transformed, context);
+    const App = moduleObj.exports.default;
+    assert.equal(typeof App, 'function', 'Transformed App.jsx must export a React functional component');
+
+    // Smoke test production App.jsx inside the actual React 18 / ReactDOMServer runtime
+    const html = ReactDOMServer.renderToString(React.createElement(App));
+    assert.ok(html.length > 0, 'App.jsx must successfully render non-empty HTML string via ReactDOMServer');
+    assert.ok(html.includes('data-screen="SplashScreen"'), 'Initial render in standard React 18 runtime must mount SplashScreen');
+    assert.ok(html.includes('data-native="SafeAreaView"'), 'Root element must be rendered inside SafeAreaView container');
   });
 
 });

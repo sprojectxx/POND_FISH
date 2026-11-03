@@ -89,32 +89,34 @@ export async function saveAuthTokens(token, refreshToken = '') {
         service: AUTH_SERVICE_KEY,
       });
     } catch (readErr) {
-      throw new Error(`Verification failed: Error reading back credentials from Keystore: ${readErr.message}`);
+      const sanitizedErr = new Error('Credential verification failed: error reading back from Keystore');
+      sanitizedErr.cause = readErr;
+      throw sanitizedErr;
     }
 
     if (!readBackCreds || readBackCreds === false || !readBackCreds.password) {
-      throw new Error('Verification failed: Credentials missing or empty after save');
+      throw new Error('Credential verification failed: credentials missing');
     }
 
     let parsed;
     try {
       parsed = JSON.parse(readBackCreds.password);
     } catch (parseErr) {
-      throw new Error(`Verification failed: Saved credentials corrupted or unparseable: ${parseErr.message}`);
+      throw new Error('Credential verification failed: stored credentials malformed');
     }
 
     if (!parsed || typeof parsed !== 'object') {
-      throw new Error('Verification failed: Saved credentials are not a valid object');
+      throw new Error('Credential verification failed: stored credentials malformed');
     }
 
     if (parsed.token !== token) {
-      throw new Error(`Verification failed: Saved token mismatch (expected '${token}', got '${parsed.token}')`);
+      throw new Error('Credential verification failed: token mismatch');
     }
 
     const expectedRefresh = refreshToken || '';
     const actualRefresh = parsed.refreshToken || '';
     if (actualRefresh !== expectedRefresh) {
-      throw new Error(`Verification failed: Saved refreshToken mismatch (expected '${expectedRefresh}', got '${actualRefresh}')`);
+      throw new Error('Credential verification failed: refresh token mismatch');
     }
 
     return true;
@@ -137,7 +139,7 @@ async function getLogoutPendingStatusInternal() {
     return {
       status: TOMBSTONE_STATUS.UNKNOWN,
       present: null,
-      error: new Error(`Unexpected or malformed tombstone marker in Keystore: ${JSON.stringify(creds)}`),
+      error: new Error('Unexpected or malformed tombstone marker in Keystore'),
     };
   } catch (err) {
     return { status: TOMBSTONE_STATUS.UNKNOWN, present: null, error: err };
