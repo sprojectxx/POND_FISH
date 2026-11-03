@@ -238,6 +238,14 @@ function buildDeduplicationKey({
   ]);
 }
 
+// Session generation tracking for request ownership & cancellation
+let currentSessionId = 1;
+let requestIdCounter = 0;
+
+// Registry of all in-flight direct requests (direct GET, POST, PUT, PATCH, DELETE)
+// Key: number (requestId) -> Value: { id, method, endpoint, url, sessionId, controller, rejectSessionReset, isGet }
+const activeDirectRequests = new Map();
+
 // Registry of active in-flight GET requests for safe request deduplication
 // Key: JSON.stringify(['GET', url, authIdentity, skipUnauthorizedHandler, effectiveTimeoutMs, headers, semanticOptions])
 // Value: {
@@ -245,11 +253,35 @@ function buildDeduplicationKey({
 //   subscribers: Set<{ resolve, reject, signal, cleanup }>,
 //   controller: AbortController | null,
 //   isSettled: boolean,
+//   sessionId: number,
 // }
 const inFlightGetRequests = new Map();
 
-function clearInFlightRequests() {
+/**
+ * Cancels active in-flight requests and invalidates response cache.
+ * When called with options.resetSession === true (or resetSession()):
+ * - Invalidates every request owned by the previous session (GET, POST, PUT, PATCH, DELETE)
+ * - Aborts supported in-flight network controllers with 'Session reset'
+ * - Rejects pending promises with API_SESSION_RESET
+ * - Increments currentSessionId so late arrivals cannot update state or populate cache
+ * When called without resetSession:
+ * - Cancels in-flight deduplicated GET requests (used during screen unmounting)
+ * - Preserves in-flight mutations per Test 5.19
+ */
+function clearInFlightRequests(options = {}) {
+  const isSessionReset = Boolean(
+    options === true ||
+    options?.resetSession === true ||
+    options?.isSessionReset === true
+  );
+
   clearResponseCache();
+
+  if (isSessionReset) {
+    currentSessionId += 1;
+  }
+
+  // 1. Cancel in-flight deduplicated GET requests
   for (const [key, entry] of inFlightGetRequests.entries()) {
     entry.isSettled = true;
     try {
@@ -269,10 +301,58 @@ function clearInFlightRequests() {
     entry.subscribers.clear();
   }
   inFlightGetRequests.clear();
+
+  // 2. Cancel in-flight direct requests
+  if (isSessionReset) {
+    for (const [id, entry] of activeDirectRequests.entries()) {
+      try {
+        if (entry.controller) {
+          entry.controller.abort('In-flight requests cancelled due to session reset');
+        }
+      } catch (_) {}
+      try {
+        if (entry.rejectSessionReset) {
+          const err = new Error('In-flight request cancelled due to session reset');
+          err.code = 'API_SESSION_RESET';
+          err.isSessionReset = true;
+          entry.rejectSessionReset(err);
+        }
+      } catch (_) {}
+    }
+    activeDirectRequests.clear();
+  } else {
+    // Non-session reset: only cancel direct GET requests, preserve mutations (Test 5.19)
+    for (const [id, entry] of activeDirectRequests.entries()) {
+      if (entry.isGet) {
+        try {
+          if (entry.controller) {
+            entry.controller.abort('In-flight requests cleared');
+          }
+        } catch (_) {}
+        try {
+          if (entry.rejectSessionReset) {
+            const err = new Error('In-flight request cancelled due to session reset');
+            err.code = 'API_SESSION_RESET';
+            err.isSessionReset = true;
+            entry.rejectSessionReset(err);
+          }
+        } catch (_) {}
+        activeDirectRequests.delete(id);
+      }
+    }
+  }
+}
+
+/**
+ * Invalidate every request owned by the current session across all HTTP methods
+ * and reject in-flight requests with API_SESSION_RESET.
+ */
+function resetSession() {
+  return clearInFlightRequests({ resetSession: true });
 }
 
 function getInFlightRequestCount() {
-  return inFlightGetRequests.size;
+  return inFlightGetRequests.size + activeDirectRequests.size;
 }
 
 function cloneResponse(val) {
@@ -861,7 +941,7 @@ function request(endpoint, options = {}) {
       : null;
 
     if (!dedupKey) {
-      // Non-GET mutation, bypassDedup, or unrepresented options: direct execution with its own controller
+      // Direct request execution (direct GET, or mutation: POST, PUT, PATCH, DELETE)
       const hasAbortController = typeof AbortController !== 'undefined';
       const controller = hasAbortController ? new AbortController() : null;
       let callerAbortListener = null;
@@ -877,18 +957,61 @@ function request(endpoint, options = {}) {
         }
       }
 
+      const reqId = ++requestIdCounter;
+      const requestSessionId = currentSessionId;
+      let rejectSessionReset = null;
+      const sessionResetPromise = new Promise((_, reject) => {
+        rejectSessionReset = reject;
+      });
+
+      const directEntry = {
+        id: reqId,
+        method,
+        endpoint,
+        url,
+        sessionId: requestSessionId,
+        controller,
+        isGet,
+        rejectSessionReset,
+      };
+      activeDirectRequests.set(reqId, directEntry);
+
       try {
-        const netRes = await executeNetworkRequest({
-          url,
-          endpoint,
-          method,
-          headers,
-          requestToken,
-          effectiveTimeoutMs,
-          options,
-          controller,
-          callerSignal: controller ? null : (options.signal || null),
-        });
+        let netRes;
+        try {
+          netRes = await Promise.race([
+            executeNetworkRequest({
+              url,
+              endpoint,
+              method,
+              headers,
+              requestToken,
+              effectiveTimeoutMs,
+              options,
+              controller,
+              callerSignal: controller ? null : (options.signal || null),
+            }),
+            sessionResetPromise,
+          ]);
+        } catch (execErr) {
+          // If session was reset while request was in flight, discard late error and reject with API_SESSION_RESET
+          if (requestSessionId !== currentSessionId) {
+            const resetErr = new Error('In-flight request cancelled due to session reset');
+            resetErr.code = 'API_SESSION_RESET';
+            resetErr.isSessionReset = true;
+            throw resetErr;
+          }
+          throw execErr;
+        }
+
+        // If session was reset while request was in flight, discard late response and reject with API_SESSION_RESET
+        if (requestSessionId !== currentSessionId) {
+          const resetErr = new Error('In-flight request cancelled due to session reset');
+          resetErr.code = 'API_SESSION_RESET';
+          resetErr.isSessionReset = true;
+          throw resetErr;
+        }
+
         const isGenerationValid =
           requestGlobalGen === globalInvalidationGeneration &&
           requestEndpointGen === getEndpointGeneration(baseEndpoint);
@@ -900,7 +1023,8 @@ function request(endpoint, options = {}) {
           throw resetErr;
         }
 
-        if (shouldWriteCache && cacheKey && isGenerationValid && netRes && netRes.success !== false) {
+        // Prevent old-session response from writing to private cache
+        if (shouldWriteCache && cacheKey && isGenerationValid && requestSessionId === currentSessionId && netRes && netRes.success !== false) {
           const byteSize = estimatePayloadBytes(netRes);
           saveToResponseCache(cacheKey, {
             data: cloneResponse(netRes),
@@ -914,6 +1038,7 @@ function request(endpoint, options = {}) {
         }
         return netRes;
       } finally {
+        activeDirectRequests.delete(reqId);
         if (callerAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
           options.signal.removeEventListener('abort', callerAbortListener);
         }
@@ -931,12 +1056,14 @@ function request(endpoint, options = {}) {
     if (isInitiator) {
       const hasAbortController = typeof AbortController !== 'undefined';
       const controller = hasAbortController ? new AbortController() : null;
+      const requestSessionId = currentSessionId;
 
       entry = {
         key: dedupKey,
         subscribers: new Set(),
         controller,
         isSettled: false,
+        sessionId: requestSessionId,
       };
       inFlightGetRequests.set(dedupKey, entry);
 
@@ -955,11 +1082,19 @@ function request(endpoint, options = {}) {
             callerSignal: null, // Shared network request MUST NOT inherit initiating subscriber's signal
           });
 
+          // Discard late response if session was reset while request was in-flight
+          if (requestSessionId !== currentSessionId) {
+            const resetErr = new Error('In-flight request cancelled due to session reset');
+            resetErr.code = 'API_SESSION_RESET';
+            resetErr.isSessionReset = true;
+            throw resetErr;
+          }
+
           const isGenerationValid =
             requestGlobalGen === globalInvalidationGeneration &&
             requestEndpointGen === getEndpointGeneration(baseEndpoint);
 
-          if (shouldWriteCache && cacheKey && isGenerationValid && json && json.success !== false) {
+          if (shouldWriteCache && cacheKey && isGenerationValid && requestSessionId === currentSessionId && json && json.success !== false) {
             const byteSize = estimatePayloadBytes(json);
             saveToResponseCache(cacheKey, {
               data: cloneResponse(json),
@@ -980,10 +1115,17 @@ function request(endpoint, options = {}) {
           }
         } catch (err) {
           entry.isSettled = true;
+          // If session was reset, ensure error code is API_SESSION_RESET
+          const finalErr = (requestSessionId !== currentSessionId)
+            ? Object.assign(new Error('In-flight request cancelled due to session reset'), {
+                code: 'API_SESSION_RESET',
+                isSessionReset: true,
+              })
+            : err;
           for (const sub of Array.from(entry.subscribers)) {
             entry.subscribers.delete(sub);
             if (sub.cleanup) sub.cleanup();
-            sub.reject(err);
+            sub.reject(finalErr);
           }
         } finally {
           entry.isSettled = true;
@@ -1055,10 +1197,11 @@ function request(endpoint, options = {}) {
 
 export const api = {
   /**
-   * Safe request deduplication management
+   * Safe request deduplication and lifecycle management
    */
   request: (endpoint, options) => request(endpoint, options),
   clearInFlightRequests,
+  resetSession,
   getInFlightRequestCount,
   buildDeduplicationKey,
   extractAndNormalizeAuthorization,

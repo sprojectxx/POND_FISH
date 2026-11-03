@@ -38,6 +38,7 @@ import TransactionResultScreen from './src/screens/TransactionResultScreen';
 import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
 import LiveTrackingScreen from './src/screens/LiveTrackingScreen';
 import { AUTHENTICATED_SCREENS, resolveNavigationDecision } from './src/utils/navigation-guard';
+import { executeSessionLogout } from './src/utils/session-controller';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
@@ -96,68 +97,31 @@ export default function App() {
   }, [currentScreen, isProfileComplete, fetchCartSummary]);
 
   const handleLogout = useCallback(async (expectedToken = null) => {
-    if (isLoggingOutRef.current) return;
-    isLoggingOutRef.current = true;
-
-    // Check token identity if expectedToken was supplied (e.g. from 401 callback)
-    if (expectedToken) {
-      try {
-        const current = await getAuthTokens();
-        if (current?.token && current.token !== expectedToken) {
-          console.warn('[LOGOUT] Session token changed before clearing; aborting obsolete logout');
-          isLoggingOutRef.current = false;
-          return;
-        }
-      } catch (e) {
-        console.warn('[LOGOUT] Error verifying token before logout', e);
-      }
-    }
-
-    // 1. Immediately invalidate session identity and cancel all in-flight requests
-    activeSessionIdRef.current += 1;
-    api.clearInFlightRequests();
-    api.clearResponseCache();
-
-    // 2. Immediately revoke access to authenticated screens and clear all private in-memory customer data
-    setIsAuthenticated(false);
-    setIsProfileComplete(false);
-    setScreenParams({});
-    setCartSummary({ totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true });
-
-    // 3. Immediately move away from authenticated screens to prevent viewing private data
-    setCurrentScreen('LOGOUT_IN_PROGRESS');
-
-    let didClear = false;
-    let clearError = null;
-
-    try {
-      didClear = await clearAuthTokens(expectedToken);
-      if (!didClear && expectedToken) {
-        console.warn('[LOGOUT] Session token changed during clear; aborting obsolete logout');
-        isLoggingOutRef.current = false;
-        return;
-      }
-    } catch (e) {
-      clearError = e;
-      console.warn('[LOGOUT] Error clearing tokens from Keystore', e);
-    } finally {
-      isLoggingOutRef.current = false;
-    }
-
-    // 4. Verification of credential deletion:
-    // Navigation to normal unauthenticated login flow (PHONE_AUTH) MUST ONLY happen after
-    // successful credential removal has been verified (didClear === true and no clearError).
-    if (didClear && !clearError) {
-      setLogoutError(null);
-      setCurrentScreen('PHONE_AUTH');
-    } else {
-      // Invariant: A failed or thrown credential deletion must never be treated as successful logout.
-      // The app transitions to a locked logout-failure state blocking all authenticated screens.
-      const errorMsg = clearError?.message || 'Secure credential reset failed';
-      setLogoutError(errorMsg);
-      setCurrentScreen('LOGOUT_FAILURE');
-    }
-  }, []);
+    return executeSessionLogout({
+      expectedToken,
+      authStorage: { getAuthTokens, clearAuthTokens },
+      apiClient: api,
+      getState: () => ({
+        currentScreen,
+        isAuthenticated,
+        isProfileComplete,
+      }),
+      setState: (updates) => {
+        if ('isAuthenticated' in updates) setIsAuthenticated(updates.isAuthenticated);
+        if ('isProfileComplete' in updates) setIsProfileComplete(updates.isProfileComplete);
+        if ('currentScreen' in updates) setCurrentScreen(updates.currentScreen);
+        if ('screenParams' in updates) setScreenParams(updates.screenParams);
+        if ('cartSummary' in updates) setCartSummary(updates.cartSummary);
+        if ('logoutError' in updates) setLogoutError(updates.logoutError);
+      },
+      onSessionInvalidated: () => {
+        activeSessionIdRef.current += 1;
+        api.clearInFlightRequests();
+        api.clearResponseCache();
+      },
+      isLoggingOutRef,
+    });
+  }, [currentScreen, isAuthenticated, isProfileComplete]);
 
   // Handle HTTP 401 unauthorized session expiration with token identity validation
   const handleUnauthorized = useCallback(async (rejectedToken) => {

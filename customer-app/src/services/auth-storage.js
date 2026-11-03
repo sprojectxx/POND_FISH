@@ -10,6 +10,12 @@ const AUTH_SERVICE_KEY = 'com.pondfish.customer.auth';
 const DEVICE_TOKEN_SERVICE_KEY = 'com.pondfish.customer.device_token';
 const LOGOUT_PENDING_SERVICE_KEY = 'com.pondfish.customer.logout_pending';
 
+const TOMBSTONE_STATUS = {
+  PRESENT: 'PRESENT',
+  ABSENT: 'ABSENT',
+  UNKNOWN: 'UNKNOWN',
+};
+
 let cachedDeviceToken = null;
 
 // Internal direct reader without queue dependency to avoid circular deadlocks
@@ -48,11 +54,16 @@ export async function saveAuthTokens(token, refreshToken = '') {
   if (!token) throw new Error('Token is required for secure persistence');
 
   return enqueueStorageMutation(async () => {
+    // Clear any prior logout pending marker before saving new credentials
     try {
       await Keychain.resetGenericPassword({
         service: LOGOUT_PENDING_SERVICE_KEY,
       });
-    } catch (_) {}
+    } catch (markerErr) {
+      console.warn('[AUTH STORAGE] Could not clear existing logout pending marker before saving', markerErr);
+      throw markerErr;
+    }
+
     await Keychain.setGenericPassword('authToken', JSON.stringify({ token, refreshToken }), {
       service: AUTH_SERVICE_KEY,
       securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
@@ -62,37 +73,69 @@ export async function saveAuthTokens(token, refreshToken = '') {
   });
 }
 
-// Internal direct checker for pending logout tombstone
-async function isLogoutPendingInternal() {
+// Internal direct tri-state checker for pending logout tombstone
+async function getLogoutPendingStatusInternal() {
   try {
     const creds = await Keychain.getGenericPassword({
       service: LOGOUT_PENDING_SERVICE_KEY,
     });
-    return Boolean(creds && creds.password === '1');
-  } catch (_) {
-    return false;
+    if (creds && creds.password === '1') {
+      return { status: TOMBSTONE_STATUS.PRESENT, present: true };
+    }
+    return { status: TOMBSTONE_STATUS.ABSENT, present: false };
+  } catch (err) {
+    return { status: TOMBSTONE_STATUS.UNKNOWN, present: null, error: err };
   }
 }
 
 /**
+ * Checks the persistent logout pending marker with explicit tri-state status:
+ * - PRESENT: Marker confirmed present in secure storage
+ * - ABSENT: Marker confirmed absent from secure storage
+ * - UNKNOWN: Secure storage failed; state cannot be determined safely
+ * @returns {Promise<{ status: string, present: boolean | null, error?: Error }>}
+ */
+export async function getLogoutPendingStatus() {
+  return getLogoutPendingStatusInternal();
+}
+
+/**
  * Checks whether an uncompleted or interrupted logout tombstone exists in Keystore.
+ * Fails closed: throws TOMBSTONE_STORAGE_ERROR if secure storage fails, never returns false.
  * @returns {Promise<boolean>}
  */
 export async function isLogoutPending() {
-  return isLogoutPendingInternal();
+  const result = await getLogoutPendingStatusInternal();
+  if (result.status === TOMBSTONE_STATUS.UNKNOWN) {
+    const err = new Error('Secure storage failed while reading logout tombstone marker');
+    err.code = 'TOMBSTONE_STORAGE_ERROR';
+    err.cause = result.error;
+    throw err;
+  }
+  return result.present;
 }
 
 /**
  * Retrieve securely stored authentication credentials.
  * Awaits any in-flight mutation queue to observe consistent state.
+ * Fails closed: if logout tombstone cannot be safely determined, throws TOMBSTONE_STORAGE_ERROR
+ * and does not return previously stored credentials.
  * @returns {Promise<{ token: string, refreshToken: string } | null>}
  */
 export async function getAuthTokens() {
   return storageMutationQueue.then(async () => {
-    const pending = await isLogoutPendingInternal();
-    if (pending) {
+    const tombstone = await getLogoutPendingStatusInternal();
+    if (tombstone.status === TOMBSTONE_STATUS.PRESENT) {
       // Incomplete or interrupted logout detected; do not restore credentials
       return null;
+    }
+    if (tombstone.status === TOMBSTONE_STATUS.UNKNOWN) {
+      // Secure storage cannot establish whether an interrupted logout exists.
+      // Must not return previously stored credentials when logout state cannot be safely determined.
+      const err = new Error('Cannot determine logout state: secure storage failed while reading tombstone');
+      err.code = 'TOMBSTONE_STORAGE_ERROR';
+      err.cause = tombstone.error;
+      throw err;
     }
     return readCredentialsDirect();
   });
@@ -115,30 +158,37 @@ export async function clearAuthTokens(expectedToken = null) {
       }
     }
 
-    // Mark persistent logout pending tombstone before executing primary reset
-    try {
-      await Keychain.setGenericPassword('logoutPending', '1', {
-        service: LOGOUT_PENDING_SERVICE_KEY,
-      });
-    } catch (_) {}
+    // Step 1: Write persistent logout pending marker before executing primary reset.
+    // Must NOT silently ignore failure: if writing marker fails, do not proceed as though recovery is established.
+    await Keychain.setGenericPassword('logoutPending', '1', {
+      service: LOGOUT_PENDING_SERVICE_KEY,
+      securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
+      storage: Keychain.STORAGE_TYPE.KEYSTORE,
+    });
 
-    // Primary credential reset: hardware exceptions propagate to caller
+    // Step 2: Primary credential reset: hardware exceptions propagate to caller
     await Keychain.resetGenericPassword({
       service: AUTH_SERVICE_KEY,
     });
 
-    // Verification check: ensure primary authentication credential is genuinely absent
+    // Step 3: Verification check: ensure primary authentication credential is genuinely absent
     const verifyCreds = await readCredentialsDirect();
     if (verifyCreds && verifyCreds.token) {
       throw new Error('Primary authentication credential could not be cleared from Keystore');
     }
 
-    // Primary credential is confirmed absent; clear persistent logout pending tombstone
-    try {
-      await Keychain.resetGenericPassword({
-        service: LOGOUT_PENDING_SERVICE_KEY,
-      });
-    } catch (_) {}
+    // Step 4: Primary credential confirmed absent; clear persistent logout pending tombstone.
+    // Must NOT silently ignore failure: verify marker cleanup succeeded.
+    await Keychain.resetGenericPassword({
+      service: LOGOUT_PENDING_SERVICE_KEY,
+    });
+
+    const verifyMarker = await Keychain.getGenericPassword({
+      service: LOGOUT_PENDING_SERVICE_KEY,
+    });
+    if (verifyMarker && verifyMarker.password === '1') {
+      throw new Error('Logout tombstone marker could not be cleared from Keystore');
+    }
 
     // Device-token cleanup failure is handled and reported separately without failing primary logout
     try {

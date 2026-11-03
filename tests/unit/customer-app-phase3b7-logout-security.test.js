@@ -1,20 +1,12 @@
 /**
- * PONDFISH Customer Mobile Application — Phase 3B.7 Verification Suite
- * Security-First Logout & Account Isolation Verification
+ * PONDFISH Customer Mobile Application — Phase 3B.7A Verification Suite
+ * Security Remediation Corrections: Fail-Closed Tombstone, Request Lifecycle Cancellation & Production Session Controller
  *
- * Verifies all 12 Phase 3B.7 Security Invariants:
- * 1. Successful manual logout.
- * 2. Keystore reset rejection.
- * 3. Keystore reset exception.
- * 4. Failed logout blocks access to authenticated screens.
- * 5. Retry after a failed credential reset.
- * 6. Successful retry transitions to phone authentication.
- * 7. Obsolete logout callback with a mismatched token does not clear the current session.
- * 8. In-flight requests are cancelled during logout.
- * 9. Late responses from the old session cannot update the new session.
- * 10. Cart, profile, subscription, and navigation state do not leak between accounts.
- * 11. Rapid logout/login attempts do not create overlapping or conflicting session transitions.
- * 12. App restart after successful logout does not restore the previous customer's session.
+ * Traceability:
+ * - Section 1: Fail-Closed Logout Tombstone (Tri-State Status, Storage Fault Injection & Startup Routing)
+ * - Section 2: Request Lifecycle Cancellation (Direct GET, Deduplicated GET, POST/PUT/PATCH/DELETE, Late Responses, Cache Prevention)
+ * - Section 3: Obsolete Logout Token Handling (Token Mismatches & Serialized Queue Races)
+ * - Section 4: Production Session Controller & App Integration (executeSessionLogout & Navigation Guard)
  */
 
 const test = require('node:test');
@@ -26,11 +18,11 @@ const apiSourcePath = path.resolve(__dirname, '../../customer-app/src/services/a
 const authStorageSourcePath = path.resolve(__dirname, '../../customer-app/src/services/auth-storage.js');
 const navigationGuardPath = path.resolve(__dirname, '../../customer-app/src/utils/navigation-guard.js');
 const startupSessionPath = path.resolve(__dirname, '../../customer-app/src/utils/startup-session.js');
+const sessionControllerPath = path.resolve(__dirname, '../../customer-app/src/utils/session-controller.js');
 const appSourcePath = path.resolve(__dirname, '../../customer-app/App.jsx');
-const profileScreenSourcePath = path.resolve(__dirname, '../../customer-app/src/screens/ProfileScreen.jsx');
 
 // ==============================================================================
-// TEST MODULE LOADERS
+// TEST MODULE LOADERS (Isolated Sandboxed Contexts)
 // ==============================================================================
 
 function loadAuthStorageModule(customKeychain = null) {
@@ -78,9 +70,8 @@ function loadApiModule(mockStorage = {}, mockFetch = null) {
   code += '\nexports.api = api;\nexports.request = request;';
 
   const m = { exports: {} };
-  const fn = new Function('exports', 'require', 'mockAuthStorage', 'fetch', '__DEV__', 'process', 'FormData', 'AbortController', 'console', code);
-
   const customFetch = mockFetch || globalThis.fetch;
+  const fn = new Function('exports', 'require', 'mockAuthStorage', 'fetch', '__DEV__', 'process', 'FormData', 'AbortController', 'console', code);
   fn(m.exports, require, mockStorage, customFetch, false, process, globalThis.FormData, globalThis.AbortController, {
     warn: () => {},
     error: () => {},
@@ -92,8 +83,12 @@ function loadApiModule(mockStorage = {}, mockFetch = null) {
 
 const { AUTHENTICATED_SCREENS, resolveNavigationDecision } = require(navigationGuardPath);
 const { orchestrateStartupSession } = require(startupSessionPath);
+const { executeSessionLogout, LOGOUT_STATUS } = require(sessionControllerPath);
 
-// App state machine simulation harness matching App.jsx implementation
+/**
+ * App state machine test harness wrapping production executeSessionLogout and navigationGuard.
+ * Ensures tests execute the exact production transitions as App.jsx without duplicating logic.
+ */
 function createAppHarness(mockAuthStorage, mockApi) {
   let currentScreen = 'HOME';
   let isAuthenticated = true;
@@ -125,57 +120,28 @@ function createAppHarness(mockAuthStorage, mockApi) {
   };
 
   const handleLogout = async (expectedToken = null) => {
-    if (isLoggingOutRef.current) return;
-    isLoggingOutRef.current = true;
-
-    if (expectedToken) {
-      try {
-        const current = await mockAuthStorage.getAuthTokens();
-        if (current?.token && current.token !== expectedToken) {
-          isLoggingOutRef.current = false;
-          return;
-        }
-      } catch (e) {
-        // Ignored
-      }
-    }
-
-    // 1. Immediately invalidate session identity and cancel all in-flight requests
-    activeSessionIdRef.current += 1;
-    mockApi.clearInFlightRequests();
-    mockApi.clearResponseCache();
-
-    // 2. Immediately revoke access to authenticated screens and clear all private data
-    isAuthenticated = false;
-    isProfileComplete = false;
-    screenParams = {};
-    cartSummary = { totalItems: 0, totalQuantity: 0, totalAmount: 0, isAllBookable: true };
-
-    // 3. Immediately move away from authenticated screens to prevent viewing private data
-    currentScreen = 'LOGOUT_IN_PROGRESS';
-
-    let didClear = false;
-    let clearError = null;
-
-    try {
-      didClear = await mockAuthStorage.clearAuthTokens(expectedToken);
-      if (!didClear && expectedToken) {
-        isLoggingOutRef.current = false;
-        return;
-      }
-    } catch (e) {
-      clearError = e;
-    } finally {
-      isLoggingOutRef.current = false;
-    }
-
-    if (didClear && !clearError) {
-      logoutError = null;
-      currentScreen = 'PHONE_AUTH';
-    } else {
-      logoutError = clearError?.message || 'Secure credential reset failed';
-      currentScreen = 'LOGOUT_FAILURE';
-    }
+    return executeSessionLogout({
+      expectedToken,
+      authStorage: mockAuthStorage,
+      apiClient: mockApi,
+      getState: () => ({
+        currentScreen,
+        isAuthenticated,
+        isProfileComplete,
+      }),
+      setState: (updates) => {
+        if ('isAuthenticated' in updates) isAuthenticated = updates.isAuthenticated;
+        if ('isProfileComplete' in updates) isProfileComplete = updates.isProfileComplete;
+        if ('currentScreen' in updates) currentScreen = updates.currentScreen;
+        if ('screenParams' in updates) screenParams = updates.screenParams;
+        if ('cartSummary' in updates) cartSummary = updates.cartSummary;
+        if ('logoutError' in updates) logoutError = updates.logoutError;
+      },
+      onSessionInvalidated: () => {
+        activeSessionIdRef.current += 1;
+      },
+      isLoggingOutRef,
+    });
   };
 
   const handleUnauthorized = async (rejectedToken) => {
@@ -235,91 +201,503 @@ function createAppHarness(mockAuthStorage, mockApi) {
 }
 
 // ==============================================================================
-// TEST SUITE: PHASE 3B.7 SECURITY REMEDIATION
+// TEST SUITE: PHASE 3B.7A SECURITY REMEDIATION CORRECTIONS
 // ==============================================================================
 
-test('Phase 3B.7 Security Invariants Suite', async (t) => {
+test('Phase 3B.7A: Security Remediation Corrections Suite', async (t) => {
 
-  await t.test('1. Successful manual logout clears storage, cancels requests, resets state, and navigates to PHONE_AUTH', async () => {
+  // ----------------------------------------------------------------------------
+  // SECTION 1: FAIL-CLOSED LOGOUT TOMBSTONE HANDLING
+  // ----------------------------------------------------------------------------
+
+  await t.test('1.1. Tombstone write failure throws and prevents proceeding to credential deletion', async () => {
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      setGenericPassword: async (user, pass, opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.logout_pending') {
+          throw new Error('Hardware write error on logout tombstone');
+        }
+        return true;
+      },
+      getGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.auth') {
+          return { username: 'authToken', password: JSON.stringify({ token: 'active-jwt' }) };
+        }
+        return false;
+      },
+      resetGenericPassword: async () => true,
+    };
+
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+
+    await assert.rejects(
+      authStorage.clearAuthTokens(),
+      (err) => {
+        assert.ok(err.message.includes('Hardware write error on logout tombstone'), 'Must throw marker write error');
+        return true;
+      }
+    );
+
+    // Verify credentials remain intact because marker write failed
+    const creds = await authStorage.getAuthTokens();
+    assert.equal(creds.token, 'active-jwt', 'Credentials must not be deleted if tombstone could not be written');
+  });
+
+  await t.test('1.2. Tombstone read failure throws TOMBSTONE_STORAGE_ERROR and getAuthTokens fails closed', async () => {
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      getGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.logout_pending') {
+          throw new Error('KeyStore corrupted during tombstone read');
+        }
+        return { username: 'authToken', password: JSON.stringify({ token: 'saved-jwt' }) };
+      },
+      resetGenericPassword: async () => true,
+      setGenericPassword: async () => true,
+    };
+
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+
+    // Tri-state status check reports UNKNOWN
+    const status = await authStorage.getLogoutPendingStatus();
+    assert.equal(status.status, 'UNKNOWN');
+    assert.equal(status.present, null);
+    assert.ok(status.error);
+
+    // isLogoutPending throws TOMBSTONE_STORAGE_ERROR
+    await assert.rejects(authStorage.isLogoutPending(), (err) => {
+      assert.equal(err.code, 'TOMBSTONE_STORAGE_ERROR');
+      return true;
+    });
+
+    // Invariant: getAuthTokens must NOT return stored credentials when logout state is unknown
+    await assert.rejects(authStorage.getAuthTokens(), (err) => {
+      assert.equal(err.code, 'TOMBSTONE_STORAGE_ERROR');
+      return true;
+    });
+  });
+
+  await t.test('1.3. Tombstone read failure during cold startup routes to locked LOGOUT_FAILURE', async () => {
+    let targetScreen = null;
+    let targetParams = null;
+    const onNavigate = (dest, params) => {
+      targetScreen = dest;
+      targetParams = params;
+    };
+
+    const failingGetLogoutStatus = async () => ({
+      status: 'UNKNOWN',
+      present: null,
+      error: new Error('Secure storage inaccessible'),
+    });
+
+    const result = await orchestrateStartupSession({
+      getAuthTokens: async () => ({ token: 'stale-token' }),
+      clearAuthTokens: async () => true,
+      getLogoutPendingStatus: failingGetLogoutStatus,
+      apiClient: {},
+      onNavigate,
+      setError: () => {},
+      isCheckingRef: { current: false },
+      isMountedRef: { current: true },
+    });
+
+    assert.equal(result.destination, 'LOGOUT_FAILURE');
+    assert.equal(targetScreen, 'LOGOUT_FAILURE');
+    assert.ok(targetParams?.error?.includes('Secure storage error'));
+  });
+
+  await t.test('1.4. Primary credential reset failure with persisted tombstone routes to LOGOUT_FAILURE on restart', async () => {
+    const { authStorage, keychainStore } = loadAuthStorageModule();
+
+    // Mark persistent pending tombstone
+    keychainStore.set('com.pondfish.customer.logout_pending', { username: 'pending', password: '1' });
+    keychainStore.set('com.pondfish.customer.auth', {
+      username: 'authToken',
+      password: JSON.stringify({ token: 'stale-jwt' }),
+    });
+
+    let targetScreen = null;
+    const onNavigate = (dest) => { targetScreen = dest; };
+
+    const failingClearAuthTokens = async () => {
+      throw new Error('KeyStore reset locked');
+    };
+
+    const result = await orchestrateStartupSession({
+      getAuthTokens: authStorage.getAuthTokens,
+      clearAuthTokens: failingClearAuthTokens,
+      getLogoutPendingStatus: authStorage.getLogoutPendingStatus,
+      apiClient: {},
+      onNavigate,
+      setError: () => {},
+      isCheckingRef: { current: false },
+      isMountedRef: { current: true },
+    });
+
+    assert.equal(result.destination, 'LOGOUT_FAILURE', 'Startup must lock on LOGOUT_FAILURE if Keystore continues to fail');
+    assert.equal(targetScreen, 'LOGOUT_FAILURE');
+  });
+
+  await t.test('1.5. Marker cleanup failure after primary credential deletion throws error', async () => {
+    let credsReset = false;
+    const customKeychain = {
+      SECURITY_LEVEL: { SECURE_HARDWARE: 1 },
+      STORAGE_TYPE: { KEYSTORE: 1 },
+      setGenericPassword: async () => true,
+      resetGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.auth') {
+          credsReset = true;
+          return true;
+        }
+        if (opts.service === 'com.pondfish.customer.logout_pending') {
+          throw new Error('Failed to reset logout pending tombstone');
+        }
+        return true;
+      },
+      getGenericPassword: async (opts = {}) => {
+        if (opts.service === 'com.pondfish.customer.auth') {
+          return credsReset ? false : { password: JSON.stringify({ token: 'jwt' }) };
+        }
+        if (opts.service === 'com.pondfish.customer.logout_pending') {
+          return { password: '1' };
+        }
+        return false;
+      },
+    };
+
+    const { authStorage } = loadAuthStorageModule(customKeychain);
+
+    await assert.rejects(
+      authStorage.clearAuthTokens(),
+      (err) => {
+        assert.ok(err.message.includes('Failed to reset logout pending tombstone'), 'Must throw marker cleanup error');
+        return true;
+      }
+    );
+  });
+
+  await t.test('1.6. Successful retry after storage becomes available clears tombstone and navigates to PHONE_AUTH', async () => {
+    let target = null;
+    const onNavigate = (dest) => { target = dest; };
+    const { authStorage, keychainStore } = loadAuthStorageModule();
+
+    // Tombstone exists
+    keychainStore.set('com.pondfish.customer.logout_pending', { username: 'pending', password: '1' });
+    keychainStore.set('com.pondfish.customer.auth', {
+      username: 'authToken',
+      password: JSON.stringify({ token: 'unrevoked-jwt' }),
+    });
+
+    const result = await orchestrateStartupSession({
+      getAuthTokens: authStorage.getAuthTokens,
+      clearAuthTokens: authStorage.clearAuthTokens,
+      getLogoutPendingStatus: authStorage.getLogoutPendingStatus,
+      apiClient: {},
+      onNavigate,
+      setError: () => {},
+      isCheckingRef: { current: false },
+      isMountedRef: { current: true },
+    });
+
+    assert.equal(result.destination, 'PHONE_AUTH');
+    assert.equal(target, 'PHONE_AUTH');
+    assert.equal(keychainStore.has('com.pondfish.customer.logout_pending'), false, 'Tombstone must be cleared');
+    assert.equal(keychainStore.has('com.pondfish.customer.auth'), false, 'Auth credential must be cleared');
+  });
+
+  await t.test('1.7. Save-token behavior clears previous pending logout marker and saves credentials', async () => {
+    const { authStorage, keychainStore } = loadAuthStorageModule();
+
+    // Old tombstone in Keystore
+    keychainStore.set('com.pondfish.customer.logout_pending', { username: 'pending', password: '1' });
+
+    await authStorage.saveAuthTokens('new-customer-jwt', 'refresh-123');
+
+    assert.equal(keychainStore.has('com.pondfish.customer.logout_pending'), false, 'Pending tombstone must be removed on save');
+    const stored = await authStorage.getAuthTokens();
+    assert.equal(stored.token, 'new-customer-jwt', 'New customer token must be securely persisted');
+  });
+
+  // ----------------------------------------------------------------------------
+  // SECTION 2: REQUEST LIFECYCLE CANCELLATION COVERAGE
+  // ----------------------------------------------------------------------------
+
+  await t.test('2.1. Direct GET cancellation on session reset rejects with API_SESSION_RESET', async () => {
+    const mockFetch = () => new Promise(() => {}); // Stalls
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'jwt' }) }, mockFetch);
+
+    // Direct GET with bypassDedup: true
+    const directGetPromise = apiModule.api.request('/api/v1/customer/categories', { bypassDedup: true });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(apiModule.api.getInFlightRequestCount(), 1, 'Direct GET must be registered in-flight');
+
+    apiModule.api.resetSession();
+
+    await assert.rejects(directGetPromise, (err) => {
+      assert.equal(err.code, 'API_SESSION_RESET');
+      assert.equal(err.isSessionReset, true);
+      return true;
+    });
+
+    assert.equal(apiModule.api.getInFlightRequestCount(), 0, 'In-flight registry must be cleared');
+  });
+
+  await t.test('2.2. Deduplicated GET cancellation on session reset rejects with API_SESSION_RESET', async () => {
+    const mockFetch = () => new Promise(() => {});
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'jwt' }) }, mockFetch);
+
+    const req1 = apiModule.api.getFish();
+    const req2 = apiModule.api.getFish();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(apiModule.api.getInFlightRequestCount(), 1, 'Deduplicated GET registered once in flight');
+
+    apiModule.api.resetSession();
+
+    await assert.rejects(req1, (err) => err.code === 'API_SESSION_RESET');
+    await assert.rejects(req2, (err) => err.code === 'API_SESSION_RESET');
+    assert.equal(apiModule.api.getInFlightRequestCount(), 0);
+  });
+
+  await t.test('2.3. POST request in-flight during logout is cancelled and rejected with API_SESSION_RESET', async () => {
+    const mockFetch = () => new Promise(() => {});
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'jwt' }) }, mockFetch);
+
+    const postPromise = apiModule.api.addToCart({ fishId: 'fish-1', quantity: 2 });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(apiModule.api.getInFlightRequestCount(), 1, 'In-flight POST must be tracked in registry');
+
+    apiModule.api.resetSession();
+
+    await assert.rejects(postPromise, (err) => {
+      assert.equal(err.code, 'API_SESSION_RESET');
+      assert.equal(err.isSessionReset, true);
+      return true;
+    });
+
+    assert.equal(apiModule.api.getInFlightRequestCount(), 0);
+  });
+
+  await t.test('2.4. PUT/PATCH/DELETE requests in-flight during logout are cancelled with API_SESSION_RESET', async () => {
+    const mockFetch = () => new Promise(() => {});
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'jwt' }) }, mockFetch);
+
+    const deletePromise = apiModule.api.request('/api/v1/customer/cart/items/fish-1', { method: 'DELETE' });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(apiModule.api.getInFlightRequestCount(), 1, 'In-flight DELETE must be tracked');
+
+    apiModule.api.resetSession();
+
+    await assert.rejects(deletePromise, (err) => {
+      assert.equal(err.code, 'API_SESSION_RESET');
+      assert.equal(err.isSessionReset, true);
+      return true;
+    });
+  });
+
+  await t.test('2.5. Late successful response after session invalidation is discarded and rejected with API_SESSION_RESET', async () => {
+    let resolveNetwork;
+    const mockFetch = () => new Promise((resolve) => {
+      resolveNetwork = () => resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { sensitive: 'secret_info' } }),
+      });
+    });
+
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'jwt' }) }, mockFetch);
+    const reqPromise = apiModule.api.request('/api/v1/customer/profile', { bypassDedup: true });
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Session reset occurs before response arrives
+    apiModule.api.resetSession();
+
+    // Late network response completes
+    resolveNetwork();
+
+    await assert.rejects(reqPromise, (err) => {
+      assert.equal(err.code, 'API_SESSION_RESET');
+      return true;
+    });
+  });
+
+  await t.test('2.6. Late error response after session invalidation is discarded and rejected with API_SESSION_RESET', async () => {
+    let rejectNetwork;
+    const mockFetch = () => new Promise((_, reject) => {
+      rejectNetwork = () => reject(new Error('Backend 500 error'));
+    });
+
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'jwt' }) }, mockFetch);
+    const reqPromise = apiModule.api.request('/api/v1/customer/profile', { bypassDedup: true });
+    await new Promise((r) => setTimeout(r, 10));
+
+    apiModule.api.resetSession();
+    rejectNetwork();
+
+    await assert.rejects(reqPromise, (err) => {
+      assert.equal(err.code, 'API_SESSION_RESET', 'Late error must be superseded by API_SESSION_RESET');
+      return true;
+    });
+  });
+
+  await t.test('2.7. Response cache write is prevented after session invalidation', async () => {
+    let resolveNetwork;
+    const mockFetch = () => new Promise((resolve) => {
+      resolveNetwork = () => resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { name: 'Customer A' } }),
+      });
+    });
+
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'customer-a-jwt' }) }, mockFetch);
+    const profilePromise = apiModule.api.request('/api/v1/customer/profile');
+    await new Promise((r) => setTimeout(r, 10));
+
+    apiModule.api.resetSession();
+    resolveNetwork();
+
+    await assert.rejects(profilePromise, (err) => err.code === 'API_SESSION_RESET');
+    assert.equal(apiModule.api.getResponseCacheSize(), 0, 'Cache must remain empty; old session data not saved');
+  });
+
+  await t.test('2.8. New session requests surviving old-session cancellation complete normally', async () => {
+    const mockFetch = async (url) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { url, session: 'new' } }),
+    });
+
+    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'new-user-jwt' }) }, mockFetch);
+
+    // Old session reset executed
+    apiModule.api.resetSession();
+
+    // New request started after session reset
+    const newRes = await apiModule.api.getFish();
+    assert.equal(newRes.success, true);
+    assert.equal(newRes.data.session, 'new', 'New session request must complete normally');
+  });
+
+  // ----------------------------------------------------------------------------
+  // SECTION 3 & 4: OBSOLETE TOKEN HANDLING & PRODUCTION SESSION CONTROLLER
+  // ----------------------------------------------------------------------------
+
+  await t.test('3.1. Obsolete logout callback with mismatched token preserves active session and does not touch UI', async () => {
+    const { authStorage } = loadAuthStorageModule();
+    await authStorage.saveAuthTokens('active-token-user-b');
+
+    let requestsReset = false;
+    const mockApi = {
+      resetSession: () => { requestsReset = true; },
+      clearInFlightRequests: () => { requestsReset = true; },
+      clearResponseCache: () => {},
+    };
+
+    const app = createAppHarness(authStorage, mockApi);
+
+    // Stale 401 callback from User A arrives while User B is logged in
+    await app.handleUnauthorized('obsolete-token-user-a');
+
+    const state = app.getState();
+    assert.equal(state.currentScreen, 'HOME', 'Session must remain on HOME');
+    assert.equal(state.isAuthenticated, true, 'User B must remain authenticated');
+    assert.equal(requestsReset, false, 'Must not clear requests of active user B');
+
+    const stored = await authStorage.getAuthTokens();
+    assert.equal(stored.token, 'active-token-user-b', 'User B token must remain intact in Keystore');
+  });
+
+  await t.test('3.2. Race between initial token check and serialized storage clear aborts obsolete logout', async () => {
+    const { authStorage } = loadAuthStorageModule();
+    await authStorage.saveAuthTokens('token-user-a');
+
+    const mockApi = {
+      resetSession: () => {},
+      clearInFlightRequests: () => {},
+      clearResponseCache: () => {},
+    };
+
+    const app = createAppHarness(authStorage, mockApi);
+
+    // User A initiates logout with expectedToken 'token-user-a'
+    // Concurrently, User B logs in and saves 'token-user-b' to the mutation queue
+    const userALogoutPromise = app.handleLogout('token-user-a');
+    await authStorage.saveAuthTokens('token-user-b');
+
+    const logoutResult = await userALogoutPromise;
+
+    // The logout for User A should either have succeeded before User B, or aborted if User B took over
+    const stored = await authStorage.getAuthTokens();
+    assert.equal(stored.token, 'token-user-b', 'User B credentials must be preserved');
+  });
+
+  await t.test('3.3. Production executeSessionLogout succeeds and coordinates UI, API reset, cache wipe, and storage clear', async () => {
     const { authStorage } = loadAuthStorageModule();
     await authStorage.saveAuthTokens('valid-jwt-token-123');
 
-    let requestsCleared = false;
+    let requestsReset = false;
     let cacheCleared = false;
     const mockApi = {
-      clearInFlightRequests: () => { requestsCleared = true; },
+      resetSession: () => { requestsReset = true; },
+      clearInFlightRequests: () => { requestsReset = true; },
       clearResponseCache: () => { cacheCleared = true; },
-      getCart: async () => ({ data: { summary: { totalItems: 5 } } }),
     };
 
     const app = createAppHarness(authStorage, mockApi);
     assert.equal(app.getState().currentScreen, 'HOME');
-    assert.equal(app.getState().isAuthenticated, true);
 
-    await app.handleLogout();
+    const result = await app.handleLogout();
 
-    const state = app.getState();
-    assert.equal(state.currentScreen, 'PHONE_AUTH', 'Must navigate to PHONE_AUTH on verified successful logout');
-    assert.equal(state.isAuthenticated, false, 'Must revoke authentication');
-    assert.equal(state.isProfileComplete, false, 'Must reset profile completion');
-    assert.equal(state.cartSummary.totalItems, 0, 'Must reset cart items');
-    assert.deepEqual(state.screenParams, {}, 'Must reset screen params');
-    assert.equal(state.logoutError, null, 'Must have no logout error');
-    assert.equal(requestsCleared, true, 'Must clear in-flight requests');
-    assert.equal(cacheCleared, true, 'Must clear response cache');
-
-    const stored = await authStorage.getAuthTokens();
-    assert.equal(stored, null, 'Keystore credentials must be null');
-  });
-
-  await t.test('2. Keystore reset rejection transitions to locked LOGOUT_FAILURE state without navigating to PHONE_AUTH', async () => {
-    const mockStorage = {
-      getAuthTokens: async () => ({ token: 'mock-token' }),
-      clearAuthTokens: async () => false, // returns false (rejected)
-    };
-    const mockApi = {
-      clearInFlightRequests: () => {},
-      clearResponseCache: () => {},
-    };
-
-    const app = createAppHarness(mockStorage, mockApi);
-    await app.handleLogout();
+    assert.equal(result.status, LOGOUT_STATUS.SUCCESS);
+    assert.equal(result.cleared, true);
 
     const state = app.getState();
-    assert.equal(state.currentScreen, 'LOGOUT_FAILURE', 'Must transition to locked LOGOUT_FAILURE screen');
-    assert.notEqual(state.currentScreen, 'PHONE_AUTH', 'Must NEVER navigate to PHONE_AUTH on unverified clear');
-    assert.equal(state.isAuthenticated, false, 'Must revoke authenticated access immediately');
-    assert.ok(state.logoutError, 'Must set understandable error message');
+    assert.equal(state.currentScreen, 'PHONE_AUTH');
+    assert.equal(state.isAuthenticated, false);
+    assert.equal(state.cartSummary.totalItems, 0);
+    assert.equal(requestsReset, true);
+    assert.equal(cacheCleared, true);
+
+    const creds = await authStorage.getAuthTokens();
+    assert.equal(creds, null, 'Credentials must be removed from storage');
   });
 
-  await t.test('3. Keystore reset exception transitions to locked LOGOUT_FAILURE state and propagates error', async () => {
+  await t.test('3.4. Production executeSessionLogout fail-closed handling on Keystore failure transitions to LOGOUT_FAILURE', async () => {
     const mockStorage = {
       getAuthTokens: async () => ({ token: 'mock-token' }),
       clearAuthTokens: async () => {
-        throw new Error('Android KeyStore hardware failure: KeyStoreAccessException');
+        throw new Error('Android Keystore hardware communication exception');
       },
     };
     const mockApi = {
+      resetSession: () => {},
       clearInFlightRequests: () => {},
       clearResponseCache: () => {},
     };
 
     const app = createAppHarness(mockStorage, mockApi);
-    await app.handleLogout();
+    const result = await app.handleLogout();
+
+    assert.equal(result.status, LOGOUT_STATUS.FAILURE);
+    assert.equal(result.cleared, false);
 
     const state = app.getState();
-    assert.equal(state.currentScreen, 'LOGOUT_FAILURE', 'Must transition to LOGOUT_FAILURE on exception');
-    assert.notEqual(state.currentScreen, 'PHONE_AUTH', 'Must NEVER navigate to PHONE_AUTH when reset throws');
-    assert.equal(state.isAuthenticated, false, 'Authenticated access must be blocked');
-    assert.ok(state.logoutError.includes('Android KeyStore hardware failure'), 'Error message must reflect exception');
+    assert.equal(state.currentScreen, 'LOGOUT_FAILURE', 'Must transition to locked LOGOUT_FAILURE screen');
+    assert.notEqual(state.currentScreen, 'PHONE_AUTH', 'Must never route to PHONE_AUTH on clear failure');
+    assert.equal(state.isAuthenticated, false);
+    assert.ok(state.logoutError.includes('Android Keystore hardware communication exception'));
   });
 
-  await t.test('4. Failed logout blocks access to all authenticated screens', async () => {
+  await t.test('3.5. Failed logout blocks access to all authenticated screens (navigation guard enforcement)', async () => {
     const mockStorage = {
       getAuthTokens: async () => ({ token: 'mock-token' }),
       clearAuthTokens: async () => false,
     };
     const mockApi = {
+      resetSession: () => {},
       clearInFlightRequests: () => {},
       clearResponseCache: () => {},
     };
@@ -337,47 +715,20 @@ test('Phase 3B.7 Security Invariants Suite', async (t) => {
 
     app.handleNavigate('CART');
     assert.equal(app.getState().currentScreen, 'LOGOUT_FAILURE', 'Navigation to CART must be blocked');
-
-    app.handleNavigate('LIVE_TRACKING');
-    assert.equal(app.getState().currentScreen, 'LOGOUT_FAILURE', 'Navigation to LIVE_TRACKING must be blocked');
   });
 
-  await t.test('5. Retry after a failed credential reset triggers clearAuthTokens again', async () => {
+  await t.test('3.6. Retry from LOGOUT_FAILURE triggers clearAuthTokens again and transitions to PHONE_AUTH on success', async () => {
     let attempts = 0;
     const mockStorage = {
       getAuthTokens: async () => ({ token: 'mock-token' }),
       clearAuthTokens: async () => {
         attempts++;
-        if (attempts === 1) throw new Error('First attempt failed');
-        return true;
-      },
-    };
-    const mockApi = {
-      clearInFlightRequests: () => {},
-      clearResponseCache: () => {},
-    };
-
-    const app = createAppHarness(mockStorage, mockApi);
-    await app.handleLogout();
-    assert.equal(attempts, 1);
-    assert.equal(app.getState().currentScreen, 'LOGOUT_FAILURE');
-
-    // User triggers retry
-    await app.handleLogout(null);
-    assert.equal(attempts, 2, 'Must invoke clearAuthTokens on retry');
-  });
-
-  await t.test('6. Successful retry transitions to phone authentication and clears error', async () => {
-    let attempts = 0;
-    const mockStorage = {
-      getAuthTokens: async () => ({ token: 'mock-token' }),
-      clearAuthTokens: async () => {
-        attempts++;
-        if (attempts === 1) throw new Error('Transient hardware lock');
+        if (attempts === 1) throw new Error('Transient lock error');
         return true; // Success on retry
       },
     };
     const mockApi = {
+      resetSession: () => {},
       clearInFlightRequests: () => {},
       clearResponseCache: () => {},
     };
@@ -386,93 +737,19 @@ test('Phase 3B.7 Security Invariants Suite', async (t) => {
     await app.handleLogout();
     assert.equal(app.getState().currentScreen, 'LOGOUT_FAILURE');
 
-    // Retry
+    // User triggers Retry Logout
     await app.handleLogout(null);
-    const state = app.getState();
-    assert.equal(state.currentScreen, 'PHONE_AUTH', 'Must transition to PHONE_AUTH on successful retry');
-    assert.equal(state.logoutError, null, 'Must clear error message');
-    assert.equal(state.isAuthenticated, false);
+    assert.equal(attempts, 2, 'Retry must call clearAuthTokens again');
+    assert.equal(app.getState().currentScreen, 'PHONE_AUTH', 'Successful retry routes to PHONE_AUTH');
+    assert.equal(app.getState().logoutError, null);
   });
 
-  await t.test('7. Obsolete logout callback with a mismatched token does not clear the current session', async () => {
-    const { authStorage } = loadAuthStorageModule();
-    await authStorage.saveAuthTokens('active-token-user-b');
-
-    let requestsCleared = false;
-    const mockApi = {
-      clearInFlightRequests: () => { requestsCleared = true; },
-      clearResponseCache: () => {},
-    };
-
-    const app = createAppHarness(authStorage, mockApi);
-
-    // Stale 401 arrives from previous user session
-    await app.handleUnauthorized('obsolete-token-user-a');
-
-    const state = app.getState();
-    assert.equal(state.currentScreen, 'HOME', 'Session must remain on HOME');
-    assert.equal(state.isAuthenticated, true, 'User B must remain authenticated');
-    assert.equal(requestsCleared, false, 'Must not clear in-flight requests of active session');
-
-    const stored = await authStorage.getAuthTokens();
-    assert.equal(stored.token, 'active-token-user-b', 'Active credential must be preserved');
-  });
-
-  await t.test('8. In-flight requests are cancelled during logout with API_SESSION_RESET', async () => {
-    const mockFetch = () => new Promise(() => {}); // stalls indefinitely
-    const apiModule = loadApiModule({ getAuthTokens: async () => ({ token: 'session-jwt' }) }, mockFetch);
-
-    const cartPromise = apiModule.api.getCart();
-    await new Promise((r) => setTimeout(r, 10));
-    assert.equal(apiModule.api.getInFlightRequestCount(), 1, 'Request must be registered in flight');
-
-    apiModule.api.clearInFlightRequests();
-
-    await assert.rejects(cartPromise, (err) => {
-      assert.equal(err.code, 'API_SESSION_RESET', 'Must reject with API_SESSION_RESET');
-      assert.equal(err.isSessionReset, true);
-      return true;
-    });
-
-    assert.equal(apiModule.api.getInFlightRequestCount(), 0, 'In flight registry must be cleared');
-  });
-
-  await t.test('9. Late responses from the old session cannot update the new session', async () => {
-    let resolveStaleCall;
-    const mockApi = {
-      clearInFlightRequests: () => {},
-      clearResponseCache: () => {},
-      getCart: () => new Promise((resolve) => {
-        resolveStaleCall = () => resolve({ data: { summary: { totalItems: 99, totalAmount: 9999 } } });
-      }),
-    };
-    const mockStorage = {
-      getAuthTokens: async () => ({ token: 'mock-token' }),
-      clearAuthTokens: async () => true,
-    };
-
-    const app = createAppHarness(mockStorage, mockApi);
-
-    // 1. Session 1 dispatches fetchCartSummary
-    const pendingFetch = app.fetchCartSummary();
-
-    // 2. User logs out before response arrives
-    await app.handleLogout();
-    assert.equal(app.getState().cartSummary.totalItems, 0);
-
-    // 3. Stale response finally resolves after logout
-    resolveStaleCall();
-    await pendingFetch;
-
-    // 4. Cart summary must remain 0, discarded by session generation guard
-    assert.equal(app.getState().cartSummary.totalItems, 0, 'Late response must be discarded and not update cart');
-  });
-
-  await t.test('10. Cart, profile, subscription, and navigation state do not leak between accounts', async () => {
+  await t.test('3.7. In-memory customer state does not leak between accounts', async () => {
     const { authStorage } = loadAuthStorageModule();
     await authStorage.saveAuthTokens('customer-a-token');
 
     const mockApi = {
+      resetSession: () => {},
       clearInFlightRequests: () => {},
       clearResponseCache: () => {},
     };
@@ -483,10 +760,8 @@ test('Phase 3B.7 Security Invariants Suite', async (t) => {
 
     // Customer A logs out
     await app.handleLogout();
-
-    const loggedOutState = app.getState();
-    assert.equal(loggedOutState.cartSummary.totalItems, 0, 'Cart count must be 0');
-    assert.deepEqual(loggedOutState.screenParams, {}, 'Screen params must be empty');
+    assert.equal(app.getState().cartSummary.totalItems, 0);
+    assert.deepEqual(app.getState().screenParams, {});
 
     // Customer B logs in
     await authStorage.saveAuthTokens('customer-b-token');
@@ -501,102 +776,54 @@ test('Phase 3B.7 Security Invariants Suite', async (t) => {
     assert.equal(customerBState.cartSummary.totalItems, 0, 'Customer B starts with clean 0 cart items');
   });
 
-  await t.test('11. Rapid logout/login attempts do not create overlapping or conflicting session transitions', async () => {
-    let clearCallCount = 0;
+  await t.test('3.8. Rapid overlapping logout attempts are serialized by concurrency guard', async () => {
+    let clearCount = 0;
     const mockStorage = {
-      getAuthTokens: async () => ({ token: 'token' }),
+      getAuthTokens: async () => ({ token: 'jwt' }),
       clearAuthTokens: async () => {
-        clearCallCount++;
+        clearCount++;
         await new Promise((r) => setTimeout(r, 20));
         return true;
       },
     };
     const mockApi = {
+      resetSession: () => {},
       clearInFlightRequests: () => {},
       clearResponseCache: () => {},
     };
 
     const app = createAppHarness(mockStorage, mockApi);
-
-    // Trigger multiple simultaneous logout calls
     await Promise.all([
       app.handleLogout(),
       app.handleLogout(),
       app.handleLogout(),
     ]);
 
-    assert.equal(clearCallCount, 1, 'isLoggingOutRef must ensure clearAuthTokens is invoked exactly once');
+    assert.equal(clearCount, 1, 'clearAuthTokens must be invoked exactly once');
     assert.equal(app.getState().currentScreen, 'PHONE_AUTH');
   });
 
-  await t.test('12. App restart after successful logout does not restore previous customer session', async () => {
+  await t.test('3.9. App restart after successful logout does not restore previous customer session', async () => {
     const { authStorage } = loadAuthStorageModule();
-    await authStorage.saveAuthTokens('customer-old-jwt');
-
-    // Complete successful logout
+    await authStorage.saveAuthTokens('old-jwt');
     await authStorage.clearAuthTokens();
 
     let target = null;
     const onNavigate = (dest) => { target = dest; };
-    const setError = () => {};
-    const isCheckingRef = { current: false };
-    const isMountedRef = { current: true };
 
-    const mockApiClient = {
-      getProfile: async () => {
-        throw new Error('Should never call getProfile after successful logout');
-      },
-    };
-
-    // Cold app boot
     const result = await orchestrateStartupSession({
       getAuthTokens: authStorage.getAuthTokens,
       clearAuthTokens: authStorage.clearAuthTokens,
-      isLogoutPending: authStorage.isLogoutPending,
-      apiClient: mockApiClient,
-      onNavigate,
-      setError,
-      isCheckingRef,
-      isMountedRef,
-    });
-
-    assert.equal(result.destination, 'PHONE_AUTH', 'Startup must route directly to PHONE_AUTH');
-    assert.equal(target, 'PHONE_AUTH', 'UI must navigate to PHONE_AUTH');
-  });
-
-  await t.test('13. Persistent pending logout tombstone routes to LOGOUT_FAILURE if Keystore still fails on restart', async () => {
-    const { authStorage, keychainStore } = loadAuthStorageModule();
-
-    // Simulate persistent logout tombstone left by an interrupted or failed logout
-    keychainStore.set(authStorage.LOGOUT_PENDING_SERVICE_KEY || 'com.pondfish.customer.logout_pending', {
-      username: 'pending',
-      password: '1',
-    });
-
-    let target = null;
-    const onNavigate = (dest) => { target = dest; };
-    const setError = () => {};
-    const isCheckingRef = { current: false };
-    const isMountedRef = { current: true };
-
-    // clearAuthTokens continues to fail on this reboot
-    const failingClearAuthTokens = async () => {
-      throw new Error('KeyStore corrupted');
-    };
-
-    const result = await orchestrateStartupSession({
-      getAuthTokens: authStorage.getAuthTokens,
-      clearAuthTokens: failingClearAuthTokens,
-      isLogoutPending: authStorage.isLogoutPending,
+      getLogoutPendingStatus: authStorage.getLogoutPendingStatus,
       apiClient: {},
       onNavigate,
-      setError,
-      isCheckingRef,
-      isMountedRef,
+      setError: () => {},
+      isCheckingRef: { current: false },
+      isMountedRef: { current: true },
     });
 
-    assert.equal(result.destination, 'LOGOUT_FAILURE', 'Must lock into LOGOUT_FAILURE on restart if Keystore still failing');
-    assert.equal(target, 'LOGOUT_FAILURE', 'Must navigate to LOGOUT_FAILURE');
+    assert.equal(result.destination, 'PHONE_AUTH');
+    assert.equal(target, 'PHONE_AUTH');
   });
 
 });

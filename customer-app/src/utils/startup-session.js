@@ -17,6 +17,7 @@ async function orchestrateStartupSession({
   getAuthTokens,
   clearAuthTokens,
   isLogoutPending,
+  getLogoutPendingStatus,
   apiClient,
   onNavigate,
   setError,
@@ -38,32 +39,72 @@ async function orchestrateStartupSession({
 
   try {
     // Check if an incomplete or interrupted logout tombstone exists
-    if (typeof isLogoutPending === 'function') {
-      const pending = await isLogoutPending();
-      if (pending) {
-        try {
-          let didClear = false;
-          if (typeof clearAuthTokens === 'function') {
-            didClear = await clearAuthTokens();
-          }
-          if (didClear) {
-            if (isMountedRef?.current && typeof onNavigate === 'function') {
-              onNavigate('PHONE_AUTH');
-            }
-            return { destination: 'PHONE_AUTH', cleared: true };
-          }
-        } catch (storageErr) {
-          console.error('[STARTUP] Previous logout failed to clear Keystore', storageErr);
-          if (isMountedRef?.current && typeof onNavigate === 'function') {
-            onNavigate('LOGOUT_FAILURE', { error: 'Previous logout could not clear stored credentials. Please retry.' });
-          }
-          return { destination: 'LOGOUT_FAILURE', storageError: storageErr };
+    let tombstoneStatus = 'ABSENT';
+    let tombstoneError = null;
+
+    if (typeof getLogoutPendingStatus === 'function') {
+      try {
+        const res = await getLogoutPendingStatus();
+        tombstoneStatus = res?.status || (res?.present ? 'PRESENT' : 'ABSENT');
+        tombstoneError = res?.error || null;
+      } catch (err) {
+        tombstoneStatus = 'UNKNOWN';
+        tombstoneError = err;
+      }
+    } else if (typeof isLogoutPending === 'function') {
+      try {
+        const pending = await isLogoutPending();
+        tombstoneStatus = pending ? 'PRESENT' : 'ABSENT';
+      } catch (err) {
+        tombstoneStatus = 'UNKNOWN';
+        tombstoneError = err;
+      }
+    }
+
+    // Invariant: If secure storage cannot establish whether an interrupted logout exists,
+    // startup must route to locked LOGOUT_FAILURE and NEVER restore the session or route to PHONE_AUTH
+    if (tombstoneStatus === 'UNKNOWN') {
+      console.error('[STARTUP] Cannot establish logout tombstone state; routing to locked failure', tombstoneError);
+      if (isMountedRef?.current && typeof onNavigate === 'function') {
+        onNavigate('LOGOUT_FAILURE', {
+          error: 'Secure storage error: Cannot determine session state. Please retry logout or restart.',
+        });
+      }
+      return { destination: 'LOGOUT_FAILURE', storageError: tombstoneError };
+    }
+
+    if (tombstoneStatus === 'PRESENT') {
+      try {
+        let didClear = false;
+        if (typeof clearAuthTokens === 'function') {
+          didClear = await clearAuthTokens();
         }
+        if (didClear) {
+          if (isMountedRef?.current && typeof onNavigate === 'function') {
+            onNavigate('PHONE_AUTH');
+          }
+          return { destination: 'PHONE_AUTH', cleared: true };
+        }
+      } catch (storageErr) {
+        console.error('[STARTUP] Interrupted logout recovery failed to clear Keystore', storageErr);
+        if (isMountedRef?.current && typeof onNavigate === 'function') {
+          onNavigate('LOGOUT_FAILURE', { error: 'Previous logout could not clear stored credentials. Please retry.' });
+        }
+        return { destination: 'LOGOUT_FAILURE', storageError: storageErr };
       }
     }
 
     // 1. Read hardware-backed Android Keystore
-    const stored = await getAuthTokens();
+    let stored = null;
+    try {
+      stored = await getAuthTokens();
+    } catch (storageErr) {
+      console.error('[STARTUP] Secure storage error reading credentials', storageErr);
+      if (isMountedRef?.current && typeof onNavigate === 'function') {
+        onNavigate('LOGOUT_FAILURE', { error: 'Secure storage error: Unable to verify stored session.' });
+      }
+      return { destination: 'LOGOUT_FAILURE', storageError: storageErr };
+    }
 
     // Check mount state after async Keystore read
     if (isMountedRef && !isMountedRef.current) {
