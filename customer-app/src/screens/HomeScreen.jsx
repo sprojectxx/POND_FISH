@@ -32,7 +32,15 @@ import ErrorStateView from '../components/ErrorStateView';
 import FishCard from '../components/FishCard';
 import OptimizedFishImage from '../components/OptimizedFishImage';
 import { filterFishCatalogue } from '../utils/catalogue-filters';
-import { SearchIcon, LocationPinIcon, CartIcon } from '../components/icons/NavIcons';
+import {
+  SearchIcon,
+  LocationPinIcon,
+  CartIcon,
+  CardIcon,
+  MedalIcon,
+  TruckIcon,
+  TagIcon,
+} from '../components/icons/NavIcons';
 
 /**
  * Prioritized data retrieval orchestrator for HomeScreen.
@@ -207,6 +215,25 @@ export default function HomeScreen({
 
   const customerName = customer?.name || 'Customer';
 
+  // Verified Customer Address or Honest Unselected State
+  const customerAddress =
+    customer?.address?.formatted ||
+    customer?.address?.street ||
+    (typeof customer?.address === 'string' ? customer.address : null) ||
+    customer?.selectedAddress ||
+    routeParams?.selectedAddress ||
+    null;
+
+  const displayLocation = customerAddress
+    ? (typeof customerAddress === 'string'
+        ? customerAddress
+        : `${customerAddress.area || customerAddress.street || ''}${customerAddress.city ? `, ${customerAddress.city}` : ''}`)
+    : 'Select your location';
+
+  const displayLocationSubtitle = customerAddress
+    ? 'Store Counter Pickup & Local Delivery'
+    : 'Choose pickup or delivery area';
+
   // Lifecycle cleanup: abort in-flight requests on screen unmount
   useEffect(() => {
     isMountedRef.current = true;
@@ -252,6 +279,11 @@ export default function HomeScreen({
 
   // Authoritative Add-To-Cart flow with validation and real UUIDs
   const handleAddToCart = useCallback(async (item) => {
+    if (!item.physicalAvailable) {
+      Alert.alert('Out of Stock', `${item.name} is currently out of stock.`);
+      return;
+    }
+
     if (!item.onlineBookable) {
       Alert.alert(
         'In-Store Counter Only',
@@ -457,6 +489,8 @@ export default function HomeScreen({
     handleDecrement,
   ]);
 
+  // Information hierarchy prioritized for shopping discovery:
+  // Compact status alerts -> Category Discovery -> Special Offers -> Previously Purchased
   const renderListHeader = useMemo(() => {
     return (
       <View>
@@ -464,6 +498,13 @@ export default function HomeScreen({
           subData={subData}
           trackingData={trackingData}
           onNavigate={onNavigate}
+        />
+        <CatalogueHeaderControls
+          categories={categories}
+          selectedCategoryId={selectedCategoryId}
+          onSelectCategory={setSelectedCategoryId}
+          availabilityFilter={availabilityFilter}
+          onSelectAvailability={setAvailabilityFilter}
         />
         <FlashSaleCarousel
           discountedFish={discountedFish}
@@ -486,19 +527,15 @@ export default function HomeScreen({
           onDecrement={handleDecrement}
           onNavigate={onNavigate}
         />
-        <CatalogueHeaderControls
-          categories={categories}
-          selectedCategoryId={selectedCategoryId}
-          onSelectCategory={setSelectedCategoryId}
-          availabilityFilter={availabilityFilter}
-          onSelectAvailability={setAvailabilityFilter}
-        />
       </View>
     );
   }, [
     subData,
     trackingData,
     onNavigate,
+    categories,
+    selectedCategoryId,
+    availabilityFilter,
     discountedFish,
     favorites,
     addingFishId,
@@ -508,9 +545,6 @@ export default function HomeScreen({
     handleIncrement,
     handleDecrement,
     fishList,
-    categories,
-    selectedCategoryId,
-    availabilityFilter,
   ]);
 
   const renderEmptyComponent = useMemo(() => {
@@ -549,8 +583,8 @@ export default function HomeScreen({
     );
   }, [loading, error, filteredFishes.length, selectedCategoryId]);
 
-  const totalCartItems = cartSummary?.totalItems || cartCount || 0;
-  const totalCartAmount = cartSummary?.totalAmount || 0;
+  const totalCartItems = cartSummary?.totalItems ?? cartCount ?? 0;
+  const totalCartAmount = cartSummary?.totalAmount ?? 0;
 
   return (
     <View style={styles.container}>
@@ -566,16 +600,22 @@ export default function HomeScreen({
               style={styles.headerLogoBadge}
               resizeMode="contain"
             />
-            <View style={styles.locationContainer}>
+            <TouchableOpacity
+              style={styles.locationContainer}
+              onPress={() => onNavigate && onNavigate('PROFILE')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={customerAddress ? `Selected delivery location: ${displayLocation}` : 'Select your location'}
+            >
               <View style={styles.locationTitleRow}>
                 <LocationPinIcon size={14} color={Colors.actionGreen} />
-                <Text style={styles.locationTitleText}>Madhapur, Hyderabad</Text>
+                <Text style={styles.locationTitleText} numberOfLines={1}>{displayLocation}</Text>
                 <Text style={styles.locationChevron}>▾</Text>
               </View>
               <Text style={styles.locationSubtitleText}>
-                Store Counter Pickup & Local Delivery
+                {displayLocationSubtitle}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Right Header: Subscription Pass & Avatar */}
@@ -584,8 +624,10 @@ export default function HomeScreen({
               style={styles.clubPassPill}
               onPress={() => onNavigate('SUBSCRIPTION')}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="View PondFish Club Pass"
             >
-              <Text style={styles.clubPassIcon}>💳</Text>
+              <CardIcon size={14} color={Colors.textWhite} />
               <Text style={styles.clubPassText}>
                 {subData?.hasSubscription && subData.subscription
                   ? `₹${subData.subscription.creditBalance ?? 0}`
@@ -694,17 +736,21 @@ export default function HomeScreen({
 }
 
 /**
- * Dashboard top banners: Factual Subscription Quota, Verified Catch Transport, Scan Bill CTA.
+ * Dashboard top banners: Compact Factual Subscription Quota & Verified Catch Transport.
  * Memoized to prevent re-renders when catalogue filters or favorites change.
  */
 const DashboardBanners = React.memo(function DashboardBanners({ subData, trackingData, onNavigate }) {
   const hasSub = Boolean(subData?.hasSubscription && subData.subscription);
   const hasTracking = Boolean(trackingData?.active && trackingData?.truckNumber);
 
+  if (!hasSub && !hasTracking) {
+    return null;
+  }
+
   return (
     <View style={styles.bannersWrapper}>
       {/* Factual Subscription Banner - Rendered ONLY if genuine subscription exists */}
-      {hasSub ? (
+      {hasSub && (
         <TouchableOpacity
           style={styles.quotaBanner}
           onPress={() => onNavigate('SUBSCRIPTION')}
@@ -713,24 +759,24 @@ const DashboardBanners = React.memo(function DashboardBanners({ subData, trackin
           accessibilityLabel="View subscription quota"
         >
           <View style={styles.quotaMedalCircle}>
-            <Text style={{ fontSize: 16 }}>🎖</Text>
+            <MedalIcon size={16} color={Colors.warning} />
           </View>
           <View style={{ flex: 1, paddingHorizontal: 8 }}>
             <Text style={styles.quotaTitle}>
               {subData.subscription.planTitle || 'Club Member'}: {subData.subscription.weeklyRemainingKg ?? 0} kg quota remaining
             </Text>
             <Text style={styles.quotaSubtitle}>
-              {subData.subscription.weeklyClaimedKg ?? 0} kg claimed this week • Resets in {subData.subscription.daysRemaining ?? '—'} days
+              {subData.subscription.weeklyClaimedKg ?? 0} kg claimed • Resets in {subData.subscription.daysRemaining ?? '—'} days
             </Text>
           </View>
           <View style={styles.rechargeBtn}>
             <Text style={styles.rechargeBtnText}>Manage</Text>
           </View>
         </TouchableOpacity>
-      ) : null}
+      )}
 
       {/* Morning Catch Supply Transport - Rendered ONLY if genuine tracking data exists */}
-      {hasTracking ? (
+      {hasTracking && (
         <TouchableOpacity
           style={styles.liveTruckCard}
           onPress={() => onNavigate('LIVE_TRACKING')}
@@ -739,24 +785,22 @@ const DashboardBanners = React.memo(function DashboardBanners({ subData, trackin
           <View style={styles.truckCardTopRow}>
             <View style={styles.truckLiveBadge}>
               <View style={styles.greenPulseDot} />
+              <TruckIcon size={14} color={Colors.textWhite} />
               <Text style={styles.truckLiveText}>
-                Fresh Catch Supply Truck #{trackingData.truckNumber}
+                Fresh Catch Supply #{trackingData.truckNumber}
               </Text>
             </View>
             <View style={styles.etaPill}>
-              <Text style={styles.etaPillText}>Live Catch En Route</Text>
+              <Text style={styles.etaPillText}>En Route</Text>
             </View>
           </View>
 
           <View style={styles.truckCardMidRow}>
-            <View style={styles.truckIconCircle}>
-              <Text style={{ fontSize: 18 }}>🚚</Text>
-            </View>
-            <View style={{ flex: 1, paddingHorizontal: 10 }}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.truckFarmTitle}>
                 {trackingData.origin?.name
                   ? `Departed ${trackingData.origin.name}`
-                  : 'Harbor supply replenishment en route'}
+                  : 'Harbor replenishment en route'}
               </Text>
               <Text style={styles.truckDestSubtitle}>
                 Destination: {trackingData.destination?.name || 'Retail Store Counter'}
@@ -767,31 +811,7 @@ const DashboardBanners = React.memo(function DashboardBanners({ subData, trackin
             </View>
           </View>
         </TouchableOpacity>
-      ) : null}
-
-      {/* Scan Counter Bill Quick Action Banner */}
-      <TouchableOpacity
-        style={styles.scanBillQuickCard}
-        onPress={() => onNavigate('SCAN_BILL')}
-        activeOpacity={0.88}
-        accessibilityRole="button"
-        accessibilityLabel="Scan printed store receipt"
-      >
-        <View style={styles.subQuickLeft}>
-          <View style={styles.scanBillQuickIcon}>
-            <Text style={{ fontSize: 18 }}>🧾</Text>
-          </View>
-          <View style={{ flex: 1, paddingHorizontal: 10 }}>
-            <Text style={styles.subQuickTitle}>Purchased at Store Counter?</Text>
-            <Text style={styles.subQuickSubtitle}>
-              Scan printed bill to apply weekly subscription quota & credit
-            </Text>
-          </View>
-        </View>
-        <View style={styles.scanBillQuickBtn}>
-          <Text style={styles.scanBillQuickBtnText}>Scan Bill →</Text>
-        </View>
-      </TouchableOpacity>
+      )}
     </View>
   );
 });
@@ -817,7 +837,7 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
     <View style={styles.flashSaleContainer}>
       <View style={styles.flashHeaderRow}>
         <View style={styles.flashIconCircle}>
-          <Text style={{ fontSize: 16 }}>🏷</Text>
+          <TagIcon size={14} color={Colors.actionGreen} />
         </View>
         <View style={{ flex: 1, paddingLeft: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -845,6 +865,8 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
             : 'SPECIAL';
 
           const qty = cartQuantities[item.id] || 0;
+          const isPhysicalAvailable = Boolean(item.physicalAvailable);
+          const isOnlineBookable = Boolean(item.onlineBookable);
 
           return (
             <View key={item.id} style={styles.flashCard}>
@@ -878,9 +900,11 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
               <Text style={styles.flashFishName} numberOfLines={2}>
                 {item.name}
               </Text>
-              <Text style={styles.flashWeightText}>
-                {item.unitBasis || '500 g'}
-              </Text>
+              {Boolean(item.unitBasis) && (
+                <Text style={styles.flashWeightText}>
+                  {item.unitBasis}
+                </Text>
+              )}
 
               <View style={styles.pricingRow}>
                 <Text style={styles.currentPrice}>
@@ -890,7 +914,7 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
               </View>
 
               <View style={styles.flashCardActionRow}>
-                {qty > 0 ? (
+                {qty > 0 && isPhysicalAvailable && isOnlineBookable ? (
                   <View style={styles.stepperContainerMini}>
                     <TouchableOpacity
                       style={styles.stepperBtnMini}
@@ -908,16 +932,26 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
                   </View>
                 ) : (
                   <TouchableOpacity
-                    style={styles.addBtnGreen}
+                    style={[
+                      styles.addBtnGreen,
+                      !isPhysicalAvailable && styles.addBtnDisabled,
+                      isPhysicalAvailable && !isOnlineBookable && styles.inStoreBtnMini,
+                    ]}
                     onPress={() => onAddToCart(item)}
-                    disabled={addingFishId === item.id || !item.physicalAvailable}
+                    disabled={addingFishId === item.id || !isPhysicalAvailable}
                     activeOpacity={0.8}
                   >
                     {addingFishId === item.id ? (
                       <ActivityIndicator size="small" color={Colors.textWhite} />
                     ) : (
-                      <Text style={styles.addBtnGreenText}>
-                        {item.physicalAvailable ? '+ ADD' : 'SOLD'}
+                      <Text
+                        style={[
+                          styles.addBtnGreenText,
+                          !isPhysicalAvailable && styles.addBtnDisabledText,
+                          isPhysicalAvailable && !isOnlineBookable && styles.inStoreBtnMiniText,
+                        ]}
+                      >
+                        {!isPhysicalAvailable ? 'SOLD' : !isOnlineBookable ? 'IN STORE' : '+ ADD'}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -962,6 +996,8 @@ const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
       >
         {fishList.slice(0, 4).map((item) => {
           const qty = cartQuantities[item.id] || 0;
+          const isPhysicalAvailable = Boolean(item.physicalAvailable);
+          const isOnlineBookable = Boolean(item.onlineBookable);
 
           return (
             <View key={`prev-${item.id}`} style={styles.prevBoughtCard}>
@@ -1002,7 +1038,7 @@ const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
               </View>
 
               <View style={styles.prevActionRow}>
-                {qty > 0 ? (
+                {qty > 0 && isPhysicalAvailable && isOnlineBookable ? (
                   <View style={styles.stepperContainerMini}>
                     <TouchableOpacity
                       style={styles.stepperBtnMini}
@@ -1020,12 +1056,22 @@ const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
                   </View>
                 ) : (
                   <TouchableOpacity
-                    style={styles.prevAddBtn}
+                    style={[
+                      styles.prevAddBtn,
+                      !isPhysicalAvailable && styles.addBtnDisabled,
+                      isPhysicalAvailable && !isOnlineBookable && styles.inStoreBtnMini,
+                    ]}
                     onPress={() => onAddToCart(item)}
-                    disabled={!item.physicalAvailable}
+                    disabled={!isPhysicalAvailable}
                   >
-                    <Text style={styles.prevAddBtnText}>
-                      {item.physicalAvailable ? '+ ADD' : 'SOLD'}
+                    <Text
+                      style={[
+                        styles.prevAddBtnText,
+                        !isPhysicalAvailable && styles.addBtnDisabledText,
+                        isPhysicalAvailable && !isOnlineBookable && styles.inStoreBtnMiniText,
+                      ]}
+                    >
+                      {!isPhysicalAvailable ? 'SOLD' : !isOnlineBookable ? 'IN STORE' : '+ ADD'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1039,7 +1085,7 @@ const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
 });
 
 /**
- * Available Fishes section header, Category Pills, and Availability Filter Chips.
+ * Available Fishes section header, Category Discovery Pills, and Availability Filter Chips.
  * Memoized to re-render only when categories or active filter selections change.
  */
 const CatalogueHeaderControls = React.memo(function CatalogueHeaderControls({
@@ -1051,9 +1097,9 @@ const CatalogueHeaderControls = React.memo(function CatalogueHeaderControls({
 }) {
   const filters = [
     { key: 'ALL', label: 'All Catch' },
-    { key: 'BOOKABLE', label: '⚡ Online Bookable' },
-    { key: 'IN_STORE', label: '🏪 In-Store Only' },
-    { key: 'DISCOUNT', label: '🏷 Catch Offers' },
+    { key: 'BOOKABLE', label: 'Online Bookable' },
+    { key: 'IN_STORE', label: 'In-Store Only' },
+    { key: 'DISCOUNT', label: 'Offers' },
   ];
 
   return (
@@ -1214,9 +1260,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     gap: 5,
   },
-  clubPassIcon: {
-    fontSize: 12,
-  },
   clubPassText: {
     color: Colors.textWhite,
     fontSize: 12,
@@ -1269,14 +1312,14 @@ const styles = StyleSheet.create({
   scrollBody: {
     paddingHorizontal: 12,
     paddingTop: 10,
-    paddingBottom: 120, // Prevents content occlusion by sticky cart bar & bottom nav
+    paddingBottom: 110, // Prevents content occlusion by sticky cart bar & bottom nav
   },
   gridRow: {
     justifyContent: 'space-between',
     paddingHorizontal: 0,
   },
   bannersWrapper: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   quotaBanner: {
     flexDirection: 'row',
@@ -1285,13 +1328,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FDE68A',
     borderRadius: Radii.lg,
-    padding: 12,
-    marginBottom: 10,
+    padding: 10,
+    marginBottom: 8,
   },
   quotaMedalCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1304,7 +1347,7 @@ const styles = StyleSheet.create({
   quotaSubtitle: {
     fontSize: 11,
     color: '#B45309',
-    marginTop: 2,
+    marginTop: 1,
   },
   rechargeBtn: {
     backgroundColor: Colors.surface,
@@ -1312,7 +1355,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderMedium,
     borderRadius: Radii.sm,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
   },
   rechargeBtnText: {
     color: Colors.brandNavy,
@@ -1322,15 +1365,15 @@ const styles = StyleSheet.create({
   liveTruckCard: {
     backgroundColor: Colors.brandNavy,
     borderRadius: Radii.lg,
-    padding: 14,
-    marginBottom: 10,
+    padding: 10,
+    marginBottom: 8,
     ...Shadows.card,
   },
   truckCardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   truckLiveBadge: {
     flexDirection: 'row',
@@ -1338,9 +1381,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   greenPulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: Colors.actionGreen,
   },
   truckLiveText: {
@@ -1350,101 +1393,46 @@ const styles = StyleSheet.create({
   },
   etaPill: {
     backgroundColor: 'rgba(0, 155, 112, 0.25)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
     borderRadius: Radii.xs,
   },
   etaPillText: {
     color: '#34D399',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
   },
   truckCardMidRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  truckIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
   truckFarmTitle: {
     color: Colors.textWhite,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   truckDestSubtitle: {
     color: Colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 10,
+    marginTop: 1,
   },
   trackLiveBtn: {
     backgroundColor: Colors.actionGreen,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: Radii.sm,
   },
   trackLiveBtnText: {
     color: Colors.textWhite,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  scanBillQuickCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.lg,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...Shadows.card,
-  },
-  subQuickLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  scanBillQuickIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.md,
-    backgroundColor: Colors.actionGreenSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subQuickTitle: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  subQuickSubtitle: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 14,
-  },
-  scanBillQuickBtn: {
-    backgroundColor: Colors.actionGreen,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radii.sm,
-    marginLeft: 6,
-  },
-  scanBillQuickBtnText: {
-    color: Colors.textWhite,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   flashSaleContainer: {
     backgroundColor: Colors.surface,
     borderRadius: Radii.lg,
-    padding: 12,
-    marginBottom: 12,
+    padding: 10,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
     ...Shadows.card,
@@ -1452,24 +1440,24 @@ const styles = StyleSheet.create({
   flashHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   flashIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: Colors.actionGreenSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
   flashSectionTitle: {
     ...Typography.sectionTitle,
-    fontSize: 15,
+    fontSize: 14,
   },
   flashBadgeGreen: {
     backgroundColor: Colors.actionGreenSubtle,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
     borderRadius: Radii.xs,
   },
   flashBadgeGreenText: {
@@ -1484,10 +1472,10 @@ const styles = StyleSheet.create({
   },
   flashCardsScroll: {
     paddingRight: 10,
-    gap: 10,
+    gap: 8,
   },
   flashCard: {
-    width: 130,
+    width: 125,
     backgroundColor: Colors.background,
     borderRadius: Radii.md,
     padding: 8,
@@ -1520,22 +1508,22 @@ const styles = StyleSheet.create({
   },
   flashImageBox: {
     width: '100%',
-    height: 80,
+    height: 75,
     borderRadius: Radii.sm,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   flashImage: {
     width: '100%',
     height: '100%',
   },
   flashFishName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: Colors.brandNavy,
-    lineHeight: 16,
-    minHeight: 32,
+    lineHeight: 14,
+    minHeight: 28,
   },
   flashWeightText: {
     fontSize: 10,
@@ -1575,6 +1563,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
+  addBtnDisabled: {
+    borderColor: Colors.borderMedium,
+    backgroundColor: Colors.surfaceSubtle,
+  },
+  addBtnDisabledText: {
+    color: Colors.textMuted,
+  },
+  inStoreBtnMini: {
+    borderColor: Colors.brandBlue,
+    backgroundColor: Colors.brandBlueSubtle,
+  },
+  inStoreBtnMiniText: {
+    color: Colors.brandBlue,
+    fontSize: 9,
+    fontWeight: '800',
+  },
   stepperContainerMini: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1602,8 +1606,8 @@ const styles = StyleSheet.create({
   previouslyBoughtContainer: {
     backgroundColor: Colors.surface,
     borderRadius: Radii.lg,
-    padding: 12,
-    marginBottom: 12,
+    padding: 10,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
     ...Shadows.card,
@@ -1612,24 +1616,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   sectionHeading: {
     ...Typography.sectionTitle,
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.brandNavy,
   },
   seeAllText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: Colors.brandBlue,
   },
   prevBoughtScroll: {
     paddingRight: 10,
-    gap: 10,
+    gap: 8,
   },
   prevBoughtCard: {
-    width: 120,
+    width: 115,
     backgroundColor: Colors.background,
     borderRadius: Radii.md,
     padding: 8,
@@ -1645,7 +1649,7 @@ const styles = StyleSheet.create({
   },
   prevImageBox: {
     width: '100%',
-    height: 70,
+    height: 65,
     borderRadius: Radii.sm,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
@@ -1700,7 +1704,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   availableSectionHeader: {
-    marginBottom: 10,
+    marginBottom: 8,
   },
   availableSub: {
     ...Typography.caption,
@@ -1710,11 +1714,11 @@ const styles = StyleSheet.create({
   categoryScroll: {
     paddingRight: 10,
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   categoryPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: Radii.pill,
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -1737,11 +1741,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   filterChip: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: Radii.sm,
     backgroundColor: Colors.surfaceSubtle,
     borderWidth: 1,
@@ -1762,10 +1766,10 @@ const styles = StyleSheet.create({
   },
   stickyCartBar: {
     position: 'absolute',
-    bottom: 14,
+    bottom: 12,
     left: 12,
     right: 12,
-    height: 54,
+    height: 52,
     backgroundColor: Colors.brandNavy,
     borderRadius: Radii.lg,
     flexDirection: 'row',
@@ -1801,7 +1805,7 @@ const styles = StyleSheet.create({
   stickyCartCta: {
     backgroundColor: Colors.actionGreen,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: Radii.pill,
   },
   stickyCartCtaText: {

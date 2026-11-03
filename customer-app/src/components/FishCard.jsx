@@ -36,7 +36,8 @@ function FishCard({
   if (!item) return null;
 
   const qty = cartQuantity || quantityInCart || 0;
-  const isAvailable = Boolean(item.physicalAvailable);
+  const isPhysicalAvailable = Boolean(item.physicalAvailable);
+  const isOnlineBookable = Boolean(item.onlineBookable);
   const effectivePrice = item.pricing ? item.pricing.effectivePrice : item.unitPrice;
   const hasDiscount = Boolean(item.pricing && item.pricing.hasDiscount);
 
@@ -76,9 +77,13 @@ function FishCard({
     <View style={styles.gridFishCard} testID={`fish-card-${item.id}`}>
       {/* Card Header: Category Tag & Favorite Button */}
       <View style={styles.gridCardHeader}>
-        <View style={[styles.gridCatBadge, getCategoryBadgeStyle(item.categoryName)]}>
-          <Text style={styles.gridCatBadgeText}>{item.categoryName || 'Freshwater'}</Text>
-        </View>
+        {Boolean(item.categoryName) ? (
+          <View style={[styles.gridCatBadge, getCategoryBadgeStyle(item.categoryName)]}>
+            <Text style={styles.gridCatBadgeText}>{item.categoryName}</Text>
+          </View>
+        ) : (
+          <View style={styles.emptyCatPlaceholder} />
+        )}
         <TouchableOpacity
           onPress={handleToggleFavPress}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -108,14 +113,14 @@ function FishCard({
           resizeMode="cover"
           testID={`fish-image-${item.id}`}
         />
-        {!isAvailable && (
+        {!isPhysicalAvailable && (
           <View style={styles.outOfStockOverlay}>
             <Text style={styles.outOfStockOverlayText}>Sold Out</Text>
           </View>
         )}
       </TouchableOpacity>
 
-      {/* Fish Title & Weight */}
+      {/* Fish Title & Verified Unit/Weight */}
       <TouchableOpacity
         onPress={handleCardPress}
         activeOpacity={0.85}
@@ -124,16 +129,27 @@ function FishCard({
         <Text style={styles.gridFishName} numberOfLines={2}>
           {item.name}
         </Text>
-        <Text style={styles.gridWeightText}>
-          {item.unitBasis || '500 g • Whole Cleaned / Cuts'}
-        </Text>
+        {Boolean(item.unitBasis) && (
+          <Text style={styles.gridWeightText}>
+            {item.unitBasis}
+          </Text>
+        )}
       </TouchableOpacity>
 
-      {/* Status Badge */}
+      {/* Verified Status Row */}
       <View style={styles.statusRow}>
-        <View style={[styles.statusDot, isAvailable ? styles.statusDotActive : styles.statusDotInactive]} />
-        <Text style={isAvailable ? styles.inStockText : styles.lowStockText}>
-          {isAvailable ? 'Available at Counter' : 'Currently Unavailable'}
+        <View
+          style={[
+            styles.statusDot,
+            isPhysicalAvailable ? styles.statusDotActive : styles.statusDotInactive,
+          ]}
+        />
+        <Text style={isPhysicalAvailable ? styles.inStockText : styles.lowStockText}>
+          {!isPhysicalAvailable
+            ? 'Sold Out'
+            : !isOnlineBookable
+            ? 'In-Store Counter Only'
+            : 'Available at Counter'}
         </Text>
       </View>
 
@@ -147,7 +163,7 @@ function FishCard({
         </View>
 
         {/* Action Button: Stepper or ADD */}
-        {qty > 0 ? (
+        {qty > 0 && isPhysicalAvailable && isOnlineBookable ? (
           <View style={styles.stepperContainer}>
             <TouchableOpacity
               style={styles.stepperBtn}
@@ -172,7 +188,7 @@ function FishCard({
               style={styles.stepperBtn}
               onPress={handleIncrementPress}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              disabled={isAdding || !isAvailable}
+              disabled={isAdding || !isPhysicalAvailable}
               accessibilityRole="button"
               accessibilityLabel="Increase quantity"
             >
@@ -181,19 +197,35 @@ function FishCard({
           </View>
         ) : (
           <TouchableOpacity
-            style={[styles.gridAddBtn, !isAvailable && styles.gridAddBtnDisabled]}
+            style={[
+              styles.gridAddBtn,
+              !isPhysicalAvailable && styles.gridAddBtnDisabled,
+              isPhysicalAvailable && !isOnlineBookable && styles.gridInStoreBtn,
+            ]}
             onPress={handleAddToCartPress}
-            disabled={isAdding || !isAvailable}
+            disabled={isAdding || !isPhysicalAvailable}
             activeOpacity={0.8}
             testID={`add-btn-${item.id}`}
             accessibilityRole="button"
-            accessibilityLabel={`Add ${item.name} to cart`}
+            accessibilityLabel={
+              !isPhysicalAvailable
+                ? `${item.name} is sold out`
+                : !isOnlineBookable
+                ? `${item.name} available in-store only`
+                : `Add ${item.name} to cart`
+            }
           >
             {isAdding ? (
               <ActivityIndicator size="small" color={Colors.actionGreen} />
             ) : (
-              <Text style={[styles.gridAddBtnText, !isAvailable && styles.gridAddBtnTextDisabled]}>
-                {isAvailable ? '+ ADD' : 'SOLD'}
+              <Text
+                style={[
+                  styles.gridAddBtnText,
+                  !isPhysicalAvailable && styles.gridAddBtnTextDisabled,
+                  isPhysicalAvailable && !isOnlineBookable && styles.gridInStoreBtnText,
+                ]}
+              >
+                {!isPhysicalAvailable ? 'SOLD' : !isOnlineBookable ? 'IN STORE' : '+ ADD'}
               </Text>
             )}
           </TouchableOpacity>
@@ -220,6 +252,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.xs,
+    minHeight: 18,
+  },
+  emptyCatPlaceholder: {
+    width: 1,
   },
   gridCatBadge: {
     paddingHorizontal: 6,
@@ -359,6 +395,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderMedium,
     backgroundColor: Colors.surfaceSubtle,
   },
+  gridInStoreBtn: {
+    borderColor: Colors.brandBlue,
+    backgroundColor: Colors.brandBlueSubtle,
+  },
   gridAddBtnText: {
     fontSize: 11,
     fontWeight: '800',
@@ -367,6 +407,12 @@ const styles = StyleSheet.create({
   },
   gridAddBtnTextDisabled: {
     color: Colors.textMuted,
+  },
+  gridInStoreBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.brandBlue,
+    letterSpacing: 0.2,
   },
   stepperContainer: {
     flexDirection: 'row',

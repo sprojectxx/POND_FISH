@@ -360,6 +360,148 @@ export function MinusIcon({ size = 14, color = Colors.actionGreen }) {
   );
 }
 
+/**
+ * Credit / Membership Card Icon
+ */
+export function CardIcon({ size = 16, color = Colors.textWhite }) {
+  const s = size;
+  return (
+    <View
+      style={{
+        width: s,
+        height: s * 0.68,
+        borderRadius: 2.5,
+        borderWidth: 1.4,
+        borderColor: color,
+        justifyContent: 'space-between',
+        paddingVertical: 2,
+      }}
+    >
+      <View style={{ width: '100%', height: 2, backgroundColor: color }} />
+      <View style={{ width: 4, height: 2, backgroundColor: color, marginLeft: 2 }} />
+    </View>
+  );
+}
+
+/**
+ * Quota Medal / Award Icon
+ */
+export function MedalIcon({ size = 18, color = Colors.warning }) {
+  const s = size;
+  return (
+    <View style={[styles.center, { width: s, height: s }]}>
+      <View
+        style={{
+          width: s * 0.6,
+          height: s * 0.6,
+          borderRadius: (s * 0.6) / 2,
+          borderWidth: 1.6,
+          borderColor: color,
+          backgroundColor: Colors.surface,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <View style={{ width: s * 0.2, height: s * 0.2, borderRadius: (s * 0.2) / 2, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Truck / Logistics Transport Icon
+ */
+export function TruckIcon({ size = 18, color = Colors.textWhite }) {
+  const s = size;
+  return (
+    <View style={{ width: s, height: s * 0.6, flexDirection: 'row', alignItems: 'flex-end' }}>
+      {/* Cargo box */}
+      <View
+        style={{
+          width: s * 0.58,
+          height: s * 0.52,
+          backgroundColor: color,
+          borderRadius: 2,
+          marginRight: 1,
+        }}
+      />
+      {/* Cab */}
+      <View
+        style={{
+          width: s * 0.36,
+          height: s * 0.38,
+          backgroundColor: color,
+          borderTopRightRadius: 4,
+          borderBottomRightRadius: 1,
+        }}
+      />
+    </View>
+  );
+}
+
+/**
+ * Offer Tag Icon
+ */
+export function TagIcon({ size = 14, color = Colors.actionGreen }) {
+  const s = size;
+  return (
+    <View style={[styles.center, { width: s, height: s }]}>
+      <View
+        style={{
+          width: s * 0.7,
+          height: s * 0.7,
+          borderWidth: 1.4,
+          borderColor: color,
+          borderRadius: 2,
+          transform: [{ rotate: '45deg' }],
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Lightning Bolt Icon
+ */
+export function LightningIcon({ size = 14, color = Colors.actionGreen }) {
+  const s = size;
+  return (
+    <View style={[styles.center, { width: s, height: s }]}>
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          borderLeftWidth: 3,
+          borderRightWidth: 3,
+          borderBottomWidth: 6,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderBottomColor: color,
+          transform: [{ rotate: '-15deg' }],
+        }}
+      />
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          borderLeftWidth: 3,
+          borderRightWidth: 3,
+          borderTopWidth: 6,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderTopColor: color,
+          transform: [{ rotate: '-15deg' }],
+          marginTop: -2,
+        }}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   center: {
     alignItems: 'center',
