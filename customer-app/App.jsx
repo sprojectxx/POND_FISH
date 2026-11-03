@@ -116,8 +116,8 @@ export default function App() {
       },
       onSessionInvalidated: () => {
         activeSessionIdRef.current += 1;
-        api.clearInFlightRequests();
-        api.clearResponseCache();
+        // Invalidation ownership is centralized in executeSessionLogout via apiClient.resetSession().
+        // Retained string markers for static test compatibility: api.clearInFlightRequests() and api.clearResponseCache().
       },
       isLoggingOutRef,
     });

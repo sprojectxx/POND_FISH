@@ -56,19 +56,31 @@ export async function saveAuthTokens(token, refreshToken = '') {
   return enqueueStorageMutation(async () => {
     // Clear any prior logout pending marker before saving new credentials
     try {
-      await Keychain.resetGenericPassword({
+      const resetMarkerRes = await Keychain.resetGenericPassword({
         service: LOGOUT_PENDING_SERVICE_KEY,
       });
+      if (resetMarkerRes === false) {
+        throw new Error('Failed to reset logout pending marker from Keystore (returned false)');
+      }
     } catch (markerErr) {
       console.warn('[AUTH STORAGE] Could not clear existing logout pending marker before saving', markerErr);
       throw markerErr;
     }
 
-    await Keychain.setGenericPassword('authToken', JSON.stringify({ token, refreshToken }), {
+    // Verify old tombstone is confirmed absent before saving new credentials
+    const tombstoneCheck = await getLogoutPendingStatusInternal();
+    if (tombstoneCheck.status !== TOMBSTONE_STATUS.ABSENT) {
+      throw new Error(`Cannot save credentials: old tombstone is not confirmed absent (status: ${tombstoneCheck.status})`);
+    }
+
+    const setRes = await Keychain.setGenericPassword('authToken', JSON.stringify({ token, refreshToken }), {
       service: AUTH_SERVICE_KEY,
       securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
       storage: Keychain.STORAGE_TYPE.KEYSTORE,
     });
+    if (setRes === false) {
+      throw new Error('Failed to persist authentication credentials to Keystore (returned false)');
+    }
     return true;
   });
 }
@@ -79,10 +91,18 @@ async function getLogoutPendingStatusInternal() {
     const creds = await Keychain.getGenericPassword({
       service: LOGOUT_PENDING_SERVICE_KEY,
     });
-    if (creds && creds.password === '1') {
+    if (!creds || creds === false) {
+      return { status: TOMBSTONE_STATUS.ABSENT, present: false };
+    }
+    if (creds && typeof creds === 'object' && creds.password === '1') {
       return { status: TOMBSTONE_STATUS.PRESENT, present: true };
     }
-    return { status: TOMBSTONE_STATUS.ABSENT, present: false };
+    // Unexpected or malformed marker value -> treat as unsafe/unknown state. Never interpret as confirmed absence.
+    return {
+      status: TOMBSTONE_STATUS.UNKNOWN,
+      present: null,
+      error: new Error(`Unexpected or malformed tombstone marker in Keystore: ${JSON.stringify(creds)}`),
+    };
   } catch (err) {
     return { status: TOMBSTONE_STATUS.UNKNOWN, present: null, error: err };
   }
@@ -159,35 +179,51 @@ export async function clearAuthTokens(expectedToken = null) {
     }
 
     // Step 1: Write persistent logout pending marker before executing primary reset.
-    // Must NOT silently ignore failure: if writing marker fails, do not proceed as though recovery is established.
-    await Keychain.setGenericPassword('logoutPending', '1', {
+    // Must NOT silently ignore failure: if writing marker fails or returns false, do not proceed.
+    const markerWriteRes = await Keychain.setGenericPassword('logoutPending', '1', {
       service: LOGOUT_PENDING_SERVICE_KEY,
       securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
       storage: Keychain.STORAGE_TYPE.KEYSTORE,
     });
+    if (markerWriteRes === false) {
+      throw new Error('Failed to write logout pending tombstone to Keystore (returned false)');
+    }
 
-    // Step 2: Primary credential reset: hardware exceptions propagate to caller
-    await Keychain.resetGenericPassword({
+    // Verify tombstone is confirmed present before resetting primary credentials
+    const tombstoneStatus = await getLogoutPendingStatusInternal();
+    if (tombstoneStatus.status !== TOMBSTONE_STATUS.PRESENT) {
+      throw new Error(`Logout tombstone not confirmed present before primary reset (status: ${tombstoneStatus.status})`);
+    }
+
+    // Step 2: Primary credential reset: verify return value and propagate hardware exceptions
+    const resetCredsRes = await Keychain.resetGenericPassword({
       service: AUTH_SERVICE_KEY,
     });
+    if (resetCredsRes === false) {
+      throw new Error('Failed to reset primary authentication credentials in Keystore (returned false)');
+    }
 
     // Step 3: Verification check: ensure primary authentication credential is genuinely absent
-    const verifyCreds = await readCredentialsDirect();
-    if (verifyCreds && verifyCreds.token) {
+    const verifyCreds = await Keychain.getGenericPassword({
+      service: AUTH_SERVICE_KEY,
+    });
+    if (verifyCreds && (verifyCreds.password || verifyCreds.username)) {
       throw new Error('Primary authentication credential could not be cleared from Keystore');
     }
 
     // Step 4: Primary credential confirmed absent; clear persistent logout pending tombstone.
-    // Must NOT silently ignore failure: verify marker cleanup succeeded.
-    await Keychain.resetGenericPassword({
+    // Must NOT silently ignore failure: verify marker cleanup succeeded and returned true.
+    const resetMarkerRes = await Keychain.resetGenericPassword({
       service: LOGOUT_PENDING_SERVICE_KEY,
     });
+    if (resetMarkerRes === false) {
+      throw new Error('Failed to clear logout tombstone marker from Keystore (returned false)');
+    }
 
-    const verifyMarker = await Keychain.getGenericPassword({
-      service: LOGOUT_PENDING_SERVICE_KEY,
-    });
-    if (verifyMarker && verifyMarker.password === '1') {
-      throw new Error('Logout tombstone marker could not be cleared from Keystore');
+    // Step 5: Verify tombstone deletion by reading the marker back
+    const verifyMarkerStatus = await getLogoutPendingStatusInternal();
+    if (verifyMarkerStatus.status !== TOMBSTONE_STATUS.ABSENT) {
+      throw new Error(`Logout tombstone marker could not be confirmed absent from Keystore (status: ${verifyMarkerStatus.status})`);
     }
 
     // Device-token cleanup failure is handled and reported separately without failing primary logout

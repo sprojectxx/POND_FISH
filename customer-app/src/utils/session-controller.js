@@ -106,12 +106,13 @@ async function executeSessionLogout({
       if (typeof onSessionInvalidated === 'function') {
         onSessionInvalidated();
       }
-      if (apiClient?.resetSession) {
+      // Single-owner session invalidation: controller coordinates resetSession and cache clearance.
+      if (typeof apiClient?.resetSession === 'function') {
         apiClient.resetSession();
-      } else if (apiClient?.clearInFlightRequests) {
+      } else if (typeof apiClient?.clearInFlightRequests === 'function') {
         apiClient.clearInFlightRequests({ resetSession: true });
       }
-      if (apiClient?.clearResponseCache) {
+      if (typeof apiClient?.clearResponseCache === 'function') {
         apiClient.clearResponseCache();
       }
 
@@ -132,12 +133,13 @@ async function executeSessionLogout({
       if (typeof onSessionInvalidated === 'function') {
         onSessionInvalidated();
       }
-      if (apiClient?.resetSession) {
+      // Single-owner session invalidation: controller coordinates resetSession and cache clearance.
+      if (typeof apiClient?.resetSession === 'function') {
         apiClient.resetSession();
-      } else if (apiClient?.clearInFlightRequests) {
+      } else if (typeof apiClient?.clearInFlightRequests === 'function') {
         apiClient.clearInFlightRequests({ resetSession: true });
       }
-      if (apiClient?.clearResponseCache) {
+      if (typeof apiClient?.clearResponseCache === 'function') {
         apiClient.clearResponseCache();
       }
 

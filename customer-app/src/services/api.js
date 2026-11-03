@@ -818,6 +818,10 @@ async function executeNetworkRequest({
  * and safe in-flight GET request deduplication.
  */
 function request(endpoint, options = {}) {
+  // Synchronously capture session generation and allocate request ID at initiation
+  const requestSessionId = currentSessionId;
+  const reqId = ++requestIdCounter;
+
   const url = `${API_BASE_URL}${endpoint}`;
   const method = (options.method || 'GET').toUpperCase();
   const isGet = method === 'GET';
@@ -854,7 +858,50 @@ function request(endpoint, options = {}) {
     effectiveTimeoutMs = options.timeout;
   }
 
+  // Early AbortController setup and caller signal forwarding
+  const hasAbortController = typeof AbortController !== 'undefined';
+  const controller = hasAbortController ? new AbortController() : null;
+  let callerAbortListener = null;
+
+  if (controller && options.signal) {
+    callerAbortListener = () => {
+      try {
+        controller.abort(options.signal.reason);
+      } catch (_) {}
+    };
+    if (typeof options.signal.addEventListener === 'function') {
+      options.signal.addEventListener('abort', callerAbortListener);
+    }
+  }
+
+  let rejectSessionReset = null;
+  const sessionResetPromise = new Promise((_, reject) => {
+    rejectSessionReset = reject;
+  });
+
+  // Register request in active direct requests registry immediately
+  // so that session reset or screen cleanup can find and cancel it during async auth lookup
+  const directEntry = {
+    id: reqId,
+    method,
+    endpoint,
+    url,
+    sessionId: requestSessionId,
+    controller,
+    isGet,
+    rejectSessionReset,
+  };
+  activeDirectRequests.set(reqId, directEntry);
+
   const runWithAuth = async () => {
+    // Check session ownership before async authentication lookup
+    if (requestSessionId !== currentSessionId) {
+      const resetErr = new Error('In-flight request cancelled due to session reset');
+      resetErr.code = 'API_SESSION_RESET';
+      resetErr.isSessionReset = true;
+      throw resetErr;
+    }
+
     let requestToken = null;
     let isAuthSafe = authInfo.isSafe;
 
@@ -876,6 +923,14 @@ function request(endpoint, options = {}) {
       } catch (e) {
         console.warn('[API CLIENT] Could not read keystore credentials', e);
       }
+    }
+
+    // Recheck session ownership immediately after getAuthTokens() resolves
+    if (requestSessionId !== currentSessionId) {
+      const resetErr = new Error('In-flight request cancelled due to session reset');
+      resetErr.code = 'API_SESSION_RESET';
+      resetErr.isSessionReset = true;
+      throw resetErr;
     }
 
     // Post-auth check: if caller signal was aborted while awaiting keystore credentials
@@ -942,39 +997,13 @@ function request(endpoint, options = {}) {
 
     if (!dedupKey) {
       // Direct request execution (direct GET, or mutation: POST, PUT, PATCH, DELETE)
-      const hasAbortController = typeof AbortController !== 'undefined';
-      const controller = hasAbortController ? new AbortController() : null;
-      let callerAbortListener = null;
-
-      if (controller && options.signal) {
-        callerAbortListener = () => {
-          try {
-            controller.abort(options.signal.reason);
-          } catch (_) {}
-        };
-        if (typeof options.signal.addEventListener === 'function') {
-          options.signal.addEventListener('abort', callerAbortListener);
-        }
+      // Recheck session ownership immediately before network dispatch
+      if (requestSessionId !== currentSessionId) {
+        const resetErr = new Error('In-flight request cancelled due to session reset');
+        resetErr.code = 'API_SESSION_RESET';
+        resetErr.isSessionReset = true;
+        throw resetErr;
       }
-
-      const reqId = ++requestIdCounter;
-      const requestSessionId = currentSessionId;
-      let rejectSessionReset = null;
-      const sessionResetPromise = new Promise((_, reject) => {
-        rejectSessionReset = reject;
-      });
-
-      const directEntry = {
-        id: reqId,
-        method,
-        endpoint,
-        url,
-        sessionId: requestSessionId,
-        controller,
-        isGet,
-        rejectSessionReset,
-      };
-      activeDirectRequests.set(reqId, directEntry);
 
       try {
         let netRes;
@@ -1045,23 +1074,30 @@ function request(endpoint, options = {}) {
       }
     }
 
+    // Deduplicatable request: transfer from activeDirectRequests to inFlightGetRequests
+    activeDirectRequests.delete(reqId);
+    if (requestSessionId !== currentSessionId) {
+      const resetErr = new Error('In-flight request cancelled due to session reset');
+      resetErr.code = 'API_SESSION_RESET';
+      resetErr.isSessionReset = true;
+      throw resetErr;
+    }
+
     // In-flight GET deduplication: either join existing active entry or create new initiator entry
     let entry = inFlightGetRequests.get(dedupKey);
-    // If entry is settled or marked inactive, do not join; create fresh entry
-    if (entry && entry.isSettled) {
+    // If entry is settled, marked inactive, or belongs to another session, do not join; create fresh entry
+    if (entry && (entry.isSettled || entry.sessionId !== requestSessionId)) {
       entry = null;
     }
     const isInitiator = !entry;
 
     if (isInitiator) {
-      const hasAbortController = typeof AbortController !== 'undefined';
-      const controller = hasAbortController ? new AbortController() : null;
-      const requestSessionId = currentSessionId;
+      const initiatorController = hasAbortController ? new AbortController() : null;
 
       entry = {
         key: dedupKey,
         subscribers: new Set(),
-        controller,
+        controller: initiatorController,
         isSettled: false,
         sessionId: requestSessionId,
       };
@@ -1070,6 +1106,14 @@ function request(endpoint, options = {}) {
       // Launch underlying network fetch in background to serve all subscribers
       (async () => {
         try {
+          // Recheck session ownership immediately before network dispatch
+          if (requestSessionId !== currentSessionId) {
+            const resetErr = new Error('In-flight request cancelled due to session reset');
+            resetErr.code = 'API_SESSION_RESET';
+            resetErr.isSessionReset = true;
+            throw resetErr;
+          }
+
           const json = await executeNetworkRequest({
             url,
             endpoint,
@@ -1078,7 +1122,7 @@ function request(endpoint, options = {}) {
             requestToken,
             effectiveTimeoutMs,
             options,
-            controller,
+            controller: initiatorController,
             callerSignal: null, // Shared network request MUST NOT inherit initiating subscriber's signal
           });
 
@@ -1192,7 +1236,20 @@ function request(endpoint, options = {}) {
     });
   };
 
-  return runWithAuth();
+  const execute = async () => {
+    try {
+      return await runWithAuth();
+    } finally {
+      activeDirectRequests.delete(reqId);
+      if (callerAbortListener && options.signal && typeof options.signal.removeEventListener === 'function') {
+        options.signal.removeEventListener('abort', callerAbortListener);
+      }
+    }
+  };
+
+  const mainPromise = execute();
+  mainPromise.catch(() => {});
+  return Promise.race([mainPromise, sessionResetPromise]);
 }
 
 export const api = {
