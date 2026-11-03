@@ -18,6 +18,13 @@ import {
 import { colors } from './src/theme/colors';
 import { api, setUnauthorizedHandler } from './src/services/api';
 import { getAuthTokens, clearAuthTokens } from './src/services/auth-storage';
+import {
+  HomeIcon,
+  TrackIcon,
+  ScanBillIcon,
+  BookingsIcon,
+  ProfileIcon,
+} from './src/components/icons/NavIcons';
 
 import SplashScreen from './src/screens/SplashScreen';
 import PhoneAuthScreen from './src/screens/PhoneAuthScreen';
@@ -460,10 +467,13 @@ export default function App() {
               style={styles.navItem}
               onPress={() => handleNavigate('HOME')}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Navigate to Home"
             >
-              <Text style={[styles.navIcon, currentScreen === 'HOME' && styles.navIconActive]}>
-                🏪
-              </Text>
+              <HomeIcon
+                size={22}
+                focused={currentScreen === 'HOME'}
+              />
               <Text style={[styles.navLabel, currentScreen === 'HOME' && styles.navLabelActive]}>
                 Home
               </Text>
@@ -474,10 +484,13 @@ export default function App() {
               style={styles.navItem}
               onPress={() => handleNavigate('LIVE_TRACKING')}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Navigate to Live Tracking"
             >
-              <Text style={[styles.navIcon, currentScreen === 'LIVE_TRACKING' && styles.navIconActive]}>
-                🧭
-              </Text>
+              <TrackIcon
+                size={22}
+                focused={currentScreen === 'LIVE_TRACKING'}
+              />
               <Text style={[styles.navLabel, currentScreen === 'LIVE_TRACKING' && styles.navLabelActive]}>
                 Track
               </Text>
@@ -488,9 +501,11 @@ export default function App() {
               style={styles.scanNavItem}
               onPress={() => handleNavigate('SCAN_BILL')}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Scan printed store receipt"
             >
               <View style={[styles.scanIconCircle, currentScreen === 'SCAN_BILL' && styles.scanIconCircleActive]}>
-                <Text style={styles.scanIconText}>▣</Text>
+                <ScanBillIcon size={24} color="#FFFFFF" focused={currentScreen === 'SCAN_BILL'} />
               </View>
               <Text style={[styles.navLabel, currentScreen === 'SCAN_BILL' && styles.navLabelActive, { marginTop: 2 }]}>
                 Scan Bill
@@ -502,16 +517,13 @@ export default function App() {
               style={styles.navItem}
               onPress={() => handleNavigate('BOOKING_HISTORY')}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Navigate to Bookings"
             >
-              <Text
-                style={[
-                  styles.navIcon,
-                  (currentScreen === 'BOOKING_HISTORY' || currentScreen === 'BOOKING_CONFIRMATION') &&
-                    styles.navIconActive,
-                ]}
-              >
-                📅
-              </Text>
+              <BookingsIcon
+                size={22}
+                focused={currentScreen === 'BOOKING_HISTORY' || currentScreen === 'BOOKING_CONFIRMATION'}
+              />
               <Text
                 style={[
                   styles.navLabel,
@@ -528,10 +540,13 @@ export default function App() {
               style={styles.navItem}
               onPress={() => handleNavigate('PROFILE')}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Navigate to Profile"
             >
-              <Text style={[styles.navIcon, currentScreen === 'PROFILE' && styles.navIconActive]}>
-                👤
-              </Text>
+              <ProfileIcon
+                size={22}
+                focused={currentScreen === 'PROFILE'}
+              />
               <Text style={[styles.navLabel, currentScreen === 'PROFILE' && styles.navLabelActive]}>
                 Profile
               </Text>
@@ -555,45 +570,48 @@ const styles = StyleSheet.create({
   bottomNavWrapper: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#EEF2F6',
   },
   bottomNav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    height: 62,
+    height: 60,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 8,
+    paddingBottom: 4,
   },
   navItem: {
     flex: 1,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
   },
   scanNavItem: {
     flex: 1,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: -16,
   },
   scanIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#0D2040',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#0D203B',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
-    shadowColor: '#0284C7',
+    shadowColor: '#0D203B',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 6,
   },
   scanIconCircleActive: {
-    backgroundColor: '#0284C7',
+    backgroundColor: '#009B70',
   },
   scanIconText: {
     color: '#FFFFFF',
@@ -611,12 +629,13 @@ const styles = StyleSheet.create({
   },
   navLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: '500',
+    color: '#94A3B8',
+    marginTop: 2,
   },
   navLabelActive: {
-    color: '#0284C7',
-    fontWeight: '800',
+    color: '#0D203B',
+    fontWeight: '700',
   },
   logoutProgressContainer: {
     flex: 1,

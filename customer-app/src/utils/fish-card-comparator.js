@@ -2,14 +2,19 @@
  * FishCard Custom Equality Comparator
  * 
  * Determines whether a memoized FishCard should re-render based on shallow equality
- * of callbacks, active selection states, and relevant item data fields.
+ * of callbacks, active selection states, cart quantities, and relevant item data fields.
  */
 function areFishCardPropsEqual(prevProps, nextProps) {
   if (prevProps.isFav !== nextProps.isFav) return false;
   if (prevProps.isAdding !== nextProps.isAdding) return false;
+  if (prevProps.cartQuantity !== nextProps.cartQuantity) return false;
+  if (prevProps.quantityInCart !== nextProps.quantityInCart) return false;
   if (prevProps.onToggleFav !== nextProps.onToggleFav) return false;
   if (prevProps.onAddToCart !== nextProps.onAddToCart) return false;
   if (prevProps.onPress !== nextProps.onPress) return false;
+  if (prevProps.onIncrement !== nextProps.onIncrement) return false;
+  if (prevProps.onDecrement !== nextProps.onDecrement) return false;
+  if (prevProps.onUpdateQuantity !== nextProps.onUpdateQuantity) return false;
 
   const prevItem = prevProps.item;
   const nextItem = nextProps.item;
@@ -33,4 +38,3 @@ function areFishCardPropsEqual(prevProps, nextProps) {
 module.exports = {
   areFishCardPropsEqual,
 };
-

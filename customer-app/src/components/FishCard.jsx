@@ -9,25 +9,33 @@ import {
 import OptimizedFishImage from './OptimizedFishImage';
 import { getCategoryBadgeStyle } from '../utils/catalogue-filters';
 import { areFishCardPropsEqual } from '../utils/fish-card-comparator';
+import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/tokens';
+import { PlusIcon, MinusIcon } from './icons/NavIcons';
 
 export { getCategoryBadgeStyle, areFishCardPropsEqual };
 
 /**
  * FishCard
  * 
- * Standalone, memoized primary catalogue card.
- * Encapsulates pricing, availability, favorite toggles, and detail navigation.
+ * Standalone, memoized primary catalogue card designed to tier-1 commerce standards.
+ * Responsive 2-column layout, verified inventory status, authentic pricing,
+ * and inline quantity stepper.
  */
 function FishCard({
   item,
   isFav = false,
   isAdding = false,
+  cartQuantity = 0,
+  quantityInCart = 0,
   onToggleFav,
   onAddToCart,
   onPress,
+  onIncrement,
+  onDecrement,
 }) {
   if (!item) return null;
 
+  const qty = cartQuantity || quantityInCart || 0;
   const isAvailable = Boolean(item.physicalAvailable);
   const effectivePrice = item.pricing ? item.pricing.effectivePrice : item.unitPrice;
   const hasDiscount = Boolean(item.pricing && item.pricing.hasDiscount);
@@ -50,17 +58,34 @@ function FishCard({
     }
   };
 
+  const handleIncrementPress = () => {
+    if (onIncrement) {
+      onIncrement(item);
+    } else if (onAddToCart) {
+      onAddToCart(item);
+    }
+  };
+
+  const handleDecrementPress = () => {
+    if (onDecrement) {
+      onDecrement(item);
+    }
+  };
+
   return (
     <View style={styles.gridFishCard} testID={`fish-card-${item.id}`}>
-      {/* Card Header: Category & Heart */}
+      {/* Card Header: Category Tag & Favorite Button */}
       <View style={styles.gridCardHeader}>
         <View style={[styles.gridCatBadge, getCategoryBadgeStyle(item.categoryName)]}>
           <Text style={styles.gridCatBadgeText}>{item.categoryName || 'Freshwater'}</Text>
         </View>
         <TouchableOpacity
           onPress={handleToggleFavPress}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={styles.heartTouchTarget}
           testID={`fav-btn-${item.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={isFav ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Text style={[styles.heartIcon, isFav && styles.heartActive]}>
             {isFav ? '♥' : '♡'}
@@ -72,8 +97,10 @@ function FishCard({
       <TouchableOpacity
         onPress={handleCardPress}
         style={styles.gridImageBox}
-        activeOpacity={0.88}
+        activeOpacity={0.9}
         testID={`image-touch-${item.id}`}
+        accessibilityRole="imagebutton"
+        accessibilityLabel={`View details for ${item.name}`}
       >
         <OptimizedFishImage
           uri={item.imageUrl}
@@ -81,226 +108,294 @@ function FishCard({
           resizeMode="cover"
           testID={`fish-image-${item.id}`}
         />
+        {!isAvailable && (
+          <View style={styles.outOfStockOverlay}>
+            <Text style={styles.outOfStockOverlayText}>Sold Out</Text>
+          </View>
+        )}
       </TouchableOpacity>
 
-      {/* Carousel Dots */}
-      <View style={styles.carouselDotsRow}>
-        <View style={[styles.cDot, styles.cDotActive]} />
-        <View style={styles.cDot} />
-        <View style={styles.cDot} />
-      </View>
-
-      {/* Weight & ADD Button Row */}
-      <View style={styles.gridMetaRow}>
-        <Text style={styles.gridWeightText}>500 g</Text>
-        <TouchableOpacity
-          style={styles.gridAddBtn}
-          onPress={handleAddToCartPress}
-          disabled={isAdding || !isAvailable}
-          activeOpacity={0.8}
-          testID={`add-btn-${item.id}`}
-        >
-          {isAdding ? (
-            <ActivityIndicator size="small" color="#16A34A" />
-          ) : (
-            <Text style={styles.gridAddBtnText}>+ ADD</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Pricing Row */}
-      <View style={styles.gridPricingRow}>
-        <Text style={styles.gridPriceVal}>₹{effectivePrice}</Text>
-        {hasDiscount && (
-          <Text style={styles.gridCrossedPrice}>₹{item.unitPrice}</Text>
-        )}
-      </View>
-
-      {/* Fish Title */}
-      <TouchableOpacity onPress={handleCardPress}>
+      {/* Fish Title & Weight */}
+      <TouchableOpacity
+        onPress={handleCardPress}
+        activeOpacity={0.85}
+        style={styles.titleContainer}
+      >
         <Text style={styles.gridFishName} numberOfLines={2}>
           {item.name}
         </Text>
+        <Text style={styles.gridWeightText}>
+          {item.unitBasis || '500 g • Whole Cleaned / Cuts'}
+        </Text>
       </TouchableOpacity>
 
-      {/* Rating */}
-      <View style={styles.gridRatingRow}>
-        <Text style={styles.gridRatingStar}>★ 4.8</Text>
-        <Text style={styles.gridRatingCount}>({item.ratingCount || '1,420'})</Text>
-      </View>
-
-      {/* Delivery & Stock status */}
-      <View style={styles.gridDeliveryRow}>
-        <Text style={styles.gridDeliveryText}>⚡ 8 mins • </Text>
+      {/* Status Badge */}
+      <View style={styles.statusRow}>
+        <View style={[styles.statusDot, isAvailable ? styles.statusDotActive : styles.statusDotInactive]} />
         <Text style={isAvailable ? styles.inStockText : styles.lowStockText}>
-          {isAvailable ? 'In stock' : 'Out of stock'}
+          {isAvailable ? 'Available at Counter' : 'Currently Unavailable'}
         </Text>
       </View>
 
-      {/* Category Footer Link */}
-      <Text style={styles.gridCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
+      {/* Pricing & ADD / Stepper Row */}
+      <View style={styles.actionRow}>
+        <View style={styles.gridPricingBox}>
+          <Text style={styles.gridPriceVal}>₹{effectivePrice}</Text>
+          {hasDiscount && (
+            <Text style={styles.gridCrossedPrice}>₹{item.unitPrice}</Text>
+          )}
+        </View>
+
+        {/* Action Button: Stepper or ADD */}
+        {qty > 0 ? (
+          <View style={styles.stepperContainer}>
+            <TouchableOpacity
+              style={styles.stepperBtn}
+              onPress={handleDecrementPress}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              disabled={isAdding}
+              accessibilityRole="button"
+              accessibilityLabel="Decrease quantity"
+            >
+              <MinusIcon size={12} color={Colors.actionGreen} />
+            </TouchableOpacity>
+
+            <View style={styles.stepperQtyBox}>
+              {isAdding ? (
+                <ActivityIndicator size="small" color={Colors.actionGreen} />
+              ) : (
+                <Text style={styles.stepperQtyText}>{qty}</Text>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.stepperBtn}
+              onPress={handleIncrementPress}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              disabled={isAdding || !isAvailable}
+              accessibilityRole="button"
+              accessibilityLabel="Increase quantity"
+            >
+              <PlusIcon size={12} color={Colors.actionGreen} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.gridAddBtn, !isAvailable && styles.gridAddBtnDisabled]}
+            onPress={handleAddToCartPress}
+            disabled={isAdding || !isAvailable}
+            activeOpacity={0.8}
+            testID={`add-btn-${item.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${item.name} to cart`}
+          >
+            {isAdding ? (
+              <ActivityIndicator size="small" color={Colors.actionGreen} />
+            ) : (
+              <Text style={[styles.gridAddBtnText, !isAvailable && styles.gridAddBtnTextDisabled]}>
+                {isAvailable ? '+ ADD' : 'SOLD'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   gridFishCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: Radii.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 10,
+    borderColor: Colors.borderSubtle,
+    padding: Spacing.sm,
+    marginHorizontal: 4,
     marginBottom: 10,
-    shadowColor: '#0A1C33',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    ...Shadows.card,
   },
   gridCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: Spacing.xs,
   },
   gridCatBadge: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 5,
+    borderRadius: Radii.xs,
   },
   gridCatBadgeText: {
-    color: '#FFFFFF',
+    color: Colors.textWhite,
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: '700',
     textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  heartTouchTarget: {
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heartIcon: {
     fontSize: 16,
-    color: '#94A3B8',
+    color: Colors.textMuted,
   },
   heartActive: {
-    color: '#EF4444',
+    color: Colors.error,
   },
   gridImageBox: {
-    height: 90,
-    borderRadius: 8,
+    width: '100%',
+    aspectRatio: 1.25,
+    borderRadius: Radii.md,
     overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceSubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
+    position: 'relative',
   },
   gridFishImage: {
     width: '100%',
     height: '100%',
   },
-  carouselDotsRow: {
-    flexDirection: 'row',
+  outOfStockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(13, 32, 59, 0.6)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-    marginVertical: 4,
   },
-  cDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E2E8F0',
-  },
-  cDotActive: {
-    backgroundColor: '#0284C7',
-    width: 10,
-  },
-  gridMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  gridWeightText: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '700',
-  },
-  gridAddBtn: {
-    borderWidth: 1.5,
-    borderColor: '#16A34A',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  gridAddBtnText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#16A34A',
-  },
-  gridPricingRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    marginBottom: 2,
-  },
-  gridPriceVal: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0A1C33',
-  },
-  gridCrossedPrice: {
+  outOfStockOverlayText: {
+    color: Colors.textWhite,
     fontSize: 11,
-    color: '#94A3B8',
-    textDecorationLine: 'line-through',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  titleContainer: {
+    minHeight: 46,
+    justifyContent: 'flex-start',
   },
   gridFishName: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0A1C33',
-    lineHeight: 16,
-    marginBottom: 4,
-    minHeight: 32,
-  },
-  gridRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginBottom: 3,
-  },
-  gridRatingStar: {
-    fontSize: 10,
-    color: '#D97706',
+    ...Typography.bodyMedium,
     fontWeight: '700',
+    color: Colors.brandNavy,
+    lineHeight: 18,
+    fontSize: 13,
   },
-  gridRatingCount: {
-    fontSize: 10,
-    color: '#94A3B8',
+  gridWeightText: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
   },
-  gridDeliveryRow: {
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginTop: 4,
+    marginBottom: 8,
   },
-  gridDeliveryText: {
-    fontSize: 10,
-    color: '#64748B',
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  statusDotActive: {
+    backgroundColor: Colors.actionGreen,
+  },
+  statusDotInactive: {
+    backgroundColor: Colors.textMuted,
   },
   inStockText: {
     fontSize: 10,
-    color: '#16A34A',
-    fontWeight: '700',
+    color: Colors.actionGreen,
+    fontWeight: '600',
   },
   lowStockText: {
     fontSize: 10,
-    color: '#DC2626',
-    fontWeight: '700',
+    color: Colors.textMuted,
+    fontWeight: '500',
   },
-  gridCategoryLink: {
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 'auto',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderSubtle,
+  },
+  gridPricingBox: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+  },
+  gridPriceVal: {
+    ...Typography.price,
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.brandNavy,
+  },
+  gridCrossedPrice: {
     fontSize: 10,
-    color: '#0284C7',
-    fontWeight: '600',
-    marginTop: 2,
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through',
+    marginTop: -2,
+  },
+  gridAddBtn: {
+    borderWidth: 1.5,
+    borderColor: Colors.actionGreen,
+    backgroundColor: Colors.actionGreenSubtle,
+    borderRadius: Radii.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    minHeight: 30,
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gridAddBtnDisabled: {
+    borderColor: Colors.borderMedium,
+    backgroundColor: Colors.surfaceSubtle,
+  },
+  gridAddBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.actionGreen,
+    letterSpacing: 0.2,
+  },
+  gridAddBtnTextDisabled: {
+    color: Colors.textMuted,
+  },
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.actionGreenSubtle,
+    borderWidth: 1.5,
+    borderColor: Colors.actionGreen,
+    borderRadius: Radii.sm,
+    minHeight: 30,
+    paddingHorizontal: 2,
+  },
+  stepperBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 24,
+  },
+  stepperQtyBox: {
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  stepperQtyText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.actionGreen,
   },
 });
 
 export default React.memo(FishCard, areFishCardPropsEqual);
-

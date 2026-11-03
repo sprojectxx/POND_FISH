@@ -1,8 +1,10 @@
 /**
  * Screen: CP-02 — Customer Home Dashboard & Primary Fish Catalogue
- * Traceability: PondFish Customer Mobile App UI Specification (CP-02, CP-03)
- * Unified fish discovery screen combining search, dynamic category filtering,
- * live inventory availability, freshness indicators, subscription quotas, and live delivery tracking.
+ * Traceability: PondFish Customer Mobile App UI Specification (CP-02, CP-03) & .agent/skills/pondfish-mobile-ui-ux/SKILL.md
+ * 
+ * Shopping-first fish discovery screen combining header with location and profile shortcuts,
+ * search filtering, dynamic category discovery, factual subscription quotas,
+ * verified morning catch replenishment, virtualized 2-column fish catalogue, and floating sticky cart bar.
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -21,15 +23,16 @@ import {
   FlatList,
   Platform,
 } from 'react-native';
+import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/tokens';
 import { colors } from '../theme/colors';
 import { api } from '../services/api';
-import FreshnessBadge from '../components/FreshnessBadge';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyStateView from '../components/EmptyStateView';
 import ErrorStateView from '../components/ErrorStateView';
 import FishCard from '../components/FishCard';
 import OptimizedFishImage from '../components/OptimizedFishImage';
 import { filterFishCatalogue } from '../utils/catalogue-filters';
+import { SearchIcon, LocationPinIcon, CartIcon } from '../components/icons/NavIcons';
 
 /**
  * Prioritized data retrieval orchestrator for HomeScreen.
@@ -176,6 +179,7 @@ export default function HomeScreen({
   const [subData, setSubData] = useState(null);
   const [trackingData, setTrackingData] = useState(null);
   const [cartSummary, setCartSummary] = useState(passedCartSummary);
+  const [cartQuantities, setCartQuantities] = useState({});
 
   useEffect(() => {
     if (passedCartSummary) {
@@ -183,20 +187,25 @@ export default function HomeScreen({
     }
   }, [passedCartSummary]);
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null); // null = all
-  const [availabilityFilter, setAvailabilityFilter] = useState('ALL'); // 'ALL' | 'BOOKABLE' | 'IN_STORE' | 'DISCOUNT'
-  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [addingFishId, setAddingFishId] = useState(null);
+
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [availabilityFilter, setAvailabilityFilter] = useState('ALL');
+
+  // Favorites & Cart state
   const [favorites, setFavorites] = useState({});
+  const [addingFishId, setAddingFishId] = useState(null);
 
-  const customerName = customer?.name || initialCustomer?.name || 'Customer';
-
+  // Request race condition prevention & cancellation
   const abortControllerRef = useRef(null);
   const isMountedRef = useRef(true);
   const requestSeqRef = useRef(0);
+
+  const customerName = customer?.name || 'Customer';
 
   // Lifecycle cleanup: abort in-flight requests on screen unmount
   useEffect(() => {
@@ -261,10 +270,13 @@ export default function HomeScreen({
       if (result.data?.summary) {
         setCartSummary(result.data.summary);
       }
+      setCartQuantities((prev) => ({
+        ...prev,
+        [item.id]: (prev[item.id] || 0) + 1,
+      }));
       if (onCartUpdated) {
         onCartUpdated(result.data);
       }
-      Alert.alert('Added to Cart', `${item.name} (1 kg) has been added to your cart.`);
     } catch (err) {
       console.error('[HOME ADD TO CART ERROR]', err.message);
       let msg = err.message || 'Could not add fish to cart.';
@@ -281,6 +293,74 @@ export default function HomeScreen({
     }
   }, [onCartUpdated]);
 
+  const handleIncrement = useCallback(async (item) => {
+    const currentQty = cartQuantities[item.id] || 0;
+    const nextQty = currentQty + 1;
+    setAddingFishId(item.id);
+    try {
+      const result = await api.updateCartQuantity({
+        fishId: item.id,
+        quantity: nextQty,
+      });
+      if (result.data?.summary) {
+        setCartSummary(result.data.summary);
+      }
+      setCartQuantities((prev) => ({ ...prev, [item.id]: nextQty }));
+      if (onCartUpdated) {
+        onCartUpdated(result.data);
+      }
+    } catch (err) {
+      console.error('[HOME INCREMENT CART ERROR]', err.message);
+    } finally {
+      setAddingFishId(null);
+    }
+  }, [cartQuantities, onCartUpdated]);
+
+  const handleDecrement = useCallback(async (item) => {
+    const currentQty = cartQuantities[item.id] || 0;
+    if (currentQty <= 1) {
+      setAddingFishId(item.id);
+      try {
+        const result = await api.removeFromCart(item.id);
+        if (result.data?.summary) {
+          setCartSummary(result.data.summary);
+        }
+        setCartQuantities((prev) => {
+          const next = { ...prev };
+          delete next[item.id];
+          return next;
+        });
+        if (onCartUpdated) {
+          onCartUpdated(result.data);
+        }
+      } catch (err) {
+        console.error('[HOME REMOVE FROM CART ERROR]', err.message);
+      } finally {
+        setAddingFishId(null);
+      }
+    } else {
+      const nextQty = currentQty - 1;
+      setAddingFishId(item.id);
+      try {
+        const result = await api.updateCartQuantity({
+          fishId: item.id,
+          quantity: nextQty,
+        });
+        if (result.data?.summary) {
+          setCartSummary(result.data.summary);
+        }
+        setCartQuantities((prev) => ({ ...prev, [item.id]: nextQty }));
+        if (onCartUpdated) {
+          onCartUpdated(result.data);
+        }
+      } catch (err) {
+        console.error('[HOME DECREMENT CART ERROR]', err.message);
+      } finally {
+        setAddingFishId(null);
+      }
+    }
+  }, [cartQuantities, onCartUpdated]);
+
   const handleNavigateDetails = useCallback((item) => {
     if (onNavigate) {
       onNavigate('FISH_DETAILS', { fishId: item.id, fish: item });
@@ -289,7 +369,7 @@ export default function HomeScreen({
 
   const keyExtractor = useCallback((item) => String(item.id || item._id || item.name), []);
 
-  // Discounted items filter for genuine Catch Offers
+  // Discounted items filter for Catch Offers
   const discountedFish = useMemo(() => {
     return fishList.filter((f) => f.pricing && f.pricing.hasDiscount);
   }, [fishList]);
@@ -309,7 +389,7 @@ export default function HomeScreen({
         <EmptyStateView
           emoji="🔍"
           title="No Matching Fish"
-          message={`No fish found matching "${searchQuery}". Try a different keyword.`}
+          message={`No fish found matching "${searchQuery}". Try a different search term.`}
           actionLabel="Clear Search"
           onAction={() => setSearchQuery('')}
         />
@@ -320,33 +400,21 @@ export default function HomeScreen({
       return (
         <EmptyStateView
           emoji="🐟"
-          title="No Fish in Category"
-          message="No catch is currently listed under this category today."
-          actionLabel="View All Fish"
+          title="No Catch in This Category"
+          message="Selected category has no fish in stock today. Browse other fresh varieties."
+          actionLabel="View All Fishes"
           onAction={() => setSelectedCategoryId(null)}
         />
       );
     }
 
-    if (availabilityFilter === 'BOOKABLE') {
-      return (
-        <EmptyStateView
-          emoji="⚡"
-          title="No Online Bookable Fish"
-          message="All catches today are currently counter pickup only."
-          actionLabel="View All Catch"
-          onAction={() => setAvailabilityFilter('ALL')}
-        />
-      );
-    }
-
-    if (availabilityFilter === 'DISCOUNT') {
+    if (availabilityFilter !== 'ALL') {
       return (
         <EmptyStateView
           emoji="🏷"
-          title="No Active Offers"
-          message="There are currently no special discount promotions active today."
-          actionLabel="View All Catch"
+          title="No Matching Catch"
+          message="No fishes currently match this availability filter."
+          actionLabel="Show All"
           onAction={() => setAvailabilityFilter('ALL')}
         />
       );
@@ -356,7 +424,7 @@ export default function HomeScreen({
       <EmptyStateView
         emoji="🎣"
         title="No Fresh Fish Available Today"
-        message="Our lake harvest delivery has not replenished stock yet. Check back shortly."
+        message="Morning lake catch delivery has not replenished counter stock yet. Check back shortly."
         actionLabel="Refresh Catalogue"
         onAction={loadAllData}
       />
@@ -369,12 +437,25 @@ export default function HomeScreen({
         item={item}
         isFav={Boolean(favorites[item.id])}
         isAdding={addingFishId === item.id}
+        cartQuantity={cartQuantities[item.id] || 0}
+        quantityInCart={cartQuantities[item.id] || 0}
         onToggleFav={toggleFavorite}
         onAddToCart={handleAddToCart}
         onPress={handleNavigateDetails}
+        onIncrement={handleIncrement}
+        onDecrement={handleDecrement}
       />
     );
-  }, [favorites, addingFishId, toggleFavorite, handleAddToCart, handleNavigateDetails]);
+  }, [
+    favorites,
+    addingFishId,
+    cartQuantities,
+    toggleFavorite,
+    handleAddToCart,
+    handleNavigateDetails,
+    handleIncrement,
+    handleDecrement,
+  ]);
 
   const renderListHeader = useMemo(() => {
     return (
@@ -388,15 +469,21 @@ export default function HomeScreen({
           discountedFish={discountedFish}
           favorites={favorites}
           addingFishId={addingFishId}
+          cartQuantities={cartQuantities}
           onToggleFav={toggleFavorite}
           onAddToCart={handleAddToCart}
+          onIncrement={handleIncrement}
+          onDecrement={handleDecrement}
           onNavigate={onNavigate}
         />
         <PreviouslyBoughtCarousel
           fishList={fishList}
           favorites={favorites}
+          cartQuantities={cartQuantities}
           onToggleFav={toggleFavorite}
           onAddToCart={handleAddToCart}
+          onIncrement={handleIncrement}
+          onDecrement={handleDecrement}
           onNavigate={onNavigate}
         />
         <CatalogueHeaderControls
@@ -415,8 +502,11 @@ export default function HomeScreen({
     discountedFish,
     favorites,
     addingFishId,
+    cartQuantities,
     toggleFavorite,
     handleAddToCart,
+    handleIncrement,
+    handleDecrement,
     fishList,
     categories,
     selectedCategoryId,
@@ -425,7 +515,7 @@ export default function HomeScreen({
 
   const renderEmptyComponent = useMemo(() => {
     if (loading) {
-      return <LoadingSkeleton count={3} />;
+      return <LoadingSkeleton count={4} />;
     }
     if (error) {
       return (
@@ -445,55 +535,58 @@ export default function HomeScreen({
     }
     return (
       <View style={styles.footerContainer}>
-        <TouchableOpacity
-          style={styles.showMoreBtn}
-          onPress={() => setSelectedCategoryId(null)}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.showMoreBtnText}>Show More Fishes in Marketplace →</Text>
-        </TouchableOpacity>
+        {selectedCategoryId && (
+          <TouchableOpacity
+            style={styles.showMoreBtn}
+            onPress={() => setSelectedCategoryId(null)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.showMoreBtnText}>View All Fishes in Marketplace →</Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.footerSpacing} />
       </View>
     );
-  }, [loading, error, filteredFishes.length]);
+  }, [loading, error, filteredFishes.length, selectedCategoryId]);
+
+  const totalCartItems = cartSummary?.totalItems || cartCount || 0;
+  const totalCartAmount = cartSummary?.totalAmount || 0;
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A192F" />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.brandNavy} />
 
-      {/* 1. TOP HEADER (Marine Navy) */}
+      {/* 1. TOP HEADER (PondFish Brand Navy) */}
       <View style={styles.topHeader}>
         <View style={styles.headerRowTop}>
+          {/* Location & Brand Group */}
           <View style={styles.headerLeftGroup}>
             <Image
               source={require('../assets/logo.png')}
               style={styles.headerLogoBadge}
               resizeMode="contain"
             />
-            <View style={{ flex: 1 }}>
-              <View style={styles.greetingTitleRow}>
-                <Text style={styles.greetingText}>Good morning, {customerName}</Text>
-                <View style={styles.verifiedBadge}>
-                  <Text style={styles.verifiedCheck}>✓</Text>
-                </View>
+            <View style={styles.locationContainer}>
+              <View style={styles.locationTitleRow}>
+                <LocationPinIcon size={14} color={Colors.actionGreen} />
+                <Text style={styles.locationTitleText}>Madhapur, Hyderabad</Text>
+                <Text style={styles.locationChevron}>▾</Text>
               </View>
-              <Text style={styles.greetingSubtitle}>
-                Fresh lake catches directly from harbor supply
+              <Text style={styles.locationSubtitleText}>
+                Store Counter Pickup & Local Delivery
               </Text>
             </View>
           </View>
 
-          {/* Right Header: Wallet / Subscription & Avatar */}
+          {/* Right Header: Subscription Pass & Avatar */}
           <View style={styles.headerRightGroup}>
             <TouchableOpacity
-              style={styles.walletPill}
+              style={styles.clubPassPill}
               onPress={() => onNavigate('SUBSCRIPTION')}
               activeOpacity={0.8}
             >
-              <View style={styles.walletIconCircle}>
-                <Text style={{ fontSize: 11, color: '#10B981' }}>💳</Text>
-              </View>
-              <Text style={styles.walletAmountText}>
+              <Text style={styles.clubPassIcon}>💳</Text>
+              <Text style={styles.clubPassText}>
                 {subData?.hasSubscription && subData.subscription
                   ? `₹${subData.subscription.creditBalance ?? 0}`
                   : 'Club'}
@@ -504,6 +597,8 @@ export default function HomeScreen({
               style={styles.userAvatarBtn}
               onPress={() => onNavigate('PROFILE')}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="View Profile"
             >
               <Text style={styles.avatarInitials}>
                 {customerName.charAt(0).toUpperCase()}
@@ -512,58 +607,32 @@ export default function HomeScreen({
           </View>
         </View>
 
-        {/* Functional Search Bar & Live Cart Button */}
-        <View style={styles.searchCartRow}>
+        {/* Functional Search Bar */}
+        <View style={styles.searchBarRow}>
           <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <SearchIcon size={16} color={Colors.textMuted} />
             <TextInput
               style={styles.searchInput}
               placeholder='Search "fresh pomfret, rohu, prawns"...'
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={Colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
               autoCorrect={false}
+              accessibilityLabel="Search fish catalogue"
             />
-            {Boolean(searchQuery) ? (
+            {Boolean(searchQuery) && (
               <TouchableOpacity
                 style={styles.clearSearchBtn}
                 onPress={() => setSearchQuery('')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
               >
                 <Text style={styles.clearSearchText}>✕</Text>
               </TouchableOpacity>
-            ) : (
-              <Text style={styles.micIcon}>🎙</Text>
             )}
           </View>
-
-          <TouchableOpacity
-            style={styles.cartButtonGreen}
-            onPress={() => onNavigate('CART')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.cartIconBox}>
-              <Text style={{ fontSize: 16 }}>🛍</Text>
-            </View>
-            <View style={styles.cartPriceBox}>
-              <Text style={styles.cartPriceText}>
-                {cartSummary?.totalAmount > 0
-                  ? `₹${cartSummary.totalAmount}`
-                  : cartCount > 0
-                  ? `${cartCount} items`
-                  : '₹0'}
-              </Text>
-              <Text style={styles.cartItemCountText}>
-                {cartCount > 0 ? `${cartCount} item${cartCount === 1 ? '' : 's'}` : 'Cart'}
-              </Text>
-            </View>
-            {cartCount > 0 && (
-              <View style={styles.cartRedBadge}>
-                <Text style={styles.cartRedBadgeText}>{cartCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -579,8 +648,8 @@ export default function HomeScreen({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#0284C7"
-            colors={['#0284C7']}
+            tintColor={Colors.actionGreen}
+            colors={[Colors.actionGreen]}
           />
         }
         ListHeaderComponent={renderListHeader}
@@ -592,64 +661,76 @@ export default function HomeScreen({
         windowSize={5}
         removeClippedSubviews={Platform.OS === 'android'}
       />
+
+      {/* 3. PERSISTENT STICKY CART ACTION BAR */}
+      {totalCartItems > 0 && (
+        <View style={styles.stickyCartBar}>
+          <View style={styles.stickyCartInfo}>
+            <View style={styles.stickyCartIconBox}>
+              <CartIcon size={18} color={Colors.textWhite} />
+            </View>
+            <View>
+              <Text style={styles.stickyCartTitle}>
+                {totalCartItems} {totalCartItems === 1 ? 'item' : 'items'} • ₹{totalCartAmount}
+              </Text>
+              <Text style={styles.stickyCartSubtitle}>
+                Dressed & prepared fresh at counter
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.stickyCartCta}
+            onPress={() => onNavigate('CART')}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel={`View basket with ${totalCartItems} items`}
+          >
+            <Text style={styles.stickyCartCtaText}>View Basket →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
 
 /**
- * Dashboard top banners: Subscription Quota, Live GPS Truck Tracking, Scan Bill CTA.
- * Memoized to prevent re-renders when favorites, adding-to-cart, or catalogue filters change.
+ * Dashboard top banners: Factual Subscription Quota, Verified Catch Transport, Scan Bill CTA.
+ * Memoized to prevent re-renders when catalogue filters or favorites change.
  */
 const DashboardBanners = React.memo(function DashboardBanners({ subData, trackingData, onNavigate }) {
-  return (
-    <View>
-      {/* Genuine Subscription Banner */}
-      {subData?.hasSubscription && subData.subscription ? (
-        <TouchableOpacity
-          style={styles.quotaBanner}
-          onPress={() => onNavigate('SUBSCRIPTION')}
-          activeOpacity={0.88}
-        >
-          <View style={styles.quotaMedalCircle}>
-            <Text style={{ fontSize: 16 }}>🎖</Text>
-          </View>
-          <View style={{ flex: 1, paddingHorizontal: 8 }}>
-            <Text style={styles.quotaTitle}>
-              {subData.subscription.planTitle || 'Gold Plan'}: {subData.subscription.weeklyRemainingKg ?? '0.6'} kg remaining for today
-            </Text>
-            <Text style={styles.quotaSubtitle}>
-              Resets in {subData.subscription.daysRemaining ?? '2'} days · {subData.subscription.weeklyClaimedKg ?? '1.4'} kg claimed this week
-            </Text>
-          </View>
-          <View style={styles.rechargeBtn}>
-            <Text style={styles.rechargeBtnText}>Recharge</Text>
-          </View>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={styles.quotaBanner}
-          onPress={() => onNavigate('SUBSCRIPTION')}
-          activeOpacity={0.88}
-        >
-          <View style={styles.quotaMedalCircle}>
-            <Text style={{ fontSize: 16 }}>🎖</Text>
-          </View>
-          <View style={{ flex: 1, paddingHorizontal: 8 }}>
-            <Text style={styles.quotaTitle}>
-              Gold Plan: 0.6 kg remaining for today
-            </Text>
-            <Text style={styles.quotaSubtitle}>
-              Resets in 2 days · 1.4 kg claimed this week
-            </Text>
-          </View>
-          <View style={styles.rechargeBtn}>
-            <Text style={styles.rechargeBtnText}>Recharge</Text>
-          </View>
-        </TouchableOpacity>
-      )}
+  const hasSub = Boolean(subData?.hasSubscription && subData.subscription);
+  const hasTracking = Boolean(trackingData?.active && trackingData?.truckNumber);
 
-      {/* Live Catch Truck Tracking Card or Honest Cold Chain Assurance */}
-      {trackingData?.active && trackingData.truckNumber ? (
+  return (
+    <View style={styles.bannersWrapper}>
+      {/* Factual Subscription Banner - Rendered ONLY if genuine subscription exists */}
+      {hasSub ? (
+        <TouchableOpacity
+          style={styles.quotaBanner}
+          onPress={() => onNavigate('SUBSCRIPTION')}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="View subscription quota"
+        >
+          <View style={styles.quotaMedalCircle}>
+            <Text style={{ fontSize: 16 }}>🎖</Text>
+          </View>
+          <View style={{ flex: 1, paddingHorizontal: 8 }}>
+            <Text style={styles.quotaTitle}>
+              {subData.subscription.planTitle || 'Club Member'}: {subData.subscription.weeklyRemainingKg ?? 0} kg quota remaining
+            </Text>
+            <Text style={styles.quotaSubtitle}>
+              {subData.subscription.weeklyClaimedKg ?? 0} kg claimed this week • Resets in {subData.subscription.daysRemaining ?? '—'} days
+            </Text>
+          </View>
+          <View style={styles.rechargeBtn}>
+            <Text style={styles.rechargeBtnText}>Manage</Text>
+          </View>
+        </TouchableOpacity>
+      ) : null}
+
+      {/* Morning Catch Supply Transport - Rendered ONLY if genuine tracking data exists */}
+      {hasTracking ? (
         <TouchableOpacity
           style={styles.liveTruckCard}
           onPress={() => onNavigate('LIVE_TRACKING')}
@@ -659,11 +740,11 @@ const DashboardBanners = React.memo(function DashboardBanners({ subData, trackin
             <View style={styles.truckLiveBadge}>
               <View style={styles.greenPulseDot} />
               <Text style={styles.truckLiveText}>
-                Fresh Catch Truck #{trackingData.truckNumber} Published Live
+                Fresh Catch Supply Truck #{trackingData.truckNumber}
               </Text>
             </View>
             <View style={styles.etaPill}>
-              <Text style={styles.etaPillText}>ETA 18 mins</Text>
+              <Text style={styles.etaPillText}>Live Catch En Route</Text>
             </View>
           </View>
 
@@ -674,70 +755,27 @@ const DashboardBanners = React.memo(function DashboardBanners({ subData, trackin
             <View style={{ flex: 1, paddingHorizontal: 10 }}>
               <Text style={styles.truckFarmTitle}>
                 {trackingData.origin?.name
-                  ? `Departed ${trackingData.origin.name} · En route`
-                  : 'Departed Godavari Farm · En route'}
+                  ? `Departed ${trackingData.origin.name}`
+                  : 'Harbor supply replenishment en route'}
               </Text>
               <Text style={styles.truckDestSubtitle}>
-                Destination: {trackingData.destination?.name || 'Madhapur Cold Hub'}
+                Destination: {trackingData.destination?.name || 'Retail Store Counter'}
               </Text>
             </View>
             <View style={styles.trackLiveBtn}>
-              <Text style={styles.trackLiveBtnText}>Track Live ✈</Text>
+              <Text style={styles.trackLiveBtnText}>Track Supply →</Text>
             </View>
-          </View>
-
-          <View style={styles.truckCardBottomRow}>
-            <View style={styles.coldChainTag}>
-              <Text style={styles.shieldSmall}>🛡</Text>
-              <Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>
-            </View>
-            <Text style={styles.gpsSyncText}>GPS Live Sync</Text>
           </View>
         </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={styles.liveTruckCard}
-          onPress={() => onNavigate('LIVE_TRACKING')}
-          activeOpacity={0.9}
-        >
-          <View style={styles.truckCardTopRow}>
-            <View style={styles.truckLiveBadge}>
-              <View style={styles.greenPulseDot} />
-              <Text style={styles.truckLiveText}>Fresh Catch Truck #OD-04 Published Live</Text>
-            </View>
-            <View style={styles.etaPill}>
-              <Text style={styles.etaPillText}>ETA 18 mins</Text>
-            </View>
-          </View>
-
-          <View style={styles.truckCardMidRow}>
-            <View style={styles.truckIconCircle}>
-              <Text style={{ fontSize: 18 }}>🚚</Text>
-            </View>
-            <View style={{ flex: 1, paddingHorizontal: 10 }}>
-              <Text style={styles.truckFarmTitle}>Departed Godavari Farm · En route</Text>
-              <Text style={styles.truckDestSubtitle}>Destination: Madhapur Cold Hub</Text>
-            </View>
-            <View style={styles.trackLiveBtn}>
-              <Text style={styles.trackLiveBtnText}>Track Live ✈</Text>
-            </View>
-          </View>
-
-          <View style={styles.truckCardBottomRow}>
-            <View style={styles.coldChainTag}>
-              <Text style={styles.shieldSmall}>🛡</Text>
-              <Text style={styles.coldChainText}>Continuous 0-4°C Cold Chain Assured</Text>
-            </View>
-            <Text style={styles.gpsSyncText}>GPS Live Sync</Text>
-          </View>
-        </TouchableOpacity>
-      )}
+      ) : null}
 
       {/* Scan Counter Bill Quick Action Banner */}
       <TouchableOpacity
         style={styles.scanBillQuickCard}
         onPress={() => onNavigate('SCAN_BILL')}
         activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel="Scan printed store receipt"
       >
         <View style={styles.subQuickLeft}>
           <View style={styles.scanBillQuickIcon}>
@@ -766,8 +804,11 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
   discountedFish,
   favorites,
   addingFishId,
+  cartQuantities = {},
   onToggleFav,
   onAddToCart,
+  onIncrement,
+  onDecrement,
   onNavigate,
 }) {
   if (!discountedFish || discountedFish.length === 0) return null;
@@ -776,20 +817,17 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
     <View style={styles.flashSaleContainer}>
       <View style={styles.flashHeaderRow}>
         <View style={styles.flashIconCircle}>
-          <Text style={{ fontSize: 16 }}>🔥</Text>
+          <Text style={{ fontSize: 16 }}>🏷</Text>
         </View>
         <View style={{ flex: 1, paddingLeft: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={styles.flashSectionTitle}>Offers on Selected Fishes</Text>
-            <View style={styles.flashBadgeRed}>
-              <Text style={styles.flashBadgeRedText}>FLASH SALE</Text>
-            </View>
-            <View style={styles.timerBadge}>
-              <Text style={styles.timerBadgeText}>⏱ Ends in 03h:24m</Text>
+            <View style={styles.flashBadgeGreen}>
+              <Text style={styles.flashBadgeGreenText}>TODAY'S SPECIAL</Text>
             </View>
           </View>
           <Text style={styles.flashSectionSubtitle}>
-            Limited stocks at verified farm-gate prices
+            Verified catch available at retail counter prices
           </Text>
         </View>
       </View>
@@ -804,7 +842,9 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
             ? `${item.pricing.discount.percent}% OFF`
             : item.pricing?.discount?.flatAmount
             ? `₹${item.pricing.discount.flatAmount} OFF`
-            : '20% OFF';
+            : 'SPECIAL';
+
+          const qty = cartQuantities[item.id] || 0;
 
           return (
             <View key={item.id} style={styles.flashCard}>
@@ -814,7 +854,7 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
                 </View>
                 <TouchableOpacity
                   onPress={() => onToggleFav(item.id)}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
                     {favorites[item.id] ? '♥' : '♡'}
@@ -825,7 +865,7 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
               <TouchableOpacity
                 onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
                 style={styles.flashImageBox}
-                activeOpacity={0.85}
+                activeOpacity={0.88}
               >
                 <OptimizedFishImage
                   uri={item.imageUrl}
@@ -835,43 +875,53 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
                 />
               </TouchableOpacity>
 
-              <View style={styles.weightAddRow}>
-                <Text style={styles.weightText}>1000 g</Text>
-                <TouchableOpacity
-                  style={styles.addBtnOutline}
-                  onPress={() => onAddToCart(item)}
-                  disabled={addingFishId === item.id}
-                  activeOpacity={0.8}
-                >
-                  {addingFishId === item.id ? (
-                    <ActivityIndicator size="small" color="#10B981" />
-                  ) : (
-                    <Text style={styles.addBtnOutlineText}>+ ADD</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.pricingRow}>
-                <Text style={styles.currentPrice}>₹{item.pricing?.effectivePrice || item.unitPrice}</Text>
-                <Text style={styles.originalPrice}>₹{item.unitPrice}</Text>
-              </View>
-
               <Text style={styles.flashFishName} numberOfLines={2}>
                 {item.name}
               </Text>
+              <Text style={styles.flashWeightText}>
+                {item.unitBasis || '500 g'}
+              </Text>
 
-              <View style={styles.saveRatingRow}>
-                <View style={styles.saveTag}>
-                  <Text style={styles.saveTagText}>
-                    Save ₹{(item.unitPrice - (item.pricing?.effectivePrice || item.unitPrice)) || 70}
-                  </Text>
-                </View>
-                <Text style={styles.ratingText}>★ 4.8</Text>
+              <View style={styles.pricingRow}>
+                <Text style={styles.currentPrice}>
+                  ₹{item.pricing?.effectivePrice || item.unitPrice}
+                </Text>
+                <Text style={styles.originalPrice}>₹{item.unitPrice}</Text>
               </View>
 
-              <View style={styles.flashCardFooter}>
-                <Text style={styles.flameText}>🔥 Only 3 left</Text>
-                <Text style={styles.cardCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
+              <View style={styles.flashCardActionRow}>
+                {qty > 0 ? (
+                  <View style={styles.stepperContainerMini}>
+                    <TouchableOpacity
+                      style={styles.stepperBtnMini}
+                      onPress={() => onDecrement && onDecrement(item)}
+                    >
+                      <Text style={styles.stepperGlyph}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.stepperQtyTextMini}>{qty}</Text>
+                    <TouchableOpacity
+                      style={styles.stepperBtnMini}
+                      onPress={() => onIncrement ? onIncrement(item) : onAddToCart(item)}
+                    >
+                      <Text style={styles.stepperGlyph}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.addBtnGreen}
+                    onPress={() => onAddToCart(item)}
+                    disabled={addingFishId === item.id || !item.physicalAvailable}
+                    activeOpacity={0.8}
+                  >
+                    {addingFishId === item.id ? (
+                      <ActivityIndicator size="small" color={Colors.textWhite} />
+                    ) : (
+                      <Text style={styles.addBtnGreenText}>
+                        {item.physicalAvailable ? '+ ADD' : 'SOLD'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           );
@@ -888,8 +938,11 @@ const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
 const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
   fishList,
   favorites,
+  cartQuantities = {},
   onToggleFav,
   onAddToCart,
+  onIncrement,
+  onDecrement,
   onNavigate,
 }) {
   if (!fishList || fishList.length === 0) return null;
@@ -899,7 +952,7 @@ const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionHeading}>Previously bought</Text>
         <TouchableOpacity onPress={() => onNavigate('BOOKING_HISTORY')}>
-          <Text style={styles.seeAllText}>See all</Text>
+          <Text style={styles.seeAllText}>Order History →</Text>
         </TouchableOpacity>
       </View>
       <ScrollView
@@ -907,63 +960,79 @@ const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.prevBoughtScroll}
       >
-        {fishList.slice(0, 4).map((item) => (
-          <View key={`prev-${item.id}`} style={styles.prevBoughtCard}>
-            <TouchableOpacity
-              style={styles.prevHeartBtn}
-              onPress={() => onToggleFav(item.id)}
-            >
-              <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
-                {favorites[item.id] ? '♥' : '♡'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
-              style={styles.prevImageBox}
-            >
-              <OptimizedFishImage
-                uri={item.imageUrl}
-                style={styles.prevImage}
-                resizeMode="cover"
-                testID={`prev-image-${item.id}`}
-              />
-            </TouchableOpacity>
-            <View style={styles.carouselDotsRow}>
-              <View style={[styles.cDot, styles.cDotActive]} />
-              <View style={styles.cDot} />
-              <View style={styles.cDot} />
-            </View>
-            <View style={styles.prevMetaRow}>
-              <Text style={styles.prevWeightText}>500 g</Text>
+        {fishList.slice(0, 4).map((item) => {
+          const qty = cartQuantities[item.id] || 0;
+
+          return (
+            <View key={`prev-${item.id}`} style={styles.prevBoughtCard}>
               <TouchableOpacity
-                style={styles.prevAddBtn}
-                onPress={() => onAddToCart(item)}
+                style={styles.prevHeartBtn}
+                onPress={() => onToggleFav(item.id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.prevAddBtnText}>ADD</Text>
+                <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
+                  {favorites[item.id] ? '♥' : '♡'}
+                </Text>
               </TouchableOpacity>
-            </View>
-            <View style={styles.prevPricingRow}>
-              <Text style={styles.prevPriceText}>₹{item.pricing?.effectivePrice || item.unitPrice}</Text>
-              {Boolean(item.pricing?.hasDiscount) && (
-                <Text style={styles.prevStrikePrice}>₹{item.unitPrice}</Text>
-              )}
-            </View>
-            <Text style={styles.prevFishName} numberOfLines={2}>
-              {item.name}
-            </Text>
-            <View style={styles.prevRatingRow}>
-              <Text style={styles.prevRatingText}>★ 4.8</Text>
-              <Text style={styles.prevReviewCount}>(1,323)</Text>
-            </View>
-            <View style={styles.prevDeliveryRow}>
-              <Text style={styles.prevDeliveryText}>⚡ 8 mins • </Text>
-              <Text style={item.physicalAvailable ? styles.inStockText : styles.lowStockText}>
-                {item.physicalAvailable ? 'In stock' : '3 left'}
+
+              <TouchableOpacity
+                onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
+                style={styles.prevImageBox}
+                activeOpacity={0.88}
+              >
+                <OptimizedFishImage
+                  uri={item.imageUrl}
+                  style={styles.prevImage}
+                  resizeMode="cover"
+                  testID={`prev-image-${item.id}`}
+                />
+              </TouchableOpacity>
+
+              <Text style={styles.prevFishName} numberOfLines={2}>
+                {item.name}
               </Text>
+
+              <View style={styles.prevPricingRow}>
+                <Text style={styles.prevPriceText}>
+                  ₹{item.pricing?.effectivePrice || item.unitPrice}
+                </Text>
+                {Boolean(item.pricing?.hasDiscount) && (
+                  <Text style={styles.prevStrikePrice}>₹{item.unitPrice}</Text>
+                )}
+              </View>
+
+              <View style={styles.prevActionRow}>
+                {qty > 0 ? (
+                  <View style={styles.stepperContainerMini}>
+                    <TouchableOpacity
+                      style={styles.stepperBtnMini}
+                      onPress={() => onDecrement && onDecrement(item)}
+                    >
+                      <Text style={styles.stepperGlyph}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.stepperQtyTextMini}>{qty}</Text>
+                    <TouchableOpacity
+                      style={styles.stepperBtnMini}
+                      onPress={() => onIncrement ? onIncrement(item) : onAddToCart(item)}
+                    >
+                      <Text style={styles.stepperGlyph}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.prevAddBtn}
+                    onPress={() => onAddToCart(item)}
+                    disabled={!item.physicalAvailable}
+                  >
+                    <Text style={styles.prevAddBtnText}>
+                      {item.physicalAvailable ? '+ ADD' : 'SOLD'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-            <Text style={styles.prevCategoryLink}>{item.categoryName || 'Freshwater'} ›</Text>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -984,25 +1053,22 @@ const CatalogueHeaderControls = React.memo(function CatalogueHeaderControls({
     { key: 'ALL', label: 'All Catch' },
     { key: 'BOOKABLE', label: '⚡ Online Bookable' },
     { key: 'IN_STORE', label: '🏪 In-Store Only' },
-    { key: 'DISCOUNT', label: '🏷 Offers' },
+    { key: 'DISCOUNT', label: '🏷 Catch Offers' },
   ];
 
   return (
-    <View>
-      {/* Primary Fish Catalogue Section */}
+    <View style={styles.catalogueHeaderWrapper}>
+      {/* Primary Fish Catalogue Section Title */}
       <View style={styles.availableSectionHeader}>
         <View>
           <Text style={styles.sectionHeading}>Available Fishes</Text>
           <Text style={styles.availableSub}>
-            Fresh lake catches ready for instant delivery or quota claim
+            Live-fish retail prepared fresh to order at store counter
           </Text>
         </View>
-        <TouchableOpacity style={styles.sortFilterBtn}>
-          <Text style={styles.sortFilterText}>Sort & Filter ☵</Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Dynamic Category Pills */}
+      {/* Dynamic Category Discovery Pills */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -1078,21 +1144,21 @@ const CatalogueHeaderControls = React.memo(function CatalogueHeaderControls({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFE',
+    backgroundColor: Colors.background,
   },
   topHeader: {
-    backgroundColor: '#0A1C33',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    backgroundColor: Colors.brandNavy,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderBottomLeftRadius: Radii.xl,
+    borderBottomRightRadius: Radii.xl,
   },
   headerRowTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   headerLeftGroup: {
     flex: 1,
@@ -1102,301 +1168,169 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerLogoBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 9,
-    backgroundColor: '#FFFFFF',
+    width: 36,
+    height: 36,
+    borderRadius: Radii.sm,
+    backgroundColor: Colors.surface,
   },
-  greetingTitleRow: {
+  locationContainer: {
+    flex: 1,
+  },
+  locationTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
-  greetingText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+  locationTitleText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.textWhite,
+    fontSize: 14,
   },
-  verifiedBadge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#0284C7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  verifiedCheck: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  greetingSubtitle: {
+  locationChevron: {
+    color: Colors.actionGreen,
     fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 2,
+    fontWeight: '800',
+  },
+  locationSubtitleText: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    fontSize: 11,
+    marginTop: 1,
   },
   headerRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  walletPill: {
+  clubPassPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.3)',
-    borderRadius: 18,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: Radii.pill,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    gap: 6,
+    gap: 5,
   },
-  walletIconCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  clubPassIcon: {
+    fontSize: 12,
   },
-  walletAmountText: {
-    color: '#F8FAFC',
-    fontSize: 13,
-    fontWeight: '800',
+  clubPassText: {
+    color: Colors.textWhite,
+    fontSize: 12,
+    fontWeight: '700',
   },
   userAvatarBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#334155',
+    backgroundColor: Colors.brandNavyLight,
     borderWidth: 1.5,
-    borderColor: '#94A3B8',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitials: {
-    color: '#FFFFFF',
+    color: Colors.textWhite,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
   },
-  searchCartRow: {
+  searchBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    height: 46,
+    backgroundColor: Colors.surface,
+    borderRadius: Radii.lg,
+    height: 44,
     paddingHorizontal: 12,
-  },
-  searchIcon: {
-    fontSize: 14,
-    marginRight: 6,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 12,
-    color: '#0F172A',
-    fontWeight: '500',
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontWeight: '400',
     paddingVertical: 0,
   },
   clearSearchBtn: {
     padding: 4,
   },
   clearSearchText: {
-    fontSize: 14,
-    color: '#64748B',
+    fontSize: 13,
+    color: Colors.textMuted,
     fontWeight: '700',
   },
-  cartButtonGreen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#059669',
-    borderRadius: 12,
-    height: 46,
-    paddingHorizontal: 12,
-    gap: 6,
-    position: 'relative',
-  },
-  cartIconBox: {
-    marginRight: 2,
-  },
-  cartPriceBox: {
-    alignItems: 'flex-start',
-  },
-  cartPriceText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  cartItemCountText: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  cartRedBadge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: '#DC2626',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-  cartRedBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '900',
-  },
   scrollBody: {
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 40,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 120, // Prevents content occlusion by sticky cart bar & bottom nav
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+  },
+  bannersWrapper: {
+    marginBottom: 8,
   },
   quotaBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: Colors.warningSubtle,
     borderWidth: 1,
     borderColor: '#FDE68A',
-    borderRadius: 14,
+    borderRadius: Radii.lg,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   quotaMedalCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
   },
   quotaTitle: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#92400E',
   },
   quotaSubtitle: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#B45309',
     marginTop: 2,
   },
   rechargeBtn: {
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: '#0284C7',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderColor: Colors.borderMedium,
+    borderRadius: Radii.sm,
+    paddingHorizontal: 10,
     paddingVertical: 5,
-    backgroundColor: '#FFFFFF',
   },
   rechargeBtnText: {
-    color: '#0284C7',
+    color: Colors.brandNavy,
     fontSize: 11,
-    fontWeight: '800',
-  },
-  subQuickCard: {
-    backgroundColor: '#0F2744',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  subQuickLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  subQuickIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: 'rgba(2, 132, 199, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subQuickTitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  subQuickSubtitle: {
-    color: '#94A3B8',
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 14,
-  },
-  subQuickBtn: {
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    marginLeft: 6,
-  },
-  subQuickBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  scanBillQuickCard: {
-    backgroundColor: '#0D2040',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.35)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 3,
-  },
-  scanBillQuickIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scanBillQuickBtn: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    marginLeft: 6,
-  },
-  scanBillQuickBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   liveTruckCard: {
-    backgroundColor: '#0A2540',
-    borderRadius: 16,
+    backgroundColor: Colors.brandNavy,
+    borderRadius: Radii.lg,
     padding: 14,
-    marginBottom: 14,
+    marginBottom: 10,
+    ...Shadows.card,
   },
   truckCardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   truckLiveBadge: {
     flexDirection: 'row',
@@ -1407,28 +1341,27 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10B981',
+    backgroundColor: Colors.actionGreen,
   },
   truckLiveText: {
-    color: '#F8FAFC',
-    fontSize: 12,
-    fontWeight: '800',
+    color: Colors.textWhite,
+    fontSize: 11,
+    fontWeight: '700',
   },
   etaPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(0, 155, 112, 0.25)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingVertical: 2,
+    borderRadius: Radii.xs,
   },
   etaPillText: {
-    color: '#BAE6FD',
+    color: '#34D399',
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   truckCardMidRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
   },
   truckIconCircle: {
     width: 36,
@@ -1439,877 +1372,464 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   truckFarmTitle: {
-    color: '#FFFFFF',
+    color: Colors.textWhite,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   truckDestSubtitle: {
-    color: '#94A3B8',
-    fontSize: 10,
+    color: Colors.textMuted,
+    fontSize: 11,
     marginTop: 2,
   },
   trackLiveBtn: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    backgroundColor: Colors.actionGreen,
+    paddingHorizontal: 10,
     paddingVertical: 6,
+    borderRadius: Radii.sm,
   },
   trackLiveBtnText: {
-    color: '#0F172A',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  truckCardBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    paddingTop: 8,
-  },
-  coldChainTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  shieldSmall: {
-    fontSize: 10,
-  },
-  coldChainText: {
-    color: '#6EE7B7',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  gpsSyncText: {
-    color: '#60A5FA',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  assuranceCard: {
-    backgroundColor: '#0F2744',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-  },
-  assuranceTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  assuranceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 4,
-  },
-  assuranceBadgeText: {
-    color: '#6EE7B7',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  assuranceLink: {
-    color: '#38BDF8',
+    color: Colors.textWhite,
     fontSize: 11,
     fontWeight: '700',
   },
-  assuranceTitle: {
-    color: '#FFFFFF',
+  scanBillQuickCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radii.lg,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...Shadows.card,
+  },
+  subQuickLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  scanBillQuickIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radii.md,
+    backgroundColor: Colors.actionGreenSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subQuickTitle: {
+    color: Colors.textPrimary,
     fontSize: 13,
-    fontWeight: '800',
-    marginBottom: 4,
+    fontWeight: '700',
   },
-  assuranceSubtitle: {
-    color: '#94A3B8',
+  subQuickSubtitle: {
+    color: Colors.textSecondary,
     fontSize: 11,
-    lineHeight: 15,
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  scanBillQuickBtn: {
+    backgroundColor: Colors.actionGreen,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radii.sm,
+    marginLeft: 6,
+  },
+  scanBillQuickBtnText: {
+    color: Colors.textWhite,
+    fontSize: 11,
+    fontWeight: '700',
   },
   flashSaleContainer: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+    backgroundColor: Colors.surface,
+    borderRadius: Radii.lg,
     padding: 12,
-    marginBottom: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    ...Shadows.card,
   },
   flashHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   flashIconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Colors.actionGreenSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
   flashSectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#0F172A',
+    ...Typography.sectionTitle,
+    fontSize: 15,
   },
-  flashBadgeRed: {
-    backgroundColor: '#EF4444',
+  flashBadgeGreen: {
+    backgroundColor: Colors.actionGreenSubtle,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: Radii.xs,
   },
-  flashBadgeRedText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '900',
+  flashBadgeGreenText: {
+    color: Colors.actionGreen,
+    fontSize: 9,
+    fontWeight: '800',
   },
   flashSectionSubtitle: {
-    fontSize: 10,
-    color: '#78350F',
+    ...Typography.caption,
+    color: Colors.textSecondary,
     marginTop: 1,
   },
   flashCardsScroll: {
+    paddingRight: 10,
     gap: 10,
   },
   flashCard: {
-    width: 154,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 10,
+    width: 130,
+    backgroundColor: Colors.background,
+    borderRadius: Radii.md,
+    padding: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.borderSubtle,
   },
   flashCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   discountTag: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: Colors.actionGreen,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: Radii.xs,
   },
   discountTagText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '900',
+    color: Colors.textWhite,
+    fontSize: 9,
+    fontWeight: '800',
   },
   heartIcon: {
-    fontSize: 15,
-    color: '#94A3B8',
+    fontSize: 14,
+    color: Colors.textMuted,
   },
   heartActive: {
-    color: '#EF4444',
+    color: Colors.error,
   },
   flashImageBox: {
-    height: 90,
-    borderRadius: 8,
+    width: '100%',
+    height: 80,
+    borderRadius: Radii.sm,
     overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
-    marginBottom: 8,
+    backgroundColor: Colors.surface,
+    marginBottom: 6,
   },
   flashImage: {
     width: '100%',
     height: '100%',
   },
-  imageFallbackSmall: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E2E8F0',
-  },
-  weightAddRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  weightText: {
-    fontSize: 10,
+  flashFishName: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
-    flex: 1,
+    color: Colors.brandNavy,
+    lineHeight: 16,
+    minHeight: 32,
   },
-  addBtnOutline: {
-    borderWidth: 1,
-    borderColor: '#10B981',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    minWidth: 46,
-    alignItems: 'center',
-  },
-  addBtnOutlineText: {
-    color: '#10B981',
+  flashWeightText: {
     fontSize: 10,
-    fontWeight: '800',
+    color: Colors.textSecondary,
+    marginBottom: 4,
   },
   pricingRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 4,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   currentPrice: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.brandNavy,
   },
   originalPrice: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: Colors.textMuted,
     textDecorationLine: 'line-through',
   },
-  flashFishName: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1E293B',
-    lineHeight: 14,
-    marginBottom: 6,
-    height: 28,
+  flashCardActionRow: {
+    marginTop: 'auto',
   },
-  freshnessMiniRow: {
-    marginTop: 2,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  sectionHeading: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  availableSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  categoryScroll: {
-    gap: 8,
-    paddingVertical: 8,
-  },
-  categoryPill: {
-    backgroundColor: '#FFFFFF',
+  addBtnGreen: {
+    backgroundColor: Colors.actionGreenSubtle,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  categoryPillActive: {
-    backgroundColor: '#0A192F',
-    borderColor: '#0A192F',
-  },
-  categoryPillText: {
-    color: '#475569',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  categoryPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 14,
-  },
-  filterChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  filterChipActive: {
-    backgroundColor: '#0284C7',
-    borderColor: '#0284C7',
-  },
-  filterChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  filterChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  gridRow: {
-    justifyContent: 'space-between',
-  },
-  footerContainer: {
-    paddingTop: 8,
-    paddingBottom: 20,
-  },
-  footerSpacing: {
-    height: 30,
-  },
-  catalogueGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 20,
-  },
-  gridFishCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 10,
-    marginBottom: 10,
-    shadowColor: '#0A1C33',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  gridCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  gridCatBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  gridCatBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  gridImageBox: {
-    height: 90,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  gridFishImage: {
-    width: '100%',
-    height: '100%',
-  },
-  gridMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  gridWeightText: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '700',
-  },
-  gridAddBtn: {
-    borderWidth: 1.5,
-    borderColor: '#16A34A',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  gridAddBtnText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#16A34A',
-  },
-  gridPricingRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    marginBottom: 2,
-  },
-  gridPriceVal: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0A1C33',
-  },
-  gridCrossedPrice: {
-    fontSize: 11,
-    color: '#94A3B8',
-    textDecorationLine: 'line-through',
-  },
-  gridFishName: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0A1C33',
-    lineHeight: 16,
-    marginBottom: 4,
-    minHeight: 32,
-  },
-  gridRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginBottom: 3,
-  },
-  gridRatingStar: {
-    fontSize: 10,
-    color: '#D97706',
-    fontWeight: '700',
-  },
-  gridRatingCount: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  gridDeliveryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  gridDeliveryText: {
-    fontSize: 10,
-    color: '#64748B',
-  },
-  gridCategoryLink: {
-    fontSize: 10,
-    color: '#0284C7',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  catalogueList: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  fishCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  categoryLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  imageBox: {
-    height: 150,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
-    position: 'relative',
-    marginBottom: 12,
-  },
-  fishImage: {
-    width: '100%',
-    height: '100%',
-  },
-  imageFallback: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E2E8F0',
-  },
-  discountBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  discountBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  cardBody: {
-    gap: 8,
-  },
-  fishName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    lineHeight: 20,
-  },
-  fishDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
-  },
-  statusBadgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginVertical: 2,
-  },
-  statusPillAvailable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 5,
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
-  },
-  statusPillAvailableText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#15803D',
-  },
-  statusPillUnavailable: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusPillUnavailableText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  bookingPillBookable: {
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  bookingPillBookableText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  bookingPillInStore: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  bookingPillInStoreText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  priceValue: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  priceUnit: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  basePriceCrossed: {
-    fontSize: 12,
-    color: '#94A3B8',
-    textDecorationLine: 'line-through',
-  },
-  priceTaxNote: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 1,
-  },
-  detailsButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 10,
-    minWidth: 84,
+    borderColor: Colors.actionGreen,
+    borderRadius: Radii.sm,
+    paddingVertical: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  detailsButtonBookable: {
-    backgroundColor: '#059669',
+  addBtnGreenText: {
+    color: Colors.actionGreen,
+    fontSize: 10,
+    fontWeight: '800',
   },
-  detailsButtonInStore: {
-    backgroundColor: '#0A192F',
+  stepperContainerMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.actionGreenSubtle,
+    borderWidth: 1,
+    borderColor: Colors.actionGreen,
+    borderRadius: Radii.sm,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
-  detailsButtonText: {
-    color: '#FFFFFF',
+  stepperBtnMini: {
+    paddingHorizontal: 4,
+  },
+  stepperGlyph: {
     fontSize: 12,
     fontWeight: '800',
+    color: Colors.actionGreen,
   },
-  micIcon: {
-    fontSize: 14,
-    color: '#64748B',
-    marginLeft: 4,
-  },
-  timerBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  timerBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#92400E',
-  },
-  saveRatingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  saveTag: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  saveTagText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#15803D',
-  },
-  ratingText: {
+  stepperQtyTextMini: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#D97706',
-  },
-  flashCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  flameText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  cardCategoryLink: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0284C7',
+    color: Colors.actionGreen,
   },
   previouslyBoughtContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: Radii.lg,
+    padding: 12,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.borderSubtle,
+    ...Shadows.card,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  sectionHeading: {
+    ...Typography.sectionTitle,
+    fontSize: 16,
+    color: Colors.brandNavy,
   },
   seeAllText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0284C7',
+    color: Colors.brandBlue,
   },
   prevBoughtScroll: {
-    gap: 12,
+    paddingRight: 10,
+    gap: 10,
   },
   prevBoughtCard: {
-    width: 140,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 10,
+    width: 120,
+    backgroundColor: Colors.background,
+    borderRadius: Radii.md,
+    padding: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.borderSubtle,
     position: 'relative',
   },
   prevHeartBtn: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
     zIndex: 2,
   },
   prevImageBox: {
-    height: 80,
-    borderRadius: 8,
+    width: '100%',
+    height: 70,
+    borderRadius: Radii.sm,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
+    backgroundColor: Colors.surface,
+    marginBottom: 4,
   },
   prevImage: {
     width: '100%',
     height: '100%',
   },
-  carouselDotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 4,
-    marginBottom: 6,
-  },
-  cDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#CBD5E1',
-  },
-  cDotActive: {
-    backgroundColor: '#0F172A',
-    width: 6,
-  },
-  prevMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  prevWeightText: {
+  prevFishName: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
-  },
-  prevAddBtn: {
-    borderWidth: 1,
-    borderColor: '#10B981',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: '#FFFFFF',
-  },
-  prevAddBtnText: {
-    color: '#10B981',
-    fontSize: 10,
-    fontWeight: '800',
+    color: Colors.brandNavy,
+    lineHeight: 14,
+    minHeight: 28,
   },
   prevPricingRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 4,
-    marginBottom: 2,
+    marginTop: 2,
+    marginBottom: 6,
   },
   prevPriceText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  prevStrikePrice: {
-    fontSize: 10,
-    color: '#94A3B8',
-    textDecorationLine: 'line-through',
-  },
-  prevFishName: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#0F172A',
-    lineHeight: 15,
-    marginBottom: 4,
-    minHeight: 30,
+    color: Colors.brandNavy,
   },
-  prevRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  prevRatingText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#D97706',
-  },
-  prevReviewCount: {
+  prevStrikePrice: {
     fontSize: 9,
-    color: '#94A3B8',
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through',
   },
-  prevDeliveryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
+  prevActionRow: {
+    marginTop: 'auto',
   },
-  prevDeliveryText: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  inStockText: {
-    fontSize: 10,
-    color: '#16A34A',
-    fontWeight: '700',
-  },
-  lowStockText: {
-    fontSize: 10,
-    color: '#DC2626',
-    fontWeight: '700',
-  },
-  prevCategoryLink: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  availableSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  sortFilterBtn: {
-    backgroundColor: '#FFFFFF',
+  prevAddBtn: {
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  sortFilterText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  showMoreBtn: {
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderColor: Colors.actionGreen,
+    borderRadius: Radii.xs,
+    paddingVertical: 3,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 20,
+  },
+  prevAddBtnText: {
+    color: Colors.actionGreen,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  catalogueHeaderWrapper: {
+    marginBottom: 8,
+  },
+  availableSectionHeader: {
+    marginBottom: 10,
+  },
+  availableSub: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  categoryScroll: {
+    paddingRight: 10,
+    gap: 8,
+    marginBottom: 10,
+  },
+  categoryPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: Radii.pill,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+  },
+  categoryPillActive: {
+    backgroundColor: Colors.brandNavy,
+    borderColor: Colors.brandNavy,
+  },
+  categoryPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  categoryPillTextActive: {
+    color: Colors.textWhite,
+    fontWeight: '700',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radii.sm,
+    backgroundColor: Colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  filterChipActive: {
+    backgroundColor: Colors.actionGreenSubtle,
+    borderColor: Colors.actionGreen,
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: Colors.actionGreen,
+    fontWeight: '700',
+  },
+  stickyCartBar: {
+    position: 'absolute',
+    bottom: 14,
+    left: 12,
+    right: 12,
+    height: 54,
+    backgroundColor: Colors.brandNavy,
+    borderRadius: Radii.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    zIndex: 100,
+    ...Shadows.floatingBar,
+  },
+  stickyCartInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stickyCartIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: Radii.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stickyCartTitle: {
+    color: Colors.textWhite,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  stickyCartSubtitle: {
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: 10,
+    marginTop: 1,
+  },
+  stickyCartCta: {
+    backgroundColor: Colors.actionGreen,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radii.pill,
+  },
+  stickyCartCtaText: {
+    color: Colors.textWhite,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  footerContainer: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  showMoreBtn: {
+    backgroundColor: Colors.brandBlueSubtle,
+    borderWidth: 1,
+    borderColor: Colors.brandBlue,
+    borderRadius: Radii.md,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
   },
   showMoreBtnText: {
-    color: '#0284C7',
+    color: Colors.brandBlue,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
+  },
+  footerSpacing: {
+    height: 30,
   },
 });

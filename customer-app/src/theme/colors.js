@@ -1,81 +1,89 @@
 /**
  * PondFish Design System Color Tokens - React Native Mobile
- * Traceability: PondFish Complete Design System UI/UX Specification
+ * Traceability: PondFish Complete Design System UI/UX Specification & .agent/skills/pondfish-mobile-ui-ux/SKILL.md
+ * 
+ * Non-breaking shim: Re-exports design system tokens from tokens.js
+ * while maintaining 100% backward compatibility for legacy color, spacing, radius,
+ * typography, and shadow keys.
  */
+
+import { Colors, Typography, Spacing, Radii, Shadows, Layout } from './tokens';
+
+export { Colors, Typography, Spacing, Radii, Shadows, Layout };
 
 export const colors = {
   // Brand Core Colors
-  primary: '#0284C7',
+  primary: Colors.brandBlue,
   primaryHover: '#0369A1',
-  primaryDark: '#075985',
+  primaryDark: Colors.brandNavy,
   accent: '#38BDF8',
-  accentLight: '#BAE6FD',
+  accentLight: Colors.brandBlueSubtle,
 
-  // Stitch Design System Tokens
-  navyPrimary: '#0A1C33',
-  navyDark: '#071628',
+  // Stitch & Modern Tokens
+  navyPrimary: Colors.brandNavy,
+  navyDark: Colors.brandNavyDark,
   navyCard: '#0F223D',
   navySurface: '#172A45',
-  blueAccent: '#0284C7',
+  blueAccent: Colors.brandBlue,
   blueSecondary: '#1D61B4',
-  blueSoft: '#EDF5FD',
+  blueSoft: Colors.brandBlueSubtle,
   blueBorder: '#C6DEF9',
 
   // Surfaces & Backgrounds
-  pageBg: '#F8FAFE',
-  cardBg: '#FFFFFF',
-  bgMain: '#F8FAFE',
-  bgCard: '#FFFFFF',
-  bgSurface: '#EDF5FD',
-  bgInput: '#FFFFFF',
-  border: '#E2E8F0',
+  pageBg: Colors.background,
+  cardBg: Colors.surface,
+  bgMain: Colors.background,
+  bgCard: Colors.surface,
+  bgSurface: Colors.surfaceSubtle,
+  bgInput: Colors.surface,
+  border: Colors.borderSubtle,
   borderLight: '#F1F5F9',
 
   // Quota & Gold Tiers
   goldBg: '#FFFBEB',
   goldBorder: '#FEF3C7',
   goldText: '#92400E',
-  goldAccent: '#F59E0B',
+  goldAccent: Colors.warning,
 
   // Freshness & Semantic Status
-  freshGreen: '#16A34A',
-  freshGreenBg: '#DCFCE7',
-  freshGrey: '#64748B',
-  freshGreyBg: '#F1F5F9',
-  freshRed: '#DC2626',
-  freshRedBg: '#FEE2E2',
-  success: '#16A34A',
-  warning: '#D97706',
-  danger: '#DC2626',
-  info: '#0284C7',
+  freshGreen: Colors.actionGreen,
+  freshGreenBg: Colors.actionGreenSubtle,
+  freshGrey: Colors.textSecondary,
+  freshGreyBg: Colors.surfaceSubtle,
+  freshRed: Colors.error,
+  freshRedBg: Colors.errorSubtle,
+  success: Colors.success,
+  warning: Colors.warning,
+  danger: Colors.error,
+  info: Colors.info,
 
   // Typography
-  textPrimary: '#0A1C33',
-  textSecondary: '#475569',
-  textMuted: '#64748B',
+  textPrimary: Colors.textPrimary,
+  textSecondary: Colors.textSecondary,
+  textMuted: Colors.textMuted,
   textLightMuted: '#94A3B8',
-  textWhite: '#FFFFFF',
-  textDark: '#0A1C33',
+  textWhite: Colors.textWhite,
+  textDark: Colors.brandNavy,
 };
 
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
+  xs: Spacing.xs,
+  sm: Spacing.sm,
+  md: Spacing.md,
+  lg: Spacing.base,
+  xl: Spacing.lg,
+  xxl: Spacing.xl,
+  xxxl: Spacing.xxl,
 };
 
 export const radius = {
-  xs: 4,
-  sm: 6,
-  md: 8,
-  lg: 12,
-  xl: 14,
+  xs: Radii.xs,
+  sm: Radii.sm,
+  md: Radii.md,
+  lg: Radii.lg,
+  xl: Radii.xl,
   xxl: 20,
-  full: 9999,
+  full: Radii.pill,
 };
 
 export const typography = {
@@ -92,26 +100,7 @@ export const typography = {
 };
 
 export const shadows = {
-  card: {
-    shadowColor: '#0A1C33',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  cardElevated: {
-    shadowColor: '#0A1C33',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  modal: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 10,
-  },
+  card: Shadows.card,
+  cardElevated: Shadows.elevatedCenter,
+  modal: Shadows.floatingBar,
 };
-
