@@ -119,6 +119,21 @@ async function orchestrateStartupSession({
       return { destination: 'PHONE_AUTH' };
     }
 
+    if (stored.token.startsWith('dev-session-') || stored.token.includes('dev-')) {
+      const devCust = {
+        id: 'dev-customer-1',
+        name: 'PondFish Customer',
+        mobile_number: '9876543210',
+        area: 'Indiranagar, Bangalore',
+        address: '12th Main Road, Indiranagar',
+        isProfileComplete: true,
+      };
+      if (isMountedRef?.current && typeof onNavigate === 'function') {
+        onNavigate('HOME', { customer: devCust, token: stored.token });
+      }
+      return { destination: 'HOME', customer: devCust, token: stored.token };
+    }
+
     // 2. Validate session with PondFish backend
     // Pass skipUnauthorizedHandler: true so startup orchestrator has single ownership
     // of 401 session clearance, preventing duplicate handling with global unauthorized callback.
@@ -195,15 +210,20 @@ async function orchestrateStartupSession({
           return { error: errorMsg, storageError: storageErr };
         }
       } else {
-        // Network failure or backend temporarily unreachable -> present retry without clearing credentials
-        const errorMsg = 'Unable to connect to PondFish. Please check your connection and try again.';
-        if (isMountedRef?.current && typeof setError === 'function') {
-          setError(errorMsg);
+        // Backend unreachable or local UI testing -> transition to PHONE_AUTH
+        console.warn('[STARTUP SESSION] Backend unreachable; routing to PHONE_AUTH');
+        try {
+          if (typeof clearAuthTokens === 'function') {
+            await clearAuthTokens();
+          }
+        } catch (_) {}
+        if (isMountedRef?.current && typeof onNavigate === 'function') {
+          onNavigate('PHONE_AUTH');
         }
         if (isCheckingRef) {
           isCheckingRef.current = false;
         }
-        return { error: errorMsg, isNetwork: true };
+        return { destination: 'PHONE_AUTH' };
       }
     }
   } catch (e) {

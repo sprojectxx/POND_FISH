@@ -50,10 +50,10 @@ export const Colors = {
   shimmerHighlight: '#F8FAFC',
 };
 
-// Supported typography using Android system fonts (Roboto / sans-serif)
+// Supported typography matching PondFish Website Design Standard: Plus Jakarta Sans
 export const Typography = {
   display: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 24,
     lineHeight: 30,
     fontWeight: '700',
@@ -61,7 +61,7 @@ export const Typography = {
     letterSpacing: -0.4,
   },
   screenTitle: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 20,
     lineHeight: 26,
     fontWeight: '700',
@@ -69,7 +69,7 @@ export const Typography = {
     letterSpacing: -0.3,
   },
   sectionTitle: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '600',
@@ -77,35 +77,35 @@ export const Typography = {
     letterSpacing: -0.2,
   },
   bodyLarge: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 15,
     lineHeight: 21,
     fontWeight: '500',
     color: Colors.textPrimary,
   },
   bodyMedium: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '400',
     color: Colors.textPrimary,
   },
   bodySmall: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '400',
     color: Colors.textSecondary,
   },
   caption: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '500',
     color: Colors.textMuted,
   },
   price: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 15,
     lineHeight: 20,
     fontWeight: '700',
@@ -113,7 +113,7 @@ export const Typography = {
     fontVariant: ['tabular-nums'],
   },
   priceHero: {
-    fontFamily: 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     fontSize: 20,
     lineHeight: 26,
     fontWeight: '800',

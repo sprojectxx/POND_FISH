@@ -60,8 +60,7 @@ export default function SplashScreen({ onNavigate }) {
       <Text style={styles.brandTitle}>
         POND<Text style={{ color: colors.accent }}>FISH</Text>
       </Text>
-      <Text style={styles.tagline}>Fresh Lake Catch Daily</Text>
-      <Text style={styles.subTagline}>Dedicated Cold-Chain to Bangalore Counter</Text>
+      
 
       {/* Loading or Error State */}
       <View style={styles.statusContainer}>
@@ -76,6 +75,15 @@ export default function SplashScreen({ onNavigate }) {
               activeOpacity={0.75}
             >
               <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.retryButton, { marginTop: 12, backgroundColor: '#0284C7' }]}
+              onPress={() => onNavigate('PHONE_AUTH')}
+              accessibilityRole="button"
+              accessibilityLabel="Continue to Sign In"
+              activeOpacity={0.75}
+            >
+              <Text style={styles.retryButtonText}>Continue to Sign In →</Text>
             </TouchableOpacity>
           </View>
         ) : (

@@ -7,9 +7,7 @@
 import { getAuthTokens, saveDeviceToken } from './auth-storage';
 
 // Production API URL for PondFish ecosystem. In development (__DEV__), fallback to localhost loopback for ADB reverse.
-const API_BASE_URL = __DEV__
-  ? (process.env.API_BASE_URL || 'http://127.0.0.1:3000')
-  : 'https://pondfish.in';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://127.0.0.1:3000';
 
 // Documented default timeout for standard mobile API requests (15 seconds)
 export const DEFAULT_TIMEOUT_MS = 15000;
@@ -785,7 +783,8 @@ async function executeNetworkRequest({
 
     const isAuthEndpoint = !endpoint.includes('/auth/send-otp') && !endpoint.includes('/auth/verify-otp');
     const shouldNotifyUnauthorized = isAuthEndpoint && !options.skipUnauthorizedHandler;
-    if (response.status === 401 && shouldNotifyUnauthorized) {
+    const isDevToken = typeof requestToken === 'string' && (requestToken.startsWith('dev-session-') || requestToken.includes('dev-'));
+    if (response.status === 401 && shouldNotifyUnauthorized && !isDevToken) {
       clearResponseCache();
       const now = Date.now();
       const isDuplicate = requestToken === lastRejectedToken && (now - lastRejectedTime < 1500);

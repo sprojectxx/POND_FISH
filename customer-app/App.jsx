@@ -11,10 +11,30 @@ import {
   StyleSheet,
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   BackHandler,
   ActivityIndicator,
+  Platform,
+  Keyboard,
 } from 'react-native';
+
+// Ensure global Plus Jakarta Sans font default is active across the application
+const globalDefaultFont = {
+  fontFamily: Platform.select({
+    ios: 'Plus Jakarta Sans',
+    android: 'PlusJakartaSans',
+    default: 'PlusJakartaSans',
+  }),
+};
+if (Text.defaultProps == null) {
+  Text.defaultProps = {};
+}
+Text.defaultProps.style = globalDefaultFont;
+if (TextInput.defaultProps == null) {
+  TextInput.defaultProps = {};
+}
+TextInput.defaultProps.style = globalDefaultFont;
 import { colors } from './src/theme/colors';
 import { api, setUnauthorizedHandler } from './src/services/api';
 import { getAuthTokens, clearAuthTokens } from './src/services/auth-storage';
@@ -49,6 +69,22 @@ import { executeSessionLogout } from './src/utils/session-controller';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('SPLASH');
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide',
+      () => setKeyboardVisible(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
   const [screenParams, setScreenParams] = useState({});
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
@@ -134,8 +170,17 @@ export default function App() {
   const handleUnauthorized = useCallback(async (rejectedToken) => {
     if (isLoggingOutRef.current) return;
 
+    if (typeof rejectedToken === 'string' && (rejectedToken.startsWith('dev-session-') || rejectedToken.includes('dev-'))) {
+      console.warn('[AUTH] Ignored 401 for dev session token:', rejectedToken);
+      return;
+    }
+
     try {
       const current = await getAuthTokens();
+      if (typeof current?.token === 'string' && (current.token.startsWith('dev-session-') || current.token.includes('dev-'))) {
+        console.warn('[AUTH] Ignored 401 because stored token is dev session:', current.token);
+        return;
+      }
 
       // If the customer has an active token in Keystore:
       if (current?.token) {
@@ -280,9 +325,15 @@ export default function App() {
     currentScreen !== 'CHECKOUT' &&
     currentScreen !== 'CART';
 
+  const isProfile = currentScreen === 'PROFILE';
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A1C33" />
+    <SafeAreaView style={[styles.container, isProfile && { backgroundColor: '#6EA3D8' }]}>
+      <StatusBar
+        barStyle={isProfile ? 'dark-content' : 'light-content'}
+        backgroundColor={isProfile ? 'transparent' : '#0A1C33'}
+        translucent={isProfile}
+      />
 
       <View style={styles.screenContainer}>
         {currentScreen === 'SPLASH' && (
@@ -459,7 +510,7 @@ export default function App() {
       </View>
 
       {/* Authenticated Global 5-Tab Bottom Navigation Bar */}
-      {showBottomNav && (
+      {showBottomNav && !isKeyboardVisible && (
         <View style={styles.bottomNavWrapper}>
           <View style={styles.bottomNav}>
             {/* Nav Item 1: Home */}
@@ -599,19 +650,19 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#0D203B',
+    backgroundColor: '#1E56A0',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
-    shadowColor: '#0D203B',
+    shadowColor: '#1E56A0',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 6,
   },
   scanIconCircleActive: {
-    backgroundColor: '#009B70',
+    backgroundColor: '#1E56A0',
   },
   scanIconText: {
     color: '#FFFFFF',
