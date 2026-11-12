@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Image } from 'react-native';
 import { Colors } from '../../theme/tokens';
 
 /**
@@ -306,40 +306,22 @@ export function LocationPinIcon({ size = 18, color = Colors.actionGreen }) {
  * Shopping Bag / Cart Icon
  */
 export function CartIcon({ size = 20, color = Colors.textWhite }) {
-  const s = size;
+  const isWhite = color === Colors.textWhite || color === '#FFFFFF' || color === '#ffffff' || color === 'white';
+  const iconSource = isWhite
+    ? require('../../assets/icons/cart_white.png')
+    : require('../../assets/icons/cart_blue.png');
+
   return (
-    <View style={[styles.center, { width: s, height: s }]}>
-      {/* Bag handle */}
-      <View
-        style={{
-          width: s * 0.42,
-          height: s * 0.32,
-          borderTopLeftRadius: (s * 0.42) / 2,
-          borderTopRightRadius: (s * 0.42) / 2,
-          borderWidth: 1.6,
-          borderColor: color,
-          borderBottomWidth: 0,
-          marginBottom: -1,
-        }}
-      />
-      {/* Bag body */}
-      <View
-        style={{
-          width: s * 0.72,
-          height: s * 0.58,
-          borderWidth: 1.8,
-          borderColor: color,
-          borderRadius: 3,
-          backgroundColor: 'transparent',
-        }}
+    <View style={[styles.center, { width: size, height: size }]}>
+      <Image
+        source={iconSource}
+        style={{ width: size, height: size }}
+        resizeMode="contain"
       />
     </View>
   );
 }
 
-/**
- * Stepper Plus Icon
- */
 export function PlusIcon({ size = 14, color = Colors.actionGreen }) {
   return (
     <View style={[styles.center, { width: size, height: size }]}>

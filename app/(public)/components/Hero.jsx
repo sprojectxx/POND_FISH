@@ -9,7 +9,7 @@ export default function Hero() {
       {/* Desktop Full-Bleed Banner Layer */}
       <div className="pf-hero-bg-desktop">
         <img
-          src="https://urkxrefqtrwjfttrukhw.supabase.co/storage/v1/object/public/fish-assets/banner.png"
+          src="https://pondfish-cdn.sprojectxx.workers.dev/fish-assets/banner.png"
           alt="Fresh fish catch on lake"
           className="pf-hero-img-desktop"
         />
@@ -19,7 +19,7 @@ export default function Hero() {
       {/* Mobile Full-Bleed Banner Layer */}
       <div className="pf-hero-bg-mobile">
         <img
-          src="https://urkxrefqtrwjfttrukhw.supabase.co/storage/v1/object/public/fish-assets/banner_phone.png"
+          src="https://pondfish-cdn.sprojectxx.workers.dev/fish-assets/banner_phone.png"
           alt="Fresh fish catch on lake"
           className="pf-hero-img-mobile"
         />

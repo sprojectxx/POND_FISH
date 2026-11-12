@@ -14,9 +14,18 @@ customer-app/node_modules/
 customer-app/android/.gradle/
 customer-app/android/app/build/
 customer-app/android/build/
+customer-app/android/app/src/main/assets/index.android.bundle
+*.apk
+*.aab
+*.bundle
 local.properties
 *.keystore
 !debug.keystore
+
+# Temporary testing & screenshots
+app_screenshots/
+*.patch
+customer-app_backup_checkpoint/
 
 # Environment variables & secrets (CRITICAL: Never commit secrets)
 .env

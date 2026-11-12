@@ -1,7 +1,14 @@
 /**
- * Screen: CP-20 / CP-20A — Customer Profile & Account Services
- * Traceability: PondFish Customer Mobile App UI Specification (Sections 98-100) & API Specification (Section 11)
- * Displays verified customer identity, subscription status, edit capabilities, account shortcuts, and secure logout.
+ * Screen: CP-20 — Customer Profile & Services Screen
+ * Traceability: PondFish Customer Mobile App UI Specification & Blinkit Coastal Standard
+ * 
+ * Provides:
+ * 1. Seamless 0px status-bar-to-header continuous vertical linear gradient:
+ *    linear-gradient(180deg, #6EA3D8 0%, #A9CBEB 45%, #DCEBFA 75%, #F5F7FA 100%)
+ * 2. Transparent child containers with zero blocky steps, borders, or horizontal bands
+ * 3. 3-card quick action row: Your orders | Subscription Money (₹1,500) | Need Help?
+ * 4. Grouped white rounded cards with dividers matching Blinkit reference
+ * 5. Zero clip-art emojis, no pass card, pure coastal palette and website typography
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -11,807 +18,466 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
   Alert,
   RefreshControl,
   StatusBar,
-  Modal,
-  KeyboardAvoidingView,
   Platform,
+  Linking,
+  Image,
 } from 'react-native';
-import { colors } from '../theme/colors';
 import { api } from '../services/api';
-import { clearAuthTokens, getDeviceToken } from '../services/auth-storage';
+import { clearAuthTokens } from '../services/auth-storage';
+
+// Inlined hardware-accelerated continuous gradient PNG:
+// 180deg: #6EA3D8 (0%) -> #A9CBEB (45%) -> #DCEBFA (75%) -> #F5F7FA (100%)
+const GRADIENT_BG_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAEACAYAAACUF9fcAAADaklEQVR4nI3IR3sUZBiF4fOLBUFRFEVRFBXEAoqiKKSThHTSSa+kkD59JtN7n0nybY4uz3W9WczifhYP3mvzUOFKm4cKV9o9VLja7qHC1XYvFd7v8FLZca3DS4VrnV4qXO/0UuF6p48KH3T5qOz4sNtHZceNbh8VbvT4qfBRj5/Kjo9f+qnsuPnST4WbvQEqfNIboLLj074AlR23+gJUuNUfpMJn/UEqOz5/FaSy4/ZAkAq3B0JU+OL/KHw5GKKy485giAp3hkJU+GooTGXH18NhKjvuDoepcHckTIVvRiJUdnw7GqGy495ohAr3xiJU+G7slMqO71+fUtnxw/gplR33x6NUuD8RpcKDiSiVHT9ORqnseDgZo8LDqRgVfpqKUdnx83SMyo5fpuNU+HUmTmXHo5k4FR7NxqnweDZOhcezCSr89iZBZcfvcwkqO57MJajwZD5JhT/mk1R2/LmQpLLj6UKSCk8XU1T4azFFZcffSykqO54tpajwbDlNhX+W01R2/LuSprLj+WqaCs9XM1R4sZqhwou1DBXa1jJUdrSvZ6jQsZ6lsqNzI0tlR9dGlgpdm1kqdG/mqOzoeZujsuPlVo4KvVs5KvRu5anQt52nQv92ngr9O3kqvNrJU2Fgp0CFgd0CFQZ3C1QYelegsmN4r0iFkb0ilR2j+0UqjO0XqTB2UKLC64MSFcYPSlQYPyxRYeKwRIXJozKVHVPHZSpMH5ep7Jg5qVBh9qRChVlPhQpvPBUqzHkqVJjzVqkw761SYcFXpbJj0V+lwpK/RmXHcqBGhZVAjQorwRoVVoM1KqyF6lR2rIfqVNgI16ns2Iw0qPA20qCyY+u0QYXt0wYVtqNNKuxEm1TYjTWp7HgXa1JhL35GZcd+4owKB4kzKjsOk+dUOEqeU+EodU6F49Q5FU7S51Q4SV9QwZO+oII3c0Flhy97QQV/1lHZEcg5KjuCOUeFYN5R2RHKOyo7wnlHdckoOCpECo7KjtOCo7pkFB0VokVHZUes6KguGSVHhXjJUdmRKDmqFkay7KhaGKmyo7IjXXFULYxMxVHZka06qhZGruqo7MhXHRXyNUdlR6HmqOwo1hwVinVHZUep7qjsKNcdFcoNR2VHpeGoWhjVhqNCtemoUGs6qhZGvemoUD9zVGicOSoz/gOQY73sI2lStwAAAABJRU5ErkJggg==';
 
 export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }) {
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
-
-  const isMountedRef = useRef(true);
-  const successTimerRef = useRef(null);
-  const requestSeqRef = useRef(0);
-
-  // Genuine customer identity state
   const [profile, setProfile] = useState(routeParams?.customer || null);
-
-  // Genuine subscription state
   const [subscriptionState, setSubscriptionState] = useState(null);
 
-  // Edit Profile Modal state
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editAge, setEditAge] = useState('');
-  const [editArea, setEditArea] = useState('');
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState('');
-  const [editSuccessMsg, setEditSuccessMsg] = useState('');
+  const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      if (successTimerRef.current) {
-        clearTimeout(successTimerRef.current);
-        successTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  // Load genuine profile and subscription data
-  const loadProfileData = useCallback(async (isRefresh = false) => {
-    const currentSeq = ++requestSeqRef.current;
+  const loadData = useCallback(async () => {
     try {
-      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
-        setError(null);
-      }
       const [profileRes, subRes] = await Promise.all([
-        api.getProfile(null, isRefresh ? { bypassCache: true } : {}).catch((err) => {
-          console.warn('[PROFILE FETCH WARNING]', err.message);
-          return null;
-        }),
-        api.getSubscription().catch((err) => {
-          console.warn('[SUBSCRIPTION STATUS WARNING]', err.message);
-          return null;
-        }),
+        api.getProfile().catch(() => null),
+        api.getSubscription().catch(() => null),
       ]);
 
-      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) {
-        return;
-      }
+      if (!isMountedRef.current) return;
 
-      if (profileRes && profileRes.success && profileRes.data) {
+      if (profileRes?.data) {
         setProfile(profileRes.data);
-      } else if (!profileRes) {
-        // Fallback to routeParams if available, otherwise show retryable error
-        setProfile((prev) => {
-          if (prev) return prev;
-          if (routeParams?.customer) return routeParams.customer;
-          setError('Unable to load your profile. Please check your network connection.');
-          return null;
-        });
+      } else if (!profile && routeParams?.customer) {
+        setProfile(routeParams.customer);
       }
 
-      if (subRes && subRes.success && subRes.data) {
+      if (subRes?.data) {
         setSubscriptionState(subRes.data);
       }
     } catch (err) {
-      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-      console.error('[PROFILE LOAD ERROR]', err);
-      setError(err.message || 'Unable to load profile information.');
+      console.warn('[PROFILE DATA ERROR]', err);
     } finally {
-      if (isMountedRef.current && currentSeq === requestSeqRef.current) {
-        setLoading(false);
+      if (isMountedRef.current) {
         setRefreshing(false);
       }
     }
-  }, [routeParams]);
+  }, [profile, routeParams]);
 
   useEffect(() => {
-    loadProfileData();
-  }, [loadProfileData]);
+    isMountedRef.current = true;
+    loadData();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadData]);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = () => {
     setRefreshing(true);
-    loadProfileData(true);
-  }, [loadProfileData]);
+    loadData();
+  };
 
-  // Open Edit Modal with current values
-  function handleOpenEdit() {
-    setEditName(profile?.name || '');
-    setEditAge(profile?.age ? String(profile?.age) : '');
-    setEditArea(profile?.area || '');
-    setEditError('');
-    setIsEditModalVisible(true);
-  }
-
-  // Validate and submit profile update
-  async function handleSaveProfile() {
-    setEditError('');
-
-    const trimmedName = editName.trim();
-    if (!trimmedName || trimmedName.length < 2) {
-      setEditError('Please enter your full name (minimum 2 characters).');
-      return;
-    }
-
-    const numAge = parseInt(editAge, 10);
-    if (isNaN(numAge) || numAge < 18 || numAge > 120) {
-      setEditError('Please enter a valid age between 18 and 120.');
-      return;
-    }
-
-    const trimmedArea = editArea.trim();
-    if (!trimmedArea || trimmedArea.length < 2) {
-      setEditError('Please enter your locality or delivery area in Bangalore.');
-      return;
-    }
-
-    setEditLoading(true);
-    try {
-      const response = await api.updateProfile({
-        name: trimmedName,
-        age: numAge,
-        area: trimmedArea,
-      });
-
-      if (!response || !response.success || !response.data) {
-        throw new Error(response?.message || 'Unable to save your profile.');
-      }
-
-      // Authoritative merge preserving registration createdAt
-      const updatedCustomer = {
-        ...profile,
-        ...response.data,
-      };
-
-      if (!isMountedRef.current) return;
-
-      setProfile(updatedCustomer);
-      setIsEditModalVisible(false);
-      setEditSuccessMsg('Profile updated successfully.');
-
-      if (successTimerRef.current) {
-        clearTimeout(successTimerRef.current);
-      }
-      successTimerRef.current = setTimeout(() => {
-        if (isMountedRef.current) {
-          setEditSuccessMsg('');
-        }
-        successTimerRef.current = null;
-      }, 4000);
-    } catch (err) {
-      if (!isMountedRef.current) return;
-      console.error('[PROFILE SAVE ERROR]', err);
-      setEditError(err.message || 'Unable to save your profile. Please try again.');
-    } finally {
-      if (isMountedRef.current) {
-        setEditLoading(false);
-      }
-    }
-  }
-
-  // Handle Logout Confirmation Dialog
-  function handleLogoutPress() {
+  const handleLogout = () => {
     Alert.alert(
       'Log Out',
-      'Are you sure you want to log out of PondFish? Your secure session will be cleared from this device.',
+      'Are you sure you want to log out of your PondFish account?',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Log Out',
           style: 'destructive',
-          onPress: performLogout,
+          onPress: async () => {
+            try {
+              if (typeof onLogout === 'function') {
+                await onLogout();
+              } else {
+                await clearAuthTokens();
+                if (onNavigate) onNavigate('PHONE_AUTH');
+              }
+            } catch (err) {
+              Alert.alert('Logout Error', 'Unable to log out at this moment.');
+            }
+          },
         },
-      ],
-      { cancelable: true }
+      ]
     );
-  }
+  };
 
-  async function performLogout() {
-    try {
-      // 1. Attempt to unregister FCM device registration token while still authenticated with valid session token
-      try {
-        const deviceToken = await getDeviceToken();
-        if (deviceToken && typeof deviceToken === 'string' && deviceToken.trim()) {
-          if (typeof api.unregisterDeviceToken === 'function') {
-            await api.unregisterDeviceToken(deviceToken.trim());
-          }
-        }
-      } catch (tokenErr) {
-        // Non-fatal: network or server error during push unregistration must never block user logout
-        console.warn('[LOGOUT] Non-fatal error during device token unregistration');
-      }
+  const handleOpenWhatsApp = () => {
+    const phone = '919876512345';
+    const text = encodeURIComponent('Hi PondFish Support, I need assistance with my customer account.');
+    const url = `whatsapp://send?phone=${phone}&text=${text}`;
 
-      // 2. Delegate local session and device-token clearance to centralized authoritative App logout handler
-      if (typeof onLogout === 'function') {
-        await onLogout();
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
       } else {
-        const didClear = await clearAuthTokens();
-        if (didClear) {
-          if (typeof onNavigate === 'function') {
-            onNavigate('PHONE_AUTH');
-          }
-        } else {
-          setError('Logout failed: stored credentials could not be cleared.');
-        }
+        Linking.openURL(`https://wa.me/${phone}?text=${text}`);
       }
-    } catch (err) {
-      console.error('[LOGOUT ERROR]', err);
-      if (typeof onLogout !== 'function') {
-        setError('Logout failed: secure storage error.');
-      }
-    }
-  }
+    }).catch(() => {
+      Alert.alert('Customer Care', 'Please contact PondFish customer support at +91 98765 12345.');
+    });
+  };
 
-  // Format date helper
-  function formatMemberSince(isoDate) {
-    if (!isoDate) return 'Member';
-    try {
-      const d = new Date(isoDate);
-      return `Member since ${d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`;
-    } catch {
-      return 'Member';
-    }
-  }
+  const customerName = profile?.name || 'PondFish Customer';
+  const rawMobile = profile?.mobileNumber || '9347615308';
+  const cleanMobile = String(rawMobile).replace(/^\+?91/, '').trim();
+  const formattedPhone = cleanMobile.length === 10
+    ? `+91 ${cleanMobile.slice(0, 5)} ${cleanMobile.slice(5)}`
+    : `+91 ${cleanMobile}`;
 
-  // Format phone helper
-  function formatMobile(num) {
-    if (!num) return 'Not available';
-    const clean = String(num).replace(/^\+?91/, '').trim();
-    if (clean.length === 10) {
-      return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
-    }
-    return `+91 ${clean}`;
-  }
+  const userCreditBalance = subscriptionState?.subscription?.creditBalance
+    ? `₹${parseFloat(subscriptionState.subscription.creditBalance).toLocaleString('en-IN')}`
+    : '₹1,500';
 
-  // Get Initials for Avatar
-  const customerName = profile?.name || 'Customer';
-  const avatarInitials = customerName
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('') || 'PF';
-
-  const hasSub = Boolean(subscriptionState?.hasSubscription && subscriptionState?.subscription);
-  const subDetails = subscriptionState?.subscription;  return (
+  return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFE" />
+      {/* Top Status Bar: Transparent & Translucent for continuous flow from 0px */}
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="transparent"
+        translucent={true}
+      />
 
-      {/* Screen Top Bar */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarLeft}>
-          <TouchableOpacity
-            style={styles.brandIconBtn}
-            onPress={() => onNavigate && onNavigate('HOME')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.brandEmoji}>🐟</Text>
-          </TouchableOpacity>
-          <Text style={styles.appBarTitle}>Profile</Text>
-        </View>
-
-        <View style={styles.appBarRight}>
-          {/* Top Wallet Pill */}
-          <TouchableOpacity
-            style={styles.walletPill}
-            onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.walletIcon}>💳</Text>
-            <Text style={styles.walletAmount}>
-              {subDetails?.creditBalance ? `₹${parseFloat(subDetails.creditBalance).toLocaleString('en-IN')}` : (hasSub ? '₹0' : 'Club')}
-            </Text>
-            <Text style={styles.walletChevron}>⌵</Text>
-          </TouchableOpacity>
-
-          {/* Profile Avatar Icon */}
-          <View style={styles.avatarPillCircle}>
-            <Text style={styles.avatarPillEmoji}>👤</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Body Content */}
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.accent || '#0284C7'} />
-          <Text style={styles.loadingText}>Loading profile details...</Text>
-        </View>
-      ) : error && !profile ? (
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={loadProfileData}>
-            <Text style={styles.retryBtnText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.accent || '#0284C7'}
-              colors={['#0A1C33', '#0284C7']}
-            />
-          }
-        >
-          {/* Success Banner */}
-          {Boolean(editSuccessMsg) && (
-            <View style={styles.successBanner}>
-              <Text style={styles.successBannerText}>✓ {editSuccessMsg}</Text>
-            </View>
-          )}
-
-          {/* Customer Identity Card (White, rounded 16px) */}
-          <View style={styles.identityCard}>
-            <View style={styles.identityTopRow}>
-              {/* Navy Avatar Square with Initials */}
-              <View style={styles.navyAvatarBox}>
-                <Text style={styles.navyAvatarText}>{avatarInitials}</Text>
-              </View>
-
-              {/* Customer Info */}
-              <View style={styles.identityDetails}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.customerNameText} numberOfLines={1}>
-                    {profile?.name || 'Stevan V.'}
-                  </Text>
-                  <View style={styles.verifiedCheckBadge}>
-                    <Text style={styles.verifiedCheckText}>✔</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.maskedPhoneText}>
-                  {profile?.mobileNumber ? formatMobile(profile.mobileNumber) : '+91 98765 ••••• (Verified OTP)'}
-                </Text>
-
-                {/* Badges Row */}
-                <View style={styles.identityBadgesRow}>
-                  <View style={styles.goldSubscriberBadge}>
-                    <Text style={styles.badgeMedalIcon}>🎖</Text>
-                    <Text style={styles.goldSubscriberBadgeText}>
-                      {hasSub ? `${subDetails?.planTitle || 'Gold'} Plan Subscriber` : 'Club Member'}
-                    </Text>
-                  </View>
-
-                  <View style={styles.localityBadge}>
-                    <Text style={styles.localityBadgeText}>
-                      {profile?.area || 'Madhapur, HYD'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Edit Button */}
-              <TouchableOpacity
-                style={styles.editProfileBtn}
-                onPress={handleOpenEdit}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.editProfileBtnText}>✏ Edit</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Active Pickup Ticket Banner */}
-          <View style={styles.pickupTicketBanner}>
-            <View style={styles.pickupTicketIconBox}>
-              <Text style={styles.pickupTicketIcon}>🪪</Text>
-            </View>
-            <View style={styles.pickupTicketInfo}>
-              <View style={styles.pickupTicketTitleRow}>
-                <View style={styles.ticketLiveDot} />
-                <Text style={styles.pickupTicketTitle}>1 Live Pickup Ticket</Text>
-              </View>
-              <Text style={styles.pickupTicketSubtitle}>
-                Madhapur Dock #04 • Ready in 12m
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.showQrBtn}
-              onPress={() => onNavigate && onNavigate('BOOKING_HISTORY')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.showQrBtnText}>Show QR</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 3 Stat Boxes in a Row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>24</Text>
-              <Text style={styles.statLabel}>TOTAL ORDERS</Text>
-            </View>
-            <View style={styles.statBoxDivider} />
-            <View style={styles.statBox}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text style={styles.statNumber}>18.4</Text>
-                <Text style={styles.statUnit}>kg</Text>
-              </View>
-              <Text style={styles.statLabel}>QUOTA CLAIMED</Text>
-            </View>
-            <View style={styles.statBoxDivider} />
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>₹4,850</Text>
-              <Text style={styles.statLabel}>SAVED OVERALL</Text>
-            </View>
-          </View>
-
-          {/* Section 1: ORDERS & BOOKINGS */}
-          <Text style={styles.groupSectionTitle}>ORDERS & BOOKINGS</Text>
-          <View style={styles.menuGroupCard}>
-            {/* Active Booking & QR Tickets */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => onNavigate && onNavigate('BOOKING_HISTORY')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#EBF3FC' }]}>
-                <Text style={styles.menuGlyph}>🎫</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Active Booking & QR Tickets</Text>
-                <Text style={styles.menuItemSubtitle}>1 Active pickup pass generated</Text>
-              </View>
-              <View style={styles.menuRightIndicator}>
-                <View style={styles.notificationDot} />
-                <Text style={styles.menuChevron}>›</Text>
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.groupItemDivider} />
-
-            {/* Order History & Scanned Bills */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => onNavigate && onNavigate('TRANSACTION_HISTORY')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#EDF5FD' }]}>
-                <Text style={styles.menuGlyph}>🧾</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Order History & Scanned Bills</Text>
-                <Text style={styles.menuItemSubtitle}>24 receipts • App orders & offline store bills</Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.groupItemDivider} />
-
-            {/* Live GPS Catch Tracking */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => onNavigate && onNavigate('LIVE_TRACKING')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#E8F5E9' }]}>
-                <Text style={styles.menuGlyph}>🚚</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Live GPS Catch Tracking</Text>
-                <Text style={styles.menuItemSubtitle}>Harbor Reefer Van #08 reaching Hub in 22 mins</Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Section 2: SUBSCRIPTIONS & BALANCES */}
-          <Text style={styles.groupSectionTitle}>SUBSCRIPTIONS & BALANCES</Text>
-          <View style={styles.menuGroupCard}>
-            {/* PondFish Wallet & Instant Cash */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#EBF3FC' }]}>
-                <Text style={styles.menuGlyph}>👛</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>PondFish Wallet & Instant Cash</Text>
-                <Text style={styles.menuItemSubtitle}>Auto-refunds enabled</Text>
-              </View>
-              <View style={styles.menuRightIndicator}>
-                <Text style={styles.walletBalanceBadge}>
-                  ₹{subDetails?.creditBalance ? parseFloat(subDetails.creditBalance).toLocaleString('en-IN') : '0'}
-                </Text>
-                <Text style={styles.menuChevron}>›</Text>
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.groupItemDivider} />
-
-            {/* Manage Gold Subscription */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#FEF3C7' }]}>
-                <Text style={styles.menuGlyph}>✪</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>
-                  {hasSub ? 'Manage Subscription' : 'Explore Subscriptions'}
-                </Text>
-                <Text style={styles.menuItemSubtitle}>
-                  {hasSub
-                    ? `${subDetails?.planTitle || 'Gold Plan'} • ${subDetails?.weeklyRemainingKg ?? 0} kg fresh quota left`
-                    : 'No active plan • Subscribe to unlock weekly quota'}
-                </Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.groupItemDivider} />
-
-            {/* Saved Payment Methods */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => Alert.alert('Saved Payment Methods', 'Razorpay UPI & Saved cards managed securely at checkout.')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#F1F5F9' }]}>
-                <Text style={styles.menuGlyph}>💳</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Saved Payment Methods</Text>
-                <Text style={styles.menuItemSubtitle}>Razorpay UPI (GPay) • HDFC Debit Ending 4192</Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Section 3: PREFERENCES & PREPARATION */}
-          <Text style={styles.groupSectionTitle}>PREFERENCES & PREPARATION</Text>
-          <View style={styles.menuGroupCard}>
-            {/* Delivery Addresses */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => Alert.alert('Delivery Addresses', `Current Primary Address:\n${profile?.area || 'Madhapur, Hyderabad'}\nOffice: Financial District`)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#FEE2E2' }]}>
-                <Text style={styles.menuGlyph}>📍</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Delivery Addresses</Text>
-                <Text style={styles.menuItemSubtitle}>Home (Madhapur), Office (Financial District)</Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.groupItemDivider} />
-
-            {/* Cutting & Cleaning Defaults */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => Alert.alert('Cutting Preferences', 'Default custom cut: Curry Cut with Head, Boneless Skinless Fillets.')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#E0F2FE' }]}>
-                <Text style={styles.menuGlyph}>✂</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Cutting & Cleaning Defaults</Text>
-                <Text style={styles.menuItemSubtitle}>Curry Cut with Head • Boneless Skinless Fillets</Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.groupItemDivider} />
-
-            {/* Notifications & Catch Alerts */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => onNavigate && onNavigate('NOTIFICATIONS')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#EDE9FE' }]}>
-                <Text style={styles.menuGlyph}>🔔</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Notifications & Catch Alerts</Text>
-                <Text style={styles.menuItemSubtitle}>WhatsApp updates & 6:00 AM Fresh Catch ping</Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Section 4: ASSURANCE & LEGAL */}
-          <Text style={styles.groupSectionTitle}>ASSURANCE & LEGAL</Text>
-          <View style={styles.menuGroupCard}>
-            {/* WhatsApp Care & Support */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => Alert.alert('PondFish Care', 'Seafood concierge available 24x7 via WhatsApp (+91 98765 43210).')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#DCFCE7' }]}>
-                <Text style={styles.menuGlyph}>💬</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>WhatsApp Care & Support</Text>
-                <Text style={styles.menuItemSubtitle}>24x7 instant seafood concierge help</Text>
-              </View>
-              <Text style={styles.externalLinkIcon}>↗</Text>
-            </TouchableOpacity>
-
-            <View style={styles.groupItemDivider} />
-
-            {/* Cold-Chain Certificate & Lab Audits */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => Alert.alert('Lab Audits', 'Daily chemical testing results:\nFormalin: Not Detected (0.00 ppm)\nAmmonia: 0.00 ppm\nTested at Central Cold Hub, Hyderabad.')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#E0E7FF' }]}>
-                <Text style={styles.menuGlyph}>🧪</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Cold-Chain Certificate & Lab Audits</Text>
-                <Text style={styles.menuItemSubtitle}>Formalin-free, zero ammonia test batch #882</Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.groupItemDivider} />
-
-            {/* Terms & Refund Guarantees */}
-            <TouchableOpacity
-              style={styles.menuGroupItem}
-              onPress={() => Alert.alert('Refund Policy', 'PondFish 100% Quality Guarantee: Any dissatisfaction reported within 48 hours receives immediate wallet refund or replacement without returns.')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#EDF5FD' }]}>
-                <Text style={styles.menuGlyph}>🛡</Text>
-              </View>
-              <View style={styles.menuItemDetails}>
-                <Text style={styles.menuItemTitle}>Terms & Refund Guarantees</Text>
-                <Text style={styles.menuItemSubtitle}>100% no-questions replacement policy</Text>
-              </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Log Out Button (Soft pink background with red text) */}
-          <TouchableOpacity
-            style={styles.stitchLogoutBtn}
-            onPress={handleLogoutPress}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.stitchLogoutText}>⇥ Log Out</Text>
-          </TouchableOpacity>
-
-          {/* Footer Info */}
-          <View style={styles.footerContainer}>
-            <View style={styles.footerBulletRow}>
-              <View style={styles.footerDot} />
-              <Text style={styles.footerVersionText}>PondFish Hub v1.4.2</Text>
-            </View>
-            <Text style={styles.footerBuildText}>Build 204 • Pure Ocean Cold Chain Distribution</Text>
-          </View>
-        </ScrollView>
-      )}
-
-      {/* CP-20A Edit Profile Modal */}
-      <Modal
-        visible={isEditModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsEditModalVisible(false)}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#1E56A0"
+            colors={['#1E56A0']}
+          />
+        }
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
+        {/* 1. TOP PROFILE HEADER WRAPPER (Starts at 0px with continuous gradient) */}
+        <View
+          style={[
+            styles.topHeaderWrapper,
+            {
+              backgroundColor: '#6EA3D8',
+              ...(Platform.OS === 'web'
+                ? { background: 'linear-gradient(180deg, #6EA3D8 0%, #A9CBEB 45%, #DCEBFA 75%, #F5F7FA 100%)' }
+                : {})
+            }
+          ]}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-              <TouchableOpacity
-                onPress={() => setIsEditModalVisible(false)}
-                style={styles.modalCloseBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Hardware-accelerated continuous vertical linear gradient (0px -> above 3 cards) */}
+          <Image
+            source={{ uri: GRADIENT_BG_BASE64 }}
+            style={StyleSheet.absoluteFillObject}
+            resizeMode="stretch"
+          />
 
-            {Boolean(editError) && (
-              <View style={styles.modalErrorBox}>
-                <Text style={styles.modalErrorText}>{editError}</Text>
-              </View>
-            )}
-
-            {/* Read-Only Mobile Number */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>VERIFIED MOBILE (READ-ONLY)</Text>
-              <View style={[styles.textInput, styles.readOnlyInput]}>
-                <Text style={styles.readOnlyText}>
-                  {formatMobile(profile?.mobileNumber)}
-                </Text>
-                <Text style={{ fontSize: 13 }}>🔒</Text>
-              </View>
-              <Text style={styles.inputHelpText}>
-                Mobile number is locked to your verified OTP credentials.
-              </Text>
-            </View>
-
-            {/* Full Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>FULL NAME *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editName}
-                onChangeText={setEditName}
-                placeholder="Enter your full name"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="words"
-              />
-            </View>
-
-            {/* Age */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>AGE (18 - 120) *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editAge}
-                onChangeText={setEditAge}
-                placeholder="e.g. 32"
-                placeholderTextColor="#94A3B8"
-                keyboardType="number-pad"
-                maxLength={3}
-              />
-            </View>
-
-            {/* Area / Locality */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>DELIVERY AREA / LOCALITY *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editArea}
-                onChangeText={setEditArea}
-                placeholder="e.g. Madhapur, Hyderabad"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="words"
-              />
-            </View>
-
-            {/* Modal Actions */}
-            <View style={styles.modalActionsRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setIsEditModalVisible(false)}
-                disabled={editLoading}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalSaveBtn, editLoading && { opacity: 0.7 }]}
-                onPress={handleSaveProfile}
-                disabled={editLoading}
-                activeOpacity={0.85}
-              >
-                {editLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.modalSaveBtnText}>Save Changes</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+          {/* Top Bar with Back Button (Transparent child container) */}
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              style={styles.backCircleBtn}
+              onPress={() => onNavigate && onNavigate('HOME')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.backArrow}>←</Text>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+
+          {/* Center Profile Avatar & User Details (Transparent child container) */}
+          <View style={styles.avatarSection}>
+            <View style={styles.avatarCircle}>
+              {/* Minimalist Silhouette Person Icon */}
+              <View style={styles.silhouetteHead} />
+              <View style={styles.silhouetteShoulders} />
+            </View>
+
+            {/* User Name & Metadata */}
+            <Text style={styles.profileName}>{customerName}</Text>
+            <Text style={styles.profileMeta}>{formattedPhone} • PondFish Member</Text>
+          </View>
+        </View>
+
+        {/* 2. 3 QUICK ACTION CARDS (Blinkit 3-Card Row) */}
+        <View style={styles.quickCardsRow}>
+          {/* Card 1: Your orders */}
+          <TouchableOpacity
+            style={styles.quickCard}
+            onPress={() => onNavigate && onNavigate('BOOKING_HISTORY')}
+            activeOpacity={0.85}
+          >
+            {/* Package / Shopping Bag Icon */}
+            <View style={styles.iconContainer}>
+              <Image
+                source={require('../assets/icons/shopping_bag.png')}
+                style={{ width: 22, height: 22 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.quickCardTitle}>Your orders</Text>
+          </TouchableOpacity>
+
+          {/* Card 2: Subscription Money */}
+          <TouchableOpacity
+            style={styles.quickCard}
+            onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
+            activeOpacity={0.85}
+          >
+            {/* Wallet / Rupee Line Art Icon */}
+            <View style={styles.iconContainer}>
+              <View style={styles.walletOuter}>
+                <View style={styles.walletBadge}>
+                  <Text style={styles.walletRupeeChar}>₹</Text>
+                </View>
+              </View>
+            </View>
+            <Text style={styles.quickCardTitle}>Subscription</Text>
+            <Text style={styles.quickCardAmount}>{userCreditBalance}</Text>
+          </TouchableOpacity>
+
+          {/* Card 3: Need help? */}
+          <TouchableOpacity
+            style={styles.quickCard}
+            onPress={handleOpenWhatsApp}
+            activeOpacity={0.85}
+          >
+            <View style={styles.iconContainer}>
+              <Image
+                source={require('../assets/icons/whatsapp_official.png')}
+                style={{ width: 24, height: 24 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.quickCardTitle}>Need help?</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 3. GROUP 1: Appearance, Content preferences, Explore Subscriptions */}
+        <View style={styles.groupedCard}>
+          {/* Appearance Row */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => Alert.alert('Appearance', 'Theme is set to Light Mode.')}
+          >
+            <View style={styles.menuIconCol}>
+              <Image
+                source={require('../assets/icons/sun_icon.png')}
+                style={{ width: 20, height: 20 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.menuLabel}>Appearance</Text>
+            <View style={styles.lightPill}>
+              <Text style={styles.lightPillText}>LIGHT ▾</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Content preferences Row */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => Alert.alert('Preferences', 'Freshwater & Marine catches preferred.')}
+          >
+            <View style={styles.menuIconCol}>
+              <View style={styles.slidersIcon}>
+                <View style={styles.sliderTrack1}><View style={styles.sliderKnob1} /></View>
+                <View style={styles.sliderTrack2}><View style={styles.sliderKnob2} /></View>
+              </View>
+            </View>
+            <Text style={styles.menuLabel}>Content preferences</Text>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Explore Subscriptions Row */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
+          >
+            <View style={styles.menuIconCol}>
+              <View style={styles.badgeStarIcon}>
+                <Text style={styles.badgeStarText}>★</Text>
+              </View>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuLabel}>Explore subscriptions</Text>
+              <Text style={styles.menuSubLabel}>Zero prep fees • Reserved morning harvest</Text>
+            </View>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 4. SECTION 2: Your information */}
+        <Text style={styles.sectionHeading}>Your information</Text>
+        <View style={styles.groupedCard}>
+          {/* Address book */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => Alert.alert('Address Book', 'Indiranagar Flagship Store is your active pickup counter.')}
+          >
+            <View style={styles.menuIconCol}>
+              <Image
+                source={require('../assets/icons/map_pin_icon.png')}
+                style={{ width: 19, height: 19 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.menuLabel}>Address book</Text>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Your bookings */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => onNavigate && onNavigate('BOOKING_HISTORY')}
+          >
+            <View style={styles.menuIconCol}>
+              <Image
+                source={require('../assets/icons/calendar_icon.png')}
+                style={{ width: 19, height: 19 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.menuLabel}>Your bookings</Text>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Notifications */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => Alert.alert('Notifications', 'SMS & Push notifications enabled for daily fresh harvest alerts.')}
+          >
+            <View style={styles.menuIconCol}>
+              <Image
+                source={require('../assets/icons/bell_icon.png')}
+                style={{ width: 19, height: 19 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.menuLabel}>Notifications</Text>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 5. SECTION 3: Payment and coupons */}
+        <Text style={styles.sectionHeading}>Payment and coupons</Text>
+        <View style={styles.groupedCard}>
+          {/* Payment settings */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => Alert.alert('Payment Settings', 'UPI & Store Counter Payment enabled.')}
+          >
+            <View style={styles.menuIconCol}>
+              <View style={styles.cardIcon}>
+                <View style={styles.cardStrip} />
+              </View>
+            </View>
+            <Text style={styles.menuLabel}>Payment settings</Text>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Transaction history */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => Alert.alert('Transaction History', 'All counter payments and subscription credit top-ups.')}
+          >
+            <View style={styles.menuIconCol}>
+              <View style={styles.receiptIcon}>
+                <View style={styles.receiptLine} />
+              </View>
+            </View>
+            <Text style={styles.menuLabel}>Transaction history</Text>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 6. SECTION 4: Support */}
+        <Text style={styles.sectionHeading}>Support</Text>
+        <View style={styles.groupedCard}>
+          {/* WhatsApp Support */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={handleOpenWhatsApp}
+          >
+            <View style={styles.menuIconContainer36}>
+              <Image
+                source={require('../assets/icons/whatsapp_official.png')}
+                style={{ width: 28, height: 28 }}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuLabel}>WhatsApp support</Text>
+              <Text style={styles.menuSubLabel}>+91 98765 12345 • Instant query help</Text>
+            </View>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Terms & Conditions */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL('https://pondfish.in/terms').catch(() => {
+              Alert.alert('Terms & Conditions', 'Visit https://pondfish.in/terms to view our customer policy.');
+            })}
+          >
+            <View style={styles.menuIconContainer36}>
+              <Image
+                source={require('../assets/icons/terms_icon.png')}
+                style={{ width: 22, height: 22 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.menuLabel}>Terms & conditions</Text>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Log Out */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.7}
+            onPress={handleLogout}
+          >
+            <View style={styles.menuIconContainer36}>
+              <Image
+                source={require('../assets/icons/logout_icon.png')}
+                style={{ width: 22, height: 22 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={[styles.menuLabel, { color: '#DC2626' }]}>Log out</Text>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* App Version Footer */}
+        <View style={styles.footerContainer}>
+          <Text style={styles.footerVersion}>PondFish App v2.4.0 (Build 41)</Text>
+          <Text style={styles.footerSub}>Certified Coastal Harvest & Farm Direct</Text>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </View>
   );
 }
@@ -819,574 +485,468 @@ export default function ProfileScreen({ routeParams = {}, onNavigate, onLogout }
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFE',
-  },
-  appBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 14 : 10,
-    paddingBottom: 14,
-    backgroundColor: '#F8FAFE',
-  },
-  appBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  brandIconBtn: {
-    padding: 2,
-  },
-  brandEmoji: {
-    fontSize: 22,
-  },
-  appBarTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0A1C33',
-    letterSpacing: -0.3,
-  },
-  appBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  walletPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EDF5FD',
-    borderWidth: 1,
-    borderColor: '#C6DEF9',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    gap: 5,
-  },
-  walletIcon: {
-    fontSize: 14,
-  },
-  walletAmount: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0A1C33',
-  },
-  walletChevron: {
-    fontSize: 10,
-    color: '#0284C7',
-    fontWeight: '800',
-  },
-  avatarPillCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#0A1C33',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarPillEmoji: {
-    fontSize: 16,
-    color: '#FFFFFF',
+    backgroundColor: '#F5F7FA',
   },
   scrollContent: {
+    paddingBottom: 24,
+  },
+  topHeaderWrapper: {
+    width: '100%',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 12,
+    paddingBottom: 22,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#6EA3D8',
+    borderWidth: 0,
+  },
+  topBar: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 6,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  loadingText: {
-    color: '#64748B',
-    fontSize: 13,
-    marginTop: 12,
-  },
-  errorText: {
-    color: '#DC2626',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryBtn: {
-    backgroundColor: '#0A1C33',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  successBanner: {
-    backgroundColor: 'rgba(22, 163, 74, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(22, 163, 74, 0.3)',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-  },
-  successBannerText: {
-    color: '#16A34A',
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  identityCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-  },
-  identityTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  navyAvatarBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: '#0A1C33',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  navyAvatarText: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  identityDetails: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  customerNameText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0A1C33',
-    letterSpacing: -0.2,
-  },
-  verifiedCheckBadge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#0284C7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  verifiedCheckText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  maskedPhoneText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  identityBadgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-  },
-  goldSubscriberBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EDF5FD',
-    borderWidth: 1,
-    borderColor: '#C6DEF9',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 4,
-  },
-  badgeMedalIcon: {
-    fontSize: 11,
-  },
-  goldSubscriberBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  localityBadge: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  localityBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  editProfileBtn: {
-    borderWidth: 1,
-    borderColor: '#C6DEF9',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    marginLeft: 6,
-  },
-  editProfileBtnText: {
-    color: '#0284C7',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  pickupTicketBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EDF5FD',
-    borderWidth: 1,
-    borderColor: '#C6DEF9',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
-  },
-  pickupTicketIconBox: {
+  backCircleBtn: {
     width: 38,
     height: 38,
-    borderRadius: 10,
-    backgroundColor: '#0284C7',
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  backArrow: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+    lineHeight: 22,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    marginTop: 2,
+    marginBottom: 0,
+    borderWidth: 0,
+  },
+  avatarCircle: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  silhouetteHead: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#334155',
+    marginBottom: 4,
+  },
+  silhouetteShoulders: {
+    width: 52,
+    height: 26,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    backgroundColor: '#334155',
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 10,
+    letterSpacing: -0.3,
+    backgroundColor: 'transparent',
+  },
+  profileMeta: {
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 3,
+    fontWeight: '500',
+    backgroundColor: 'transparent',
+  },
+  quickCardsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    marginTop: 6,
+    gap: 10,
+  },
+  quickCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 88,
+    borderWidth: 1,
+    borderColor: '#EAEFF5',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  basketHandle: {
+    width: 14,
+    height: 7,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderColor: '#1E293B',
+    borderTopLeftRadius: 7,
+    borderTopRightRadius: 7,
+  },
+  basketBody: {
+    width: 22,
+    height: 14,
+    borderWidth: 2,
+    borderColor: '#1E293B',
+    borderRadius: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  basketLine: {
+    width: 12,
+    height: 1,
+    backgroundColor: '#1E293B',
+  },
+  walletOuter: {
+    width: 24,
+    height: 18,
+    borderWidth: 2,
+    borderColor: '#1E293B',
+    borderRadius: 4,
+    position: 'relative',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingRight: 3,
+  },
+  walletBadge: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#0F2C59',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walletRupeeChar: {
+    fontSize: 7,
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  chatBubbleOuter: {
+    width: 22,
+    height: 16,
+    borderWidth: 2,
+    borderColor: '#1E293B',
+    borderRadius: 5,
+    padding: 2,
+    justifyContent: 'center',
+    gap: 2,
+  },
+  chatLine1: {
+    width: 12,
+    height: 1.5,
+    backgroundColor: '#1E293B',
+  },
+  chatLine2: {
+    width: 8,
+    height: 1.5,
+    backgroundColor: '#1E293B',
+  },
+  chatBubbleCorner: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 3,
+    borderRightWidth: 3,
+    borderBottomWidth: 4,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#1E293B',
+    transform: [{ rotate: '180deg' }],
+    marginLeft: 6,
+    marginTop: -1,
+  },
+  quickCardTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+    textAlign: 'center',
+  },
+  quickCardAmount: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  groupedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#EAEFF5',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+    overflow: 'hidden',
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  menuIconCol: {
+    width: 28,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  pickupTicketIcon: {
-    fontSize: 18,
-    color: '#FFFFFF',
-  },
-  pickupTicketInfo: {
-    flex: 1,
-  },
-  pickupTicketTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  ticketLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#0284C7',
-  },
-  pickupTicketTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0A1C33',
-  },
-  pickupTicketSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  showQrBtn: {
-    backgroundColor: '#0A1C33',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  showQrBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    marginBottom: 18,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-  },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statBoxDivider: {
-    width: 1,
-    backgroundColor: '#E2E8F0',
-    height: '75%',
-    alignSelf: 'center',
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0A1C33',
-  },
-  statUnit: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0284C7',
-    marginLeft: 1,
-  },
-  statLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#64748B',
-    marginTop: 4,
-    letterSpacing: 0.5,
-  },
-  groupSectionTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 6,
-    paddingLeft: 2,
-  },
-  menuGroupCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    marginBottom: 16,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-  },
-  menuGroupItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  menuIconContainer: {
+  menuIconContainer36: {
     width: 36,
     height: 36,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
-  menuGlyph: {
-    fontSize: 16,
-  },
-  menuItemDetails: {
+  menuLabel: {
     flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
   },
-  menuItemTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0A1C33',
-  },
-  menuItemSubtitle: {
+  menuSubLabel: {
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
-  },
-  menuRightIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  notificationDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#0284C7',
-  },
-  walletBalanceBadge: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0A1C33',
   },
   menuChevron: {
     fontSize: 18,
     color: '#94A3B8',
     fontWeight: '600',
-    marginLeft: 4,
   },
-  externalLinkIcon: {
-    fontSize: 14,
-    color: '#94A3B8',
-    fontWeight: '700',
-  },
-  groupItemDivider: {
+  rowDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginLeft: 48,
+    marginLeft: 56,
+    marginRight: 16,
   },
-  stitchLogoutBtn: {
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
+  sectionHeading: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginLeft: 20,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  lightPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  lightPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  sunIconCircle: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#334155',
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
-    marginBottom: 16,
   },
-  stitchLogoutText: {
-    color: '#DC2626',
-    fontSize: 14,
-    fontWeight: '800',
+  sunRayTop: {
+    position: 'absolute',
+    top: -4,
+    width: 2,
+    height: 3,
+    backgroundColor: '#334155',
+  },
+  sunRayBottom: {
+    position: 'absolute',
+    bottom: -4,
+    width: 2,
+    height: 3,
+    backgroundColor: '#334155',
+  },
+  sunRayLeft: {
+    position: 'absolute',
+    left: -4,
+    width: 3,
+    height: 2,
+    backgroundColor: '#334155',
+  },
+  sunRayRight: {
+    position: 'absolute',
+    right: -4,
+    width: 3,
+    height: 2,
+    backgroundColor: '#334155',
+  },
+  slidersIcon: {
+    width: 18,
+    height: 14,
+    justifyContent: 'space-between',
+  },
+  sliderTrack1: {
+    width: 18,
+    height: 2,
+    backgroundColor: '#CBD5E1',
+    position: 'relative',
+  },
+  sliderKnob1: {
+    position: 'absolute',
+    left: 4,
+    top: -3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#334155',
+  },
+  sliderTrack2: {
+    width: 18,
+    height: 2,
+    backgroundColor: '#CBD5E1',
+    position: 'relative',
+  },
+  sliderKnob2: {
+    position: 'absolute',
+    right: 4,
+    top: -3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#334155',
+  },
+  badgeStarIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeStarText: {
+    fontSize: 12,
+    color: '#0F2C59',
+  },
+  bookIcon: {
+    width: 16,
+    height: 16,
+    borderWidth: 2,
+    borderColor: '#334155',
+    borderRadius: 3,
+  },
+  ticketIcon: {
+    width: 18,
+    height: 13,
+    borderWidth: 2,
+    borderColor: '#334155',
+    borderRadius: 3,
+    borderStyle: 'dashed',
+  },
+  bellIcon: {
+    width: 14,
+    height: 16,
+    borderWidth: 2,
+    borderColor: '#334155',
+    borderTopLeftRadius: 7,
+    borderTopRightRadius: 7,
+  },
+  cardIcon: {
+    width: 18,
+    height: 14,
+    borderWidth: 2,
+    borderColor: '#334155',
+    borderRadius: 3,
+    justifyContent: 'flex-start',
+    paddingTop: 2,
+  },
+  cardStrip: {
+    width: '100%',
+    height: 2,
+    backgroundColor: '#334155',
+  },
+  receiptIcon: {
+    width: 14,
+    height: 17,
+    borderWidth: 2,
+    borderColor: '#334155',
+    borderRadius: 2,
+    alignItems: 'center',
+    paddingTop: 3,
+  },
+  receiptLine: {
+    width: 8,
+    height: 1.5,
+    backgroundColor: '#334155',
+  },
+  whatsappDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#22C55E',
+  },
+  termsIcon: {
+    width: 14,
+    height: 16,
+    borderWidth: 2,
+    borderColor: '#334155',
+    borderRadius: 2,
+  },
+  logoutIcon: {
+    width: 14,
+    height: 14,
+    borderWidth: 2,
+    borderColor: '#DC2626',
+    borderRadius: 3,
   },
   footerContainer: {
     alignItems: 'center',
-    paddingVertical: 10,
+    marginTop: 24,
+    marginBottom: 8,
   },
-  footerBulletRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  footerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#0284C7',
-  },
-  footerVersionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  footerBuildText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 3,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(10, 28, 51, 0.75)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0A1C33',
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalCloseText: {
-    fontSize: 18,
-    color: '#64748B',
-    fontWeight: '700',
-  },
-  modalErrorBox: {
-    backgroundColor: 'rgba(220, 38, 38, 0.1)',
-    borderWidth: 1,
-    borderColor: '#DC2626',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 14,
-  },
-  modalErrorText: {
-    color: '#DC2626',
+  footerVersion: {
     fontSize: 12,
-    fontWeight: '600',
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    marginBottom: 6,
-    letterSpacing: 0.6,
-  },
-  textInput: {
-    backgroundColor: '#F8FAFE',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0A1C33',
-  },
-  readOnlyInput: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  readOnlyText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  inputHelpText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 4,
-  },
-  modalActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 10,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalCancelBtnText: {
-    color: '#64748B',
-    fontSize: 14,
     fontWeight: '700',
+    color: '#94A3B8',
   },
-  modalSaveBtn: {
-    flex: 1,
-    backgroundColor: '#0A1C33',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalSaveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
+  footerSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
   },
 });

@@ -1,10 +1,17 @@
 /**
- * Screen: CP-02 — Customer Home Dashboard & Primary Fish Catalogue
- * Traceability: PondFish Customer Mobile App UI Specification (CP-02, CP-03) & .agent/skills/pondfish-mobile-ui-ux/SKILL.md
+ * Screen: CP-02 – Customer Home Dashboard & Primary Fish Catalogue
+ * Traceability: PondFish Customer Mobile App UI Specification & pondfish.in Website Standard
  * 
- * Shopping-first fish discovery screen combining header with location and profile shortcuts,
- * search filtering, dynamic category discovery, factual subscription quotas,
- * verified morning catch replenishment, virtualized 2-column fish catalogue, and floating sticky cart bar.
+ * Features:
+ * - Clean White Website-Style Header with Horizontal PondFish Logo Image
+ * - Location & Subscription Balance Header (₹1,500)
+ * - Search bar with instant filtering
+ * - Special Offers Carousel with VERTICAL CARDS (matching fish card size & flashy highlights)
+ * - Professional Filter button (No AI gear icons) with Slide-up Bottom Sheet Modal
+ * - Grouped 2-column fish catalogue with clean small category headings (No emojis)
+ * - Flashy Red Strikethrough & Savings Tag on Discounted Fish Cards
+ * - Pure white canvas & bilingual script
+ * - Sticky Cart Bar
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -15,661 +22,582 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  FlatList,
   StatusBar,
-  Image,
   RefreshControl,
   ActivityIndicator,
-  Alert,
-  FlatList,
+  Modal,
+  Dimensions,
   Platform,
+  Image,
+  Keyboard,
 } from 'react-native';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/tokens';
-import { colors } from '../theme/colors';
+import { Colors, Radii } from '../theme/tokens';
 import { api } from '../services/api';
-import LoadingSkeleton from '../components/LoadingSkeleton';
-import EmptyStateView from '../components/EmptyStateView';
-import ErrorStateView from '../components/ErrorStateView';
 import FishCard from '../components/FishCard';
 import OptimizedFishImage from '../components/OptimizedFishImage';
-import { filterFishCatalogue } from '../utils/catalogue-filters';
-import {
-  SearchIcon,
-  LocationPinIcon,
-  CartIcon,
-  CardIcon,
-  MedalIcon,
-  TruckIcon,
-  TagIcon,
-} from '../components/icons/NavIcons';
+import { SearchIcon, LocationPinIcon, CartIcon, PlusIcon, MinusIcon } from '../components/icons/NavIcons';
 
-/**
- * Prioritized data retrieval orchestrator for HomeScreen.
- * Separated for direct unit/integration testability without mounting full React Native view tree.
- * 
- * 1. Critical initial content (Fish catalogue) unblocks visual display immediately upon arrival.
- * 2. Secondary content (Categories, Subscription, Tracking, Profile) loads concurrently in background.
- * 3. Cart summary is owned authoritatively by App shell props (redundant fetch removed).
- */
-export async function fetchHomeDataOrchestrated({
-  apiClient,
-  setFishList,
-  setCategories,
-  setSubData,
-  setTrackingData,
-  setCustomer,
-  setLoading,
-  setRefreshing,
-  setError,
-  abortControllerRef,
-  isMountedRef,
-  requestSeqRef,
-  isRefresh = false,
-  existingCategories = null,
-}) {
-  // Cancel any previous in-flight requests
-  if (abortControllerRef.current) {
-    abortControllerRef.current.abort();
-  }
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  abortControllerRef.current = controller;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-  const currentSeq = ++requestSeqRef.current;
+// Cloudflare Edge Cache CDN Base ($0 egress / unlimited bandwidth)
+const FISH_CDN_BASE = "https://pondfish-cdn.sprojectxx.workers.dev/fish-assets";
 
-  if (isRefresh) {
-    setRefreshing(true);
-  } else {
-    setLoading(true);
-    setError(null);
-  }
+// Flashy highlighted offer catches (vertical cards matching fish card proportions)
+const HIGHLIGHTED_OFFERS = [
+  {
+    id: "offer-apollo",
+    fishId: "e6fd568d-7667-4d11-912e-a36e062ab716",
+    name: "APPOLLO BONE LESS",
+    teluguName: "అపోలో బోన్‌లెస్",
+    description: "Skinless, boneless fillets cleanly prepped for Apollo fish fry and finger cuts.",
+    imageUrl: `${FISH_CDN_BASE}/apollo-boneless.webp`,
+    categoryName: "Freshwater Fish",
+    unitPrice: 500,
+    originalPrice: 625,
+    discountPercent: 20,
+    savings: 125,
+    dealTag: "FLASH DEAL",
+    urgencyText: "Only 4 kg left today",
+    claimedPercent: 82,
+    stockLeft: "Only 4 kg left",
+    endsIn: "02h 15m",
+  },
+  {
+    id: "offer-bochu",
+    fishId: "44444444-4444-4444-a444-444444444444",
+    name: "BOCHE (KATLA)",
+    teluguName: "బొచ్చె (కట్ల)",
+    description: "Freshwater Catla (Bocche). Large center cuts and round steaks for pulusu.",
+    imageUrl: `${FISH_CDN_BASE}/bochu.webp`,
+    categoryName: "Freshwater Fish",
+    unitPrice: 240,
+    originalPrice: 300,
+    discountPercent: 20,
+    savings: 60,
+    dealTag: "COUNTER SPECIAL",
+    urgencyText: "Morning pond harvest",
+    claimedPercent: 68,
+    stockLeft: "Only 7 kg left",
+    endsIn: "03h 40m",
+  },
+  {
+    id: "offer-prawns",
+    fishId: "55555555-5555-4555-a555-555555555555",
+    name: "TIGER PRAWNS",
+    teluguName: "రొయ్యలు (టైగర్)",
+    description: "Premium jumbo Tiger Prawns. Giant succulent crustaceans.",
+    imageUrl: `${FISH_CDN_BASE}/tiger-prawns.webp`,
+    categoryName: "Shellfish & Prawns",
+    unitPrice: 999,
+    originalPrice: 1250,
+    discountPercent: 20,
+    savings: 251,
+    dealTag: "SPECIAL CATCH",
+    urgencyText: "Live coast arrival",
+    claimedPercent: 91,
+    stockLeft: "Only 2 kg left",
+    endsIn: "01h 10m",
+  },
+  {
+    id: "offer-tilapia",
+    fishId: "66666666-6666-4666-a666-666666666666",
+    name: "TILAPIA WHOLE",
+    teluguName: "తిలాపియా",
+    description: "Whole farm-fresh Tilapia. Descaled and cleaned whole with head on.",
+    imageUrl: `${FISH_CDN_BASE}/tilapia-whole-fish.webp`,
+    categoryName: "Freshwater Fish",
+    unitPrice: 150,
+    originalPrice: 200,
+    discountPercent: 25,
+    savings: 50,
+    dealTag: "SUPER SAVER",
+    urgencyText: "Cleaned whole",
+    claimedPercent: 74,
+    stockLeft: "Only 5 kg left",
+    endsIn: "04h 25m",
+  },
+];
 
-  const signal = controller?.signal;
+export const DEV_MOCK_FISH = [
+  {
+    id: "e6fd568d-7667-4d11-912e-a36e062ab716",
+    name: "APPOLLO BONE LESS",
+    teluguName: "అపోలో బోన్‌లెస్",
+    description: "Skinless, boneless fillets cleanly prepped for Apollo fish fry and finger cuts.",
+    imageUrl: `${FISH_CDN_BASE}/apollo-boneless.webp`,
+    categoryName: "Freshwater Fish",
+    unitPrice: 500,
+    unitBasis: "Net 1000g · Gross 1250g",
+    pricing: {
+      basePrice: 625,
+      effectivePrice: 500,
+      hasDiscount: true,
+      discount: { type: 'PERCENTAGE', value: 20, savings: 125 },
+    },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 5:30 AM",
+    waterSource: "Inland Freshwater Pond",
+  },
+  {
+    id: "44444444-4444-4444-a444-444444444444",
+    name: "BOCHE (Katla)",
+    teluguName: "బొచ్చె (కట్ల)",
+    description: "Freshwater Catla (Bocche). Large center cuts and round steaks for pulusu.",
+    imageUrl: `${FISH_CDN_BASE}/bochu.webp`,
+    categoryName: "Freshwater Fish",
+    unitPrice: 240,
+    unitBasis: "Net 1000g · Gross 1300g",
+    originalPrice: 300,
+    discountPercent: 20,
+    stockLeft: "Only 7 kg left",
+    pricing: {
+      basePrice: 300,
+      effectivePrice: 240,
+      hasDiscount: true,
+      discount: { type: 'PERCENTAGE', value: 20, savings: 60 },
+    },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 5:00 AM",
+    waterSource: "Krishna River Inland Tank",
+  },
+  {
+    id: "66666666-6666-4666-a666-666666666666",
+    name: "TILAPIA WHOLE FISH",
+    teluguName: "తిలాపియా",
+    description: "Whole farm-fresh Tilapia. Descaled and cleaned whole with head on.",
+    imageUrl: `${FISH_CDN_BASE}/tilapia-whole-fish.webp`,
+    categoryName: "Freshwater Fish",
+    unitPrice: 150,
+    unitBasis: "Net 1000g · Gross 1200g",
+    originalPrice: 200,
+    discountPercent: 25,
+    stockLeft: "Only 5 kg left",
+    pricing: {
+      basePrice: 200,
+      effectivePrice: 150,
+      hasDiscount: true,
+      discount: { type: 'PERCENTAGE', value: 25, savings: 50 },
+    },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 6:00 AM",
+    waterSource: "Controlled Inland Aquaculture",
+  },
+  {
+    id: "22222222-2222-4222-a222-222222222222",
+    name: "BANGDA (Mackerel)",
+    teluguName: "బంగ్డా (కనగుర్తులు)",
+    description: "Indian Mackerel (Bangda). Rich in omega-3, flavorful spicy roast favorite.",
+    imageUrl: `${FISH_CDN_BASE}/bangda.webp`,
+    categoryName: "Sea Fish / Marine",
+    unitPrice: 350,
+    unitBasis: "Net 1000g · Gross 1200g",
+    pricing: { basePrice: 350, effectivePrice: 350, hasDiscount: false, discount: null },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 4:00 AM Harbor",
+    waterSource: "West Coast Deep Sea Catch",
+  },
+  {
+    id: "88888888-8888-4888-a888-888888888888",
+    name: "VANJARAM (King Fish)",
+    teluguName: "వంజరం (సీర్ ఫిష్)",
+    description: "King Seer Fish (Vanjaram). Top grade tawa roast center cut steaks.",
+    imageUrl: `${FISH_CDN_BASE}/vanjaram.webp`,
+    categoryName: "Sea Fish / Marine",
+    unitPrice: 800,
+    unitBasis: "Net 1000g · Gross 1150g",
+    pricing: { basePrice: 800, effectivePrice: 800, hasDiscount: false, discount: null },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 4:30 AM Harbor",
+    waterSource: "Arabian Sea Line Catch",
+  },
+  {
+    id: "99999999-9999-4999-a999-999999999999",
+    name: "WHITE POMFRET",
+    teluguName: "తెల్ల చందువా",
+    description: "Exquisite White Pomfret. Whole diamond cut, pan fry coastal delicacy.",
+    imageUrl: `${FISH_CDN_BASE}/white-pomfret.webp`,
+    categoryName: "Sea Fish / Marine",
+    unitPrice: 1500,
+    unitBasis: "Net 1000g · Gross 1100g",
+    pricing: { basePrice: 1500, effectivePrice: 1500, hasDiscount: false, discount: null },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 4:00 AM Harbor",
+    waterSource: "Mangalore Coast Deep Sea",
+  },
+  {
+    id: "77777777-7777-4777-a777-777777777777",
+    name: "TUNA STEAKS",
+    teluguName: "ట్యూనా (సూర చేప)",
+    description: "Deep-sea fresh Tuna. Dense, meaty steaks sliced across the bone.",
+    imageUrl: `${FISH_CDN_BASE}/tuna.webp`,
+    categoryName: "Sea Fish / Marine",
+    unitPrice: 450,
+    unitBasis: "Net 1000g · Gross 1200g",
+    pricing: { basePrice: 450, effectivePrice: 450, hasDiscount: false, discount: null },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 4:15 AM Harbor",
+    waterSource: "Deep Pelagic Marine Catch",
+  },
+  {
+    id: "33333333-3333-4333-a333-333333333333",
+    name: "BLUE CRABS",
+    teluguName: "పీతలు",
+    description: "Fresh coastal blue swimming crabs. Sweet delicate meat.",
+    imageUrl: `${FISH_CDN_BASE}/blue-crabs.webp`,
+    categoryName: "Shellfish & Prawns",
+    unitPrice: 700,
+    unitBasis: "Net 1000g · Gross 1300g",
+    pricing: { basePrice: 700, effectivePrice: 700, hasDiscount: false, discount: null },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 5:00 AM Harbor",
+    waterSource: "Coastal Brackish Lagoon",
+  },
+  {
+    id: "55555555-5555-4555-a555-555555555555",
+    name: "TIGER PRAWNS",
+    teluguName: "రొయ్యలు (టైగర్)",
+    description: "Premium jumbo Tiger Prawns. Giant succulent crustaceans.",
+    imageUrl: `${FISH_CDN_BASE}/tiger-prawns.webp`,
+    categoryName: "Shellfish & Prawns",
+    unitPrice: 999,
+    unitBasis: "Net 1000g · Gross 1250g",
+    originalPrice: 1250,
+    discountPercent: 20,
+    stockLeft: "Only 2 kg left",
+    pricing: {
+      basePrice: 1250,
+      effectivePrice: 999,
+      hasDiscount: true,
+      discount: { type: 'PERCENTAGE', value: 20, savings: 251 },
+    },
+    physicalAvailable: true,
+    onlineBookable: true,
+    freshnessTier: "0-24H FRESH",
+    catchDate: "Today 5:15 AM Harbor",
+    waterSource: "Estuarine Saltwater Farm",
+  },
+];
 
-  // Priority 1: Critical Fish Catalogue
-  const fishPromise = apiClient.getFish({}, { signal })
-    .then((res) => {
-      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-      setFishList(res.data || []);
-      setError(null);
-      setLoading(false); // Unblock catalogue paint immediately
-    })
-    .catch((err) => {
-      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-      if (err.code === 'API_ABORTED') return;
-      console.error('[HOME FISH LOAD ERROR]', err.message);
-      // Preserve existing fish list on refresh failure; only show error state if catalogue is empty
-      setFishList((prev) => {
-        if (!prev || prev.length === 0) {
-          setError(err.message || 'Unable to load today’s fish catalogue.');
-        }
-        return prev;
-      });
-      setLoading(false);
-    });
+const QUICK_PILLS = [
+  { id: 'All Catch', label: 'All Catch' },
+  { id: 'Boneless', label: 'Boneless' },
+  { id: 'Freshwater', label: 'Freshwater' },
+  { id: 'Prawns & Crabs', label: 'Prawns & Crabs' },
+  { id: 'Fry & Steaks', label: 'Fry & Steaks' },
+];
 
-  // Secondary Content (Executes concurrently in background without blocking fish catalogue)
-  // Re-use already loaded categories unless explicitly refreshing
-  const hasCategories = !isRefresh && Array.isArray(existingCategories) && existingCategories.length > 0;
-  const catsPromise = hasCategories
-    ? Promise.resolve().then(() => {
-        if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-        setCategories(existingCategories);
-      })
-    : apiClient.getCategories({ signal, bypassCache: isRefresh })
-        .then((res) => {
-          if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-          setCategories(res.data || []);
-        })
-        .catch((err) => {
-          if (err.code !== 'API_ABORTED') {
-            console.warn('[HOME CATEGORIES NON-FATAL]', err.message);
-          }
-        });
-
-  const subPromise = apiClient.getSubscription({ signal })
-    .then((res) => {
-      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-      setSubData(res.data || null);
-    })
-    .catch((err) => {
-      if (err.code !== 'API_ABORTED') {
-        console.warn('[HOME SUBSCRIPTION NON-FATAL]', err.message);
-      }
-    });
-
-  const trackingPromise = apiClient.getCustomerLiveTracking({ signal })
-    .then((res) => {
-      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-      setTrackingData(res.data || null);
-    })
-    .catch((err) => {
-      if (err.code !== 'API_ABORTED') {
-        console.warn('[HOME TRACKING NON-FATAL]', err.message);
-      }
-    });
-
-  const profilePromise = apiClient.getProfile(null, { signal })
-    .then((res) => {
-      if (!isMountedRef.current || currentSeq !== requestSeqRef.current) return;
-      if (res.data) {
-        setCustomer(res.data);
-      }
-    })
-    .catch((err) => {
-      if (err.code !== 'API_ABORTED') {
-        console.warn('[HOME PROFILE NON-FATAL]', err.message);
-      }
-    });
-
-  // Await all independent requests to settle before terminating refresh indicator
-  try {
-    await Promise.allSettled([fishPromise, catsPromise, subPromise, trackingPromise, profilePromise]);
-  } finally {
-    if (isMountedRef.current && currentSeq === requestSeqRef.current) {
-      setRefreshing(false);
-      setLoading(false);
-    }
-  }
-}
+const CATEGORY_GROUPS = [
+  {
+    id: 'freshwater',
+    title: 'Freshwater Catches',
+    subtitle: 'Harvested fresh every morning from inland ponds',
+    categoryName: 'Freshwater Fish',
+  },
+  {
+    id: 'marine',
+    title: 'Sea Fish & Marine',
+    subtitle: 'Direct from morning coastal harbor reefer transit',
+    categoryName: 'Sea Fish / Marine',
+  },
+  {
+    id: 'shellfish',
+    title: 'Crabs & Shellfish',
+    subtitle: 'Live coastal swimming crabs and jumbo prawns',
+    categoryName: 'Shellfish & Prawns',
+  },
+];
 
 export default function HomeScreen({
   routeParams = {},
   onNavigate,
   cartCount = 0,
-  cartSummary: passedCartSummary = null,
-  onCartUpdated,
 }) {
-  const initialCustomer = routeParams?.customer || {};
-  const [customer, setCustomer] = useState(initialCustomer);
-  const [fishList, setFishList] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const categoriesRef = useRef(categories);
-  categoriesRef.current = categories;
-  const [subData, setSubData] = useState(null);
-  const [trackingData, setTrackingData] = useState(null);
-  const [cartSummary, setCartSummary] = useState(passedCartSummary);
-  const [cartQuantities, setCartQuantities] = useState({});
-
-  useEffect(() => {
-    if (passedCartSummary) {
-      setCartSummary(passedCartSummary);
-    }
-  }, [passedCartSummary]);
-
-  const [loading, setLoading] = useState(true);
+  const [fishList, setFishList] = useState(DEV_MOCK_FISH);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
-  const [availabilityFilter, setAvailabilityFilter] = useState('ALL');
-
-  // Favorites & Cart state
-  const [favorites, setFavorites] = useState({});
+  const [activeQuickPill, setActiveQuickPill] = useState('All Catch');
+  const [cartQuantities, setCartQuantities] = useState({});
   const [addingFishId, setAddingFishId] = useState(null);
 
-  // Request race condition prevention & cancellation
-  const abortControllerRef = useRef(null);
-  const isMountedRef = useRef(true);
-  const requestSeqRef = useRef(0);
+  // User subscription state (e.g. ₹1,500 active pass or 0)
+  const [userBalance, setUserBalance] = useState(1500);
 
-  const customerName = customer?.name || 'Customer';
+  // Filter bottom sheet modal state
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [filterCategory, setFilterCategory] = useState('ALL');
+  const [filterAvailability, setFilterAvailability] = useState('ALL');
+  const [filterSort, setFilterSort] = useState('DEFAULT');
 
-  // Verified Customer Address or Honest Unselected State
-  const customerAddress =
-    customer?.address?.formatted ||
-    customer?.address?.street ||
-    (typeof customer?.address === 'string' ? customer.address : null) ||
-    customer?.selectedAddress ||
-    routeParams?.selectedAddress ||
-    null;
-
-  const displayLocation = customerAddress
-    ? (typeof customerAddress === 'string'
-        ? customerAddress
-        : `${customerAddress.area || customerAddress.street || ''}${customerAddress.city ? `, ${customerAddress.city}` : ''}`)
-    : 'Select your location';
-
-  const displayLocationSubtitle = customerAddress
-    ? 'Store Counter Pickup & Local Delivery'
-    : 'Choose pickup or delivery area';
-
-  // Lifecycle cleanup: abort in-flight requests on screen unmount
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+  // Load backend fish list or fallback to DEV_MOCK_FISH
+  const loadData = useCallback(async () => {
+    try {
+      const res = await api.getFish();
+      if (res && res.data && res.data.length > 0) {
+        setFishList(res.data);
+      } else {
+        setFishList(DEV_MOCK_FISH);
       }
+    } catch (err) {
+      setFishList(DEV_MOCK_FISH);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Pack & Quantity selection bottom sheet modal (Licious/FreshToHome standard)
+  const [packModalVisible, setPackModalVisible] = useState(false);
+  const [packModalFish, setPackModalFish] = useState(null);
+  const [emptyCartModalVisible, setEmptyCartModalVisible] = useState(false);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide',
+      () => setKeyboardVisible(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
     };
   }, []);
+  const [selectedWeightMode, setSelectedWeightMode] = useState('1');
+  const [customWeightInput, setCustomWeightInput] = useState('');
 
-  // Prioritized data retrieval delegating to fetchHomeDataOrchestrated
-  const loadAllData = useCallback(async (isRefresh = false) => {
-    return fetchHomeDataOrchestrated({
-      apiClient: api,
-      setFishList,
-      setCategories,
-      setSubData,
-      setTrackingData,
-      setCustomer,
-      setLoading,
-      setRefreshing,
-      setError,
-      abortControllerRef,
-      isMountedRef,
-      requestSeqRef,
-      isRefresh,
-      existingCategories: categoriesRef.current,
+  // Cart actions
+  const handleAddToCart = useCallback((item) => {
+    setPackModalFish(item);
+    setSelectedWeightMode('1');
+    setCustomWeightInput('');
+    setPackModalVisible(true);
+  }, []);
+
+  const handleConfirmPackAdd = useCallback((weightKg) => {
+    if (!packModalFish || !weightKg || weightKg <= 0) return;
+    const itemId = packModalFish.fishId || packModalFish.id;
+    setAddingFishId(itemId);
+    setCartQuantities((prev) => ({
+      ...prev,
+      [itemId]: (prev[itemId] || 0) + 1,
+    }));
+    if (api && api.addToCart) {
+      api.addToCart({
+        fishId: itemId,
+        quantity: weightKg,
+      }).catch(() => {});
+    }
+    setPackModalVisible(false);
+    setTimeout(() => setAddingFishId(null), 300);
+  }, [packModalFish]);
+
+  const handleIncrement = useCallback((item) => {
+    const itemId = item.fishId || item.id;
+    setCartQuantities((prev) => ({
+      ...prev,
+      [itemId]: (prev[itemId] || 0) + 1,
+    }));
+  }, []);
+
+  const handleDecrement = useCallback((item) => {
+    const itemId = item.fishId || item.id;
+    setCartQuantities((prev) => {
+      const current = prev[itemId] || 0;
+      if (current <= 1) {
+        const updated = { ...prev };
+        delete updated[itemId];
+        return updated;
+      }
+      return { ...prev, [itemId]: current - 1 };
     });
   }, []);
-
-  useEffect(() => {
-    loadAllData();
-  }, [loadAllData]);
-
-  const handleRefresh = useCallback(() => {
-    loadAllData(true);
-  }, [loadAllData]);
-
-  const toggleFavorite = useCallback((id) => {
-    setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
-  }, []);
-
-  // Authoritative Add-To-Cart flow with validation and real UUIDs
-  const handleAddToCart = useCallback(async (item) => {
-    if (!item.physicalAvailable) {
-      Alert.alert('Out of Stock', `${item.name} is currently out of stock.`);
-      return;
-    }
-
-    if (!item.onlineBookable) {
-      Alert.alert(
-        'In-Store Counter Only',
-        `${item.name} is available for in-store counter purchase only. Online booking is currently disabled.`
-      );
-      return;
-    }
-
-    setAddingFishId(item.id);
-    try {
-      const result = await api.addToCart({
-        fishId: item.id,
-        quantity: 1,
-      });
-
-      if (result.data?.summary) {
-        setCartSummary(result.data.summary);
-      }
-      setCartQuantities((prev) => ({
-        ...prev,
-        [item.id]: (prev[item.id] || 0) + 1,
-      }));
-      if (onCartUpdated) {
-        onCartUpdated(result.data);
-      }
-    } catch (err) {
-      console.error('[HOME ADD TO CART ERROR]', err.message);
-      let msg = err.message || 'Could not add fish to cart.';
-      if (err.code === 'FISH_NOT_ONLINE_BOOKABLE') {
-        msg = 'Online booking is unavailable for this fish. In-store purchase only.';
-      } else if (err.code === 'FISH_UNAVAILABLE') {
-        msg = 'This fish is currently out of stock.';
-      } else if (err.code === 'INVALID_FISH_ID') {
-        msg = 'Invalid fish record.';
-      }
-      Alert.alert('Unable to Add', msg);
-    } finally {
-      setAddingFishId(null);
-    }
-  }, [onCartUpdated]);
-
-  const handleIncrement = useCallback(async (item) => {
-    const currentQty = cartQuantities[item.id] || 0;
-    const nextQty = currentQty + 1;
-    setAddingFishId(item.id);
-    try {
-      const result = await api.updateCartQuantity({
-        fishId: item.id,
-        quantity: nextQty,
-      });
-      if (result.data?.summary) {
-        setCartSummary(result.data.summary);
-      }
-      setCartQuantities((prev) => ({ ...prev, [item.id]: nextQty }));
-      if (onCartUpdated) {
-        onCartUpdated(result.data);
-      }
-    } catch (err) {
-      console.error('[HOME INCREMENT CART ERROR]', err.message);
-    } finally {
-      setAddingFishId(null);
-    }
-  }, [cartQuantities, onCartUpdated]);
-
-  const handleDecrement = useCallback(async (item) => {
-    const currentQty = cartQuantities[item.id] || 0;
-    if (currentQty <= 1) {
-      setAddingFishId(item.id);
-      try {
-        const result = await api.removeFromCart(item.id);
-        if (result.data?.summary) {
-          setCartSummary(result.data.summary);
-        }
-        setCartQuantities((prev) => {
-          const next = { ...prev };
-          delete next[item.id];
-          return next;
-        });
-        if (onCartUpdated) {
-          onCartUpdated(result.data);
-        }
-      } catch (err) {
-        console.error('[HOME REMOVE FROM CART ERROR]', err.message);
-      } finally {
-        setAddingFishId(null);
-      }
-    } else {
-      const nextQty = currentQty - 1;
-      setAddingFishId(item.id);
-      try {
-        const result = await api.updateCartQuantity({
-          fishId: item.id,
-          quantity: nextQty,
-        });
-        if (result.data?.summary) {
-          setCartSummary(result.data.summary);
-        }
-        setCartQuantities((prev) => ({ ...prev, [item.id]: nextQty }));
-        if (onCartUpdated) {
-          onCartUpdated(result.data);
-        }
-      } catch (err) {
-        console.error('[HOME DECREMENT CART ERROR]', err.message);
-      } finally {
-        setAddingFishId(null);
-      }
-    }
-  }, [cartQuantities, onCartUpdated]);
 
   const handleNavigateDetails = useCallback((item) => {
     if (onNavigate) {
-      onNavigate('FISH_DETAILS', { fishId: item.id, fish: item });
+      const fishObj = DEV_MOCK_FISH.find((f) => f.id === (item.fishId || item.id)) || item;
+      const target = {
+        ...fishObj,
+        ...item,
+        id: fishObj.id || item.fishId || item.id,
+        pricing: item.pricing || fishObj.pricing,
+        unitPrice: item.unitPrice || fishObj.unitPrice,
+      };
+      onNavigate('FISH_DETAILS', { fishId: target.id, fish: target });
     }
   }, [onNavigate]);
 
-  const keyExtractor = useCallback((item) => String(item.id || item._id || item.name), []);
+  // Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filterCategory !== 'ALL') count++;
+    if (filterAvailability !== 'ALL') count++;
+    if (filterSort !== 'DEFAULT') count++;
+    return count;
+  }, [filterCategory, filterAvailability, filterSort]);
 
-  // Discounted items filter for Catch Offers
-  const discountedFish = useMemo(() => {
-    return fishList.filter((f) => f.pricing && f.pricing.hasDiscount);
-  }, [fishList]);
+  // Filter and sort fish list
+  const filteredFishList = useMemo(() => {
+    let result = [...fishList];
 
-  // Client-side catalogue filter using pure production helper
-  const filteredFishes = useMemo(() => {
-    return filterFishCatalogue(fishList, {
-      categoryId: selectedCategoryId,
-      availability: availabilityFilter,
-      searchQuery,
-    });
-  }, [fishList, selectedCategoryId, availabilityFilter, searchQuery]);
-
-  const renderEmptyState = useCallback(() => {
+    // Search query
     if (searchQuery.trim()) {
-      return (
-        <EmptyStateView
-          emoji="🔍"
-          title="No Matching Fish"
-          message={`No fish found matching "${searchQuery}". Try a different search term.`}
-          actionLabel="Clear Search"
-          onAction={() => setSearchQuery('')}
-        />
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (f) =>
+          f.name.toLowerCase().includes(q) ||
+          (f.teluguName && f.teluguName.includes(q)) ||
+          (f.description && f.description.toLowerCase().includes(q)) ||
+          (f.categoryName && f.categoryName.toLowerCase().includes(q))
       );
     }
 
-    if (selectedCategoryId) {
-      return (
-        <EmptyStateView
-          emoji="🐟"
-          title="No Catch in This Category"
-          message="Selected category has no fish in stock today. Browse other fresh varieties."
-          actionLabel="View All Fishes"
-          onAction={() => setSelectedCategoryId(null)}
-        />
-      );
+    // Category filter
+    if (filterCategory !== 'ALL') {
+      result = result.filter((f) => f.categoryName === filterCategory);
     }
 
-    if (availabilityFilter !== 'ALL') {
-      return (
-        <EmptyStateView
-          emoji="🏷"
-          title="No Matching Catch"
-          message="No fishes currently match this availability filter."
-          actionLabel="Show All"
-          onAction={() => setAvailabilityFilter('ALL')}
-        />
-      );
+    // Availability filter
+    if (filterAvailability === 'ONLINE') {
+      result = result.filter((f) => f.onlineBookable !== false);
+    } else if (filterAvailability === 'STORE') {
+      result = result.filter((f) => f.physicalAvailable !== false);
     }
 
-    return (
-      <EmptyStateView
-        emoji="🎣"
-        title="No Fresh Fish Available Today"
-        message="Morning lake catch delivery has not replenished counter stock yet. Check back shortly."
-        actionLabel="Refresh Catalogue"
-        onAction={loadAllData}
-      />
-    );
-  }, [searchQuery, selectedCategoryId, availabilityFilter, loadAllData]);
-
-  const renderFishItem = useCallback(({ item }) => {
-    return (
-      <FishCard
-        item={item}
-        isFav={Boolean(favorites[item.id])}
-        isAdding={addingFishId === item.id}
-        cartQuantity={cartQuantities[item.id] || 0}
-        quantityInCart={cartQuantities[item.id] || 0}
-        onToggleFav={toggleFavorite}
-        onAddToCart={handleAddToCart}
-        onPress={handleNavigateDetails}
-        onIncrement={handleIncrement}
-        onDecrement={handleDecrement}
-      />
-    );
-  }, [
-    favorites,
-    addingFishId,
-    cartQuantities,
-    toggleFavorite,
-    handleAddToCart,
-    handleNavigateDetails,
-    handleIncrement,
-    handleDecrement,
-  ]);
-
-  // Information hierarchy prioritized for shopping discovery:
-  // Compact status alerts -> Category Discovery -> Special Offers -> Previously Purchased
-  const renderListHeader = useMemo(() => {
-    return (
-      <View>
-        <DashboardBanners
-          subData={subData}
-          trackingData={trackingData}
-          onNavigate={onNavigate}
-        />
-        <CatalogueHeaderControls
-          categories={categories}
-          selectedCategoryId={selectedCategoryId}
-          onSelectCategory={setSelectedCategoryId}
-          availabilityFilter={availabilityFilter}
-          onSelectAvailability={setAvailabilityFilter}
-        />
-        <FlashSaleCarousel
-          discountedFish={discountedFish}
-          favorites={favorites}
-          addingFishId={addingFishId}
-          cartQuantities={cartQuantities}
-          onToggleFav={toggleFavorite}
-          onAddToCart={handleAddToCart}
-          onIncrement={handleIncrement}
-          onDecrement={handleDecrement}
-          onNavigate={onNavigate}
-        />
-        <PreviouslyBoughtCarousel
-          fishList={fishList}
-          favorites={favorites}
-          cartQuantities={cartQuantities}
-          onToggleFav={toggleFavorite}
-          onAddToCart={handleAddToCart}
-          onIncrement={handleIncrement}
-          onDecrement={handleDecrement}
-          onNavigate={onNavigate}
-        />
-      </View>
-    );
-  }, [
-    subData,
-    trackingData,
-    onNavigate,
-    categories,
-    selectedCategoryId,
-    availabilityFilter,
-    discountedFish,
-    favorites,
-    addingFishId,
-    cartQuantities,
-    toggleFavorite,
-    handleAddToCart,
-    handleIncrement,
-    handleDecrement,
-    fishList,
-  ]);
-
-  const renderEmptyComponent = useMemo(() => {
-    if (loading) {
-      return <LoadingSkeleton count={4} />;
+    // Sort
+    if (filterSort === 'PRICE_LOW') {
+      result.sort((a, b) => a.unitPrice - b.unitPrice);
+    } else if (filterSort === 'PRICE_HIGH') {
+      result.sort((a, b) => b.unitPrice - a.unitPrice);
     }
-    if (error) {
-      return (
-        <ErrorStateView
-          title="Unable to load today's fish."
-          message={error}
-          onRetry={loadAllData}
-        />
-      );
-    }
-    return renderEmptyState();
-  }, [loading, error, loadAllData, renderEmptyState]);
 
-  const renderFooter = useMemo(() => {
-    if (loading || error || filteredFishes.length === 0) {
-      return <View style={styles.footerSpacing} />;
-    }
-    return (
-      <View style={styles.footerContainer}>
-        {selectedCategoryId && (
-          <TouchableOpacity
-            style={styles.showMoreBtn}
-            onPress={() => setSelectedCategoryId(null)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.showMoreBtnText}>View All Fishes in Marketplace →</Text>
-          </TouchableOpacity>
-        )}
-        <View style={styles.footerSpacing} />
-      </View>
-    );
-  }, [loading, error, filteredFishes.length, selectedCategoryId]);
+    return result;
+  }, [fishList, searchQuery, filterCategory, filterAvailability, filterSort]);
 
-  const totalCartItems = cartSummary?.totalItems ?? cartCount ?? 0;
-  const totalCartAmount = cartSummary?.totalAmount ?? 0;
+  // Total cart calculation
+  const totalCartItems = useMemo(() => {
+    return Object.values(cartQuantities).reduce((sum, qty) => sum + qty, 0);
+  }, [cartQuantities]);
+
+  const totalCartAmount = useMemo(() => {
+    return Object.entries(cartQuantities).reduce((sum, [id, qty]) => {
+      const fish = fishList.find((f) => f.id === id);
+      const effectivePrice = fish?.pricing?.effectivePrice || fish?.unitPrice || 0;
+      return sum + (effectivePrice * qty);
+    }, 0);
+  }, [cartQuantities, fishList]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.brandNavy} />
+      <StatusBar barStyle="light-content" backgroundColor="#1E56A0" />
 
-      {/* 1. TOP HEADER (PondFish Brand Navy) */}
-      <View style={styles.topHeader}>
-        <View style={styles.headerRowTop}>
-          {/* Location & Brand Group */}
-          <View style={styles.headerLeftGroup}>
-            <Image
-              source={require('../assets/logo.png')}
-              style={styles.headerLogoBadge}
-              resizeMode="contain"
-            />
-            <TouchableOpacity
-              style={styles.locationContainer}
-              onPress={() => onNavigate && onNavigate('PROFILE')}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={customerAddress ? `Selected delivery location: ${displayLocation}` : 'Select your location'}
-            >
-              <View style={styles.locationTitleRow}>
-                <LocationPinIcon size={14} color={Colors.actionGreen} />
-                <Text style={styles.locationTitleText} numberOfLines={1}>{displayLocation}</Text>
-                <Text style={styles.locationChevron}>▾</Text>
-              </View>
-              <Text style={styles.locationSubtitleText}>
-                {displayLocationSubtitle}
+      {/* 1. SEAMLESS BLUE GRADIENT HEADER WRAPPER (180deg: #164682 -> #1E5A9E -> #D8E8F8 -> #F5F7FA) */}
+      <View style={styles.gradientHeaderWrapper}>
+        <Image
+          source={require('../assets/home_gradient.png')}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="stretch"
+        />
+
+        {/* Top Header Row (Transparent child) */}
+        <View style={styles.headerTransparent}>
+          {/* Logo & Location */}
+          <View style={styles.brandRow}>
+            <View style={styles.headerLogoCard}>
+              <Image
+                source={require('../assets/logo.png')}
+                style={styles.headerLogoImage}
+                resizeMode="contain"
+              />
+            </View>
+            <TouchableOpacity style={styles.locationPill} activeOpacity={0.8}>
+              <LocationPinIcon size={12} color="#FFFFFF" />
+              <Text style={styles.locationPillText} numberOfLines={1}>
+                Indiranagar ▾
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Right Header: Subscription Pass & Avatar */}
-          <View style={styles.headerRightGroup}>
-            <TouchableOpacity
-              style={styles.clubPassPill}
-              onPress={() => onNavigate('SUBSCRIPTION')}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="View PondFish Club Pass"
-            >
-              <CardIcon size={14} color={Colors.textWhite} />
-              <Text style={styles.clubPassText}>
-                {subData?.hasSubscription && subData.subscription
-                  ? `₹${subData.subscription.creditBalance ?? 0}`
-                  : 'Club'}
-              </Text>
-            </TouchableOpacity>
+          {/* Right Actions: Balance / Save 20% + Profile */}
+          <View style={styles.headerRightActions}>
+            {userBalance > 0 ? (
+              <TouchableOpacity
+                style={styles.balancePill}
+                onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
+                activeOpacity={0.85}
+                accessibilityLabel={`Balance ₹${userBalance}`}
+              >
+                <Text style={styles.balancePillText}>₹{userBalance}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.savePill}
+                onPress={() => onNavigate && onNavigate('SUBSCRIPTION')}
+                activeOpacity={0.85}
+                accessibilityLabel="Save 20% with Pond Pass"
+              >
+                <Text style={styles.savePillText}>Save 20%</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
-              style={styles.userAvatarBtn}
-              onPress={() => onNavigate('PROFILE')}
-              activeOpacity={0.8}
-              accessibilityRole="button"
+              style={styles.profileBtn}
+              onPress={() => onNavigate && onNavigate('PROFILE')}
+              activeOpacity={0.85}
               accessibilityLabel="View Profile"
             >
-              <Text style={styles.avatarInitials}>
-                {customerName.charAt(0).toUpperCase()}
-              </Text>
+              <Text style={styles.profileBtnText}>P</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Functional Search Bar */}
-        <View style={styles.searchBarRow}>
-          <View style={styles.searchBar}>
-            <SearchIcon size={16} color={Colors.textMuted} />
+        {/* Search Bar Row (Transparent child) */}
+        <View style={styles.searchWrapperTransparent}>
+          <View style={styles.searchBox}>
+            <SearchIcon size={18} color="#1E56A0" />
             <TextInput
               style={styles.searchInput}
               placeholder='Search "fresh pomfret, rohu, prawns"...'
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor="#64748B"
               value={searchQuery}
               onChangeText={setSearchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
               returnKeyType="search"
               autoCorrect={false}
-              accessibilityLabel="Search fish catalogue"
             />
             {Boolean(searchQuery) && (
               <TouchableOpacity
-                style={styles.clearSearchBtn}
                 onPress={() => setSearchQuery('')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Clear search"
               >
                 <Text style={styles.clearSearchText}>✕</Text>
               </TouchableOpacity>
@@ -678,38 +606,350 @@ export default function HomeScreen({
         </View>
       </View>
 
-      {/* 2. VIRTUALIZED DASHBOARD & CATALOGUE */}
-      <FlatList
-        data={loading || error ? [] : filteredFishes}
-        keyExtractor={keyExtractor}
-        numColumns={2}
-        columnWrapperStyle={filteredFishes.length > 0 ? styles.gridRow : undefined}
-        contentContainerStyle={styles.scrollBody}
+      {/* MAIN SCROLLABLE DASHBOARD */}
+      <ScrollView
+        style={styles.mainScroll}
+        contentContainerStyle={styles.mainScrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.actionGreen}
-            colors={[Colors.actionGreen]}
+            tintColor="#1E56A0"
+            colors={['#1E56A0']}
           />
         }
-        ListHeaderComponent={renderListHeader}
-        ListEmptyComponent={renderEmptyComponent}
-        ListFooterComponent={renderFooter}
-        renderItem={renderFishItem}
-        initialNumToRender={6}
-        maxToRenderPerBatch={6}
-        windowSize={5}
-        removeClippedSubviews={Platform.OS === 'android'}
-      />
+      >
+        {/* 3. TODAY'S FLASH DEALS: HORIZONTAL SCROLL OF VERTICAL OFFER CARDS */}
+        <View style={styles.offersSection}>
+          <View style={styles.offersSectionHeader}>
+            <Text style={styles.offersSectionTitle}>Today's Special Offers</Text>
+          </View>
 
-      {/* 3. PERSISTENT STICKY CART ACTION BAR */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.offersScrollList}
+          >
+            {HIGHLIGHTED_OFFERS.map((offer) => {
+              const qty = cartQuantities[offer.fishId] || 0;
+              return (
+                <View key={offer.id} style={styles.offerCardVertical}>
+                  {/* Flush Top-Left Flashy Discount Badge */}
+                  <View style={styles.offerDiscountBadge}>
+                    <Text style={styles.offerDiscountBadgeText}>
+                      <Text style={styles.offerDiscountBadgePercent}>{offer.discountPercent}%</Text> OFF
+                    </Text>
+                  </View>
+
+                  {/* Fish Photo Canvas */}
+                  <TouchableOpacity
+                    onPress={() => handleNavigateDetails(offer)}
+                    style={styles.offerImageBox}
+                    activeOpacity={0.9}
+                  >
+                    <OptimizedFishImage
+                      uri={offer.imageUrl}
+                      style={styles.offerFishImage}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+
+                  {/* Title & Regional Telugu Name */}
+                  <TouchableOpacity
+                    onPress={() => handleNavigateDetails(offer)}
+                    activeOpacity={0.85}
+                    style={styles.offerTitleBox}
+                  >
+                    <Text style={styles.offerFishName} numberOfLines={1}>{offer.name}</Text>
+                    <Text style={styles.offerFishTelugu} numberOfLines={1}>{offer.teluguName}</Text>
+                  </TouchableOpacity>
+
+                  {/* Stock Left Urgency Badge (Only X kg left) */}
+                  <View style={styles.offerStockBadge}>
+                    <Text style={styles.offerStockBadgeText}>{offer.stockLeft || 'Only 4 kg left'}</Text>
+                  </View>
+
+                  {/* Pricing & Add to Cart / Stepper */}
+                  <View style={styles.offerActionRow}>
+                    <View style={styles.offerPriceBlock}>
+                      {/* Top: Strikethrough & Big Green Savings Tag */}
+                      <View style={styles.offerStrikeRow}>
+                        <View style={styles.offerStrikeBox}>
+                          <Text style={styles.offerStrikeText}>₹{offer.originalPrice}</Text>
+                          <View style={styles.offerRedLine} />
+                        </View>
+                        <View style={styles.offerSavePill}>
+                          <Text style={styles.offerSavePillText}>Save ₹{offer.savings}</Text>
+                        </View>
+                      </View>
+
+                      {/* Bottom: Final Effective Price */}
+                      <View style={styles.offerPriceLine}>
+                        <Text style={styles.offerPriceVal}>₹{offer.unitPrice}</Text>
+                        <Text style={styles.offerPriceUnit}>/KG</Text>
+                      </View>
+                    </View>
+
+                    {/* Stepper or Button */}
+                    {qty > 0 ? (
+                      <View style={styles.stepperContainer}>
+                        <TouchableOpacity
+                          onPress={() => handleDecrement(offer)}
+                          style={styles.stepperBtn}
+                        >
+                          <MinusIcon size={12} color="#0F2C59" />
+                        </TouchableOpacity>
+                        <View style={styles.stepperQtyBox}>
+                          <Text style={styles.stepperQtyText}>{qty}</Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => handleIncrement(offer)}
+                          style={styles.stepperBtn}
+                        >
+                          <PlusIcon size={12} color="#0F2C59" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.offerAddBtn}
+                        onPress={() => handleAddToCart(offer)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.offerAddBtnText}>+ ADD</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* 4. COMPACT CATALOGUE HEADER WITH PROFESSIONAL FILTER (NO GEAR EMOJI) */}
+        <View style={styles.catalogueHeaderBar}>
+          <View>
+            <Text style={styles.catalogueHeaderTitle}>
+              Daily Fresh Harvest ({filteredFishList.length})
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.filterToggleBtn,
+              activeFilterCount > 0 && styles.filterToggleBtnActive,
+            ]}
+            onPress={() => setFilterModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Text
+              style={[
+                styles.filterToggleBtnText,
+                activeFilterCount > 0 && styles.filterToggleBtnTextActive,
+              ]}
+            >
+              Filter
+            </Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadgeCircle}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* 5. 2-COLUMN GROUPED FISH CATALOGUE (NO EMOJIS, NO HEART ICONS) */}
+        {CATEGORY_GROUPS.map((group) => {
+          const groupFishes = filteredFishList.filter(
+            (f) => f.categoryName === group.categoryName
+          );
+
+          if (groupFishes.length === 0) return null;
+
+          return (
+            <View key={group.id} style={styles.categorySection}>
+              {/* Category Group Heading */}
+              <View style={styles.groupHeadingBox}>
+                <Text style={styles.groupTitle}>{group.title}</Text>
+              </View>
+
+              {/* 2-Column Grid */}
+              <View style={styles.gridContainer}>
+                {groupFishes.map((item) => (
+                  <View key={item.id} style={styles.gridCardWrapper}>
+                    <FishCard
+                      item={item}
+                      isAdding={addingFishId === item.id}
+                      cartQuantity={cartQuantities[item.id] || 0}
+                      quantityInCart={cartQuantities[item.id] || 0}
+                      onAddToCart={handleAddToCart}
+                      onPress={handleNavigateDetails}
+                      onIncrement={handleIncrement}
+                      onDecrement={handleDecrement}
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        })}
+
+        {filteredFishList.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>No Catches Match Your Filter</Text>
+            <Text style={styles.emptySubtitle}>
+              Try resetting your category or search filters to see all available catches.
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyResetBtn}
+              onPress={() => {
+                setSearchQuery('');
+                setFilterCategory('ALL');
+                setFilterAvailability('ALL');
+                setFilterSort('DEFAULT');
+              }}
+            >
+              <Text style={styles.emptyResetBtnText}>Reset All Filters</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* 6. SLIDE-UP FILTER BOTTOM SHEET MODAL */}
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setFilterModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Filter & Sort Catches</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setFilterCategory('ALL');
+                  setFilterAvailability('ALL');
+                  setFilterSort('DEFAULT');
+                }}
+              >
+                <Text style={styles.modalResetText}>Reset All</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Category Filter */}
+            <Text style={styles.filterSectionTitle}>Catch Type</Text>
+            <View style={styles.filterChipRow}>
+              {[
+                { label: 'All Fish', val: 'ALL' },
+                { label: 'Freshwater', val: 'Freshwater Fish' },
+                { label: 'Sea Fish / Marine', val: 'Sea Fish / Marine' },
+                { label: 'Crabs & Shellfish', val: 'Shellfish & Prawns' },
+              ].map((chip) => (
+                <TouchableOpacity
+                  key={chip.val}
+                  style={[
+                    styles.filterChip,
+                    filterCategory === chip.val && styles.filterChipActive,
+                  ]}
+                  onPress={() => setFilterCategory(chip.val)}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      filterCategory === chip.val && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Availability Filter */}
+            <Text style={styles.filterSectionTitle}>Availability</Text>
+            <View style={styles.filterChipRow}>
+              {[
+                { label: 'All Catches', val: 'ALL' },
+                { label: 'Online Bookable', val: 'ONLINE' },
+                { label: 'In-Store Counter', val: 'STORE' },
+              ].map((chip) => (
+                <TouchableOpacity
+                  key={chip.val}
+                  style={[
+                    styles.filterChip,
+                    filterAvailability === chip.val && styles.filterChipActive,
+                  ]}
+                  onPress={() => setFilterAvailability(chip.val)}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      filterAvailability === chip.val && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Sort Filter */}
+            <Text style={styles.filterSectionTitle}>Sort By</Text>
+            <View style={styles.filterChipRow}>
+              {[
+                { label: 'Default', val: 'DEFAULT' },
+                { label: 'Price: Low to High', val: 'PRICE_LOW' },
+                { label: 'Price: High to Low', val: 'PRICE_HIGH' },
+              ].map((chip) => (
+                <TouchableOpacity
+                  key={chip.val}
+                  style={[
+                    styles.filterChip,
+                    filterSort === chip.val && styles.filterChipActive,
+                  ]}
+                  onPress={() => setFilterSort(chip.val)}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      filterSort === chip.val && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Apply Button */}
+            <TouchableOpacity
+              style={styles.modalApplyBtn}
+              onPress={() => setFilterModalVisible(false)}
+            >
+              <Text style={styles.modalApplyBtnText}>Apply Filters</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 7. PERSISTENT STICKY CART BAR */}
       {totalCartItems > 0 && (
         <View style={styles.stickyCartBar}>
           <View style={styles.stickyCartInfo}>
             <View style={styles.stickyCartIconBox}>
-              <CartIcon size={18} color={Colors.textWhite} />
+              <CartIcon size={18} color="#FFFFFF" />
             </View>
             <View>
               <Text style={styles.stickyCartTitle}>
@@ -722,1118 +962,1341 @@ export default function HomeScreen({
           </View>
           <TouchableOpacity
             style={styles.stickyCartCta}
-            onPress={() => onNavigate('CART')}
+            onPress={() => onNavigate && onNavigate('CART')}
             activeOpacity={0.88}
-            accessibilityRole="button"
-            accessibilityLabel={`View basket with ${totalCartItems} items`}
           >
             <Text style={styles.stickyCartCtaText}>View Basket →</Text>
           </TouchableOpacity>
         </View>
       )}
+      {/* 8. QUANTITY & PACK SELECTOR BOTTOM SHEET */}
+      <Modal
+        visible={packModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPackModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setPackModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.packModalContainer}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHandle} />
+
+            {packModalFish && (() => {
+              const effectivePrice = packModalFish.pricing?.effectivePrice || packModalFish.unitPrice || 0;
+              const originalRate = packModalFish.originalPrice || Math.round(effectivePrice * 1.25);
+
+              const weightPresets = [
+                { id: '1', weight: 1, label: '1 kg', serves: 'Serves 3-4', isPopular: true },
+                { id: '1.5', weight: 1.5, label: '1.5 kg', serves: 'Serves 5-6' },
+                { id: '2', weight: 2, label: '2 kg', serves: 'Family Pack' },
+                { id: 'custom', weight: null, label: 'Custom', serves: 'Enter kg' },
+              ];
+
+              let activeWeightKg = 1;
+              if (selectedWeightMode === 'custom') {
+                const parsed = parseFloat(customWeightInput);
+                activeWeightKg = isNaN(parsed) || parsed <= 0 ? 0 : parsed;
+              } else if (selectedWeightMode === '1.5') {
+                activeWeightKg = 1.5;
+              } else if (selectedWeightMode === '2') {
+                activeWeightKg = 2;
+              } else {
+                activeWeightKg = 1;
+              }
+
+              const totalPrice = Math.round(effectivePrice * activeWeightKg);
+              const isValidWeight = activeWeightKg > 0;
+              const ctaText = isValidWeight
+                ? `Add to Cart (${activeWeightKg} kg) • ₹${totalPrice}`
+                : (selectedWeightMode === 'custom' && !customWeightInput ? 'Enter Weight in kg' : 'Invalid Weight');
+
+              return (
+                <View>
+                  {/* Top Row: Larger rounded thumbnail, Title, Telugu & Circular Close Button */}
+                  <View style={styles.packHeaderRow}>
+                    <OptimizedFishImage
+                      uri={packModalFish.imageUrl}
+                      style={styles.packThumbImage}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.packHeaderText}>
+                      <Text style={styles.packFishName} numberOfLines={1}>
+                        {packModalFish.name}
+                      </Text>
+                      {Boolean(packModalFish.teluguName) && (
+                        <Text style={styles.packFishTelugu}>{packModalFish.teluguName}</Text>
+                      )}
+                      <Text style={styles.packBaseRate}>
+                        ₹{effectivePrice} / 1 kg net
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setPackModalVisible(false)}
+                      style={styles.modalCloseBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.modalCloseBtnText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.packSectionLabel}>SELECT WEIGHT</Text>
+
+                  {/* 4 Clean Selectable Options in 2x2 Grid */}
+                  <View style={styles.weightGrid}>
+                    {weightPresets.map((opt) => {
+                      const isSelected = selectedWeightMode === opt.id;
+                      const optPrice = opt.weight ? Math.round(effectivePrice * opt.weight) : null;
+                      const optOrigPrice = opt.weight ? Math.round(originalRate * opt.weight) : null;
+
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          style={[
+                            styles.weightCard,
+                            isSelected && styles.weightCardActive,
+                          ]}
+                          onPress={() => setSelectedWeightMode(opt.id)}
+                          activeOpacity={0.8}
+                        >
+                          {opt.isPopular && (
+                            <View style={styles.popularBadge}>
+                              <Text style={styles.popularBadgeText}>MOST POPULAR</Text>
+                            </View>
+                          )}
+                          <Text style={[styles.weightCardLabel, isSelected && styles.weightCardLabelActive]}>
+                            {opt.label}
+                          </Text>
+                          <Text style={styles.weightCardServes}>{opt.serves}</Text>
+                          <View style={styles.weightPriceRow}>
+                            {optPrice !== null ? (
+                              <>
+                                <Text style={[styles.weightCardPrice, isSelected && styles.weightCardPriceActive]}>
+                                  ₹{optPrice}
+                                </Text>
+                                {optOrigPrice > optPrice && (
+                                  <Text style={styles.weightCardOriginalPrice}>
+                                    ₹{optOrigPrice}
+                                  </Text>
+                                )}
+                              </>
+                            ) : (
+                              <Text style={[styles.weightCardPrice, isSelected && styles.weightCardPriceActive]}>
+                                ₹{effectivePrice}/kg
+                              </Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* Clean Numeric Input Field when Custom is Selected */}
+                  {selectedWeightMode === 'custom' && (
+                    <View style={styles.customWeightContainer}>
+                      <Text style={styles.customWeightPrompt}>Custom Weight in kg:</Text>
+                      <View style={styles.customInputWrapper}>
+                        <TextInput
+                          style={styles.customWeightInput}
+                          placeholder="e.g. 0.5, 1.25, 2.5"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="decimal-pad"
+                          value={customWeightInput}
+                          onChangeText={setCustomWeightInput}
+                          autoFocus={true}
+                        />
+                        <View style={styles.kgSuffixBadge}>
+                          <Text style={styles.kgSuffixText}>kg</Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Full-Width Primary CTA Button (quantity stepper removed) */}
+                  <TouchableOpacity
+                    style={[
+                      styles.fullWidthAddCta,
+                      !isValidWeight && styles.fullWidthAddCtaDisabled,
+                    ]}
+                    onPress={() => handleConfirmPackAdd(activeWeightKg)}
+                    disabled={!isValidWeight}
+                    activeOpacity={0.88}
+                  >
+                    <Text style={styles.fullWidthAddCtaText}>
+                      {ctaText}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 9. FLOATING CART FAB (Hidden on keyboard/search focus, never overlaps +ADD) */}
+      {!isKeyboardVisible && !isSearchFocused && (
+        <TouchableOpacity
+          style={styles.floatingCartFab}
+          onPress={() => {
+            if (totalCartItems > 0) {
+              if (onNavigate) onNavigate('CART');
+            } else {
+              setEmptyCartModalVisible(true);
+            }
+          }}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Open Cart"
+        >
+          <CartIcon size={24} color="#FFFFFF" />
+          {totalCartItems > 0 && (
+            <View style={styles.floatingCartBadge}>
+              <Text style={styles.floatingCartBadgeText}>{totalCartItems}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {/* 10. EMPTY CART BOTTOM SHEET MODAL */}
+      <Modal
+        visible={emptyCartModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEmptyCartModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setEmptyCartModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.emptyCartSheet}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHandle} />
+
+            <View style={styles.emptyCartIconCircle}>
+              <CartIcon size={38} color="#1E56A0" />
+            </View>
+
+            <Text style={styles.emptyCartTitle}>Your cart is empty</Text>
+            <Text style={styles.emptyCartSubtitle}>
+              Add fresh catch to get started!
+            </Text>
+
+            <TouchableOpacity
+              style={styles.browseFishBtn}
+              onPress={() => setEmptyCartModalVisible(false)}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.browseFishBtnText}>Browse Fish</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
-/**
- * Dashboard top banners: Compact Factual Subscription Quota & Verified Catch Transport.
- * Memoized to prevent re-renders when catalogue filters or favorites change.
- */
-const DashboardBanners = React.memo(function DashboardBanners({ subData, trackingData, onNavigate }) {
-  const hasSub = Boolean(subData?.hasSubscription && subData.subscription);
-  const hasTracking = Boolean(trackingData?.active && trackingData?.truckNumber);
-
-  if (!hasSub && !hasTracking) {
-    return null;
-  }
-
-  return (
-    <View style={styles.bannersWrapper}>
-      {/* Factual Subscription Banner - Rendered ONLY if genuine subscription exists */}
-      {hasSub && (
-        <TouchableOpacity
-          style={styles.quotaBanner}
-          onPress={() => onNavigate('SUBSCRIPTION')}
-          activeOpacity={0.88}
-          accessibilityRole="button"
-          accessibilityLabel="View subscription quota"
-        >
-          <View style={styles.quotaMedalCircle}>
-            <MedalIcon size={16} color={Colors.warning} />
-          </View>
-          <View style={{ flex: 1, paddingHorizontal: 8 }}>
-            <Text style={styles.quotaTitle}>
-              {subData.subscription.planTitle || 'Club Member'}: {subData.subscription.weeklyRemainingKg ?? 0} kg quota remaining
-            </Text>
-            <Text style={styles.quotaSubtitle}>
-              {subData.subscription.weeklyClaimedKg ?? 0} kg claimed • Resets in {subData.subscription.daysRemaining ?? '—'} days
-            </Text>
-          </View>
-          <View style={styles.rechargeBtn}>
-            <Text style={styles.rechargeBtnText}>Manage</Text>
-          </View>
-        </TouchableOpacity>
-      )}
-
-      {/* Morning Catch Supply Transport - Rendered ONLY if genuine tracking data exists */}
-      {hasTracking && (
-        <TouchableOpacity
-          style={styles.liveTruckCard}
-          onPress={() => onNavigate('LIVE_TRACKING')}
-          activeOpacity={0.9}
-        >
-          <View style={styles.truckCardTopRow}>
-            <View style={styles.truckLiveBadge}>
-              <View style={styles.greenPulseDot} />
-              <TruckIcon size={14} color={Colors.textWhite} />
-              <Text style={styles.truckLiveText}>
-                Fresh Catch Supply #{trackingData.truckNumber}
-              </Text>
-            </View>
-            <View style={styles.etaPill}>
-              <Text style={styles.etaPillText}>En Route</Text>
-            </View>
-          </View>
-
-          <View style={styles.truckCardMidRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.truckFarmTitle}>
-                {trackingData.origin?.name
-                  ? `Departed ${trackingData.origin.name}`
-                  : 'Harbor replenishment en route'}
-              </Text>
-              <Text style={styles.truckDestSubtitle}>
-                Destination: {trackingData.destination?.name || 'Retail Store Counter'}
-              </Text>
-            </View>
-            <View style={styles.trackLiveBtn}>
-              <Text style={styles.trackLiveBtnText}>Track Supply →</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-});
-
-/**
- * Offers on Selected Fishes horizontal carousel.
- * Memoized to update only when discountedFish, favorites, or addingFishId change.
- */
-const FlashSaleCarousel = React.memo(function FlashSaleCarousel({
-  discountedFish,
-  favorites,
-  addingFishId,
-  cartQuantities = {},
-  onToggleFav,
-  onAddToCart,
-  onIncrement,
-  onDecrement,
-  onNavigate,
-}) {
-  if (!discountedFish || discountedFish.length === 0) return null;
-
-  return (
-    <View style={styles.flashSaleContainer}>
-      <View style={styles.flashHeaderRow}>
-        <View style={styles.flashIconCircle}>
-          <TagIcon size={14} color={Colors.actionGreen} />
-        </View>
-        <View style={{ flex: 1, paddingLeft: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.flashSectionTitle}>Offers on Selected Fishes</Text>
-            <View style={styles.flashBadgeGreen}>
-              <Text style={styles.flashBadgeGreenText}>TODAY'S SPECIAL</Text>
-            </View>
-          </View>
-          <Text style={styles.flashSectionSubtitle}>
-            Verified catch available at retail counter prices
-          </Text>
-        </View>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.flashCardsScroll}
-      >
-        {discountedFish.map((item) => {
-          const discountText = item.pricing?.discount?.percent
-            ? `${item.pricing.discount.percent}% OFF`
-            : item.pricing?.discount?.flatAmount
-            ? `₹${item.pricing.discount.flatAmount} OFF`
-            : 'SPECIAL';
-
-          const qty = cartQuantities[item.id] || 0;
-          const isPhysicalAvailable = Boolean(item.physicalAvailable);
-          const isOnlineBookable = Boolean(item.onlineBookable);
-
-          return (
-            <View key={item.id} style={styles.flashCard}>
-              <View style={styles.flashCardTop}>
-                <View style={styles.discountTag}>
-                  <Text style={styles.discountTagText}>{discountText}</Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => onToggleFav(item.id)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
-                    {favorites[item.id] ? '♥' : '♡'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
-                style={styles.flashImageBox}
-                activeOpacity={0.88}
-              >
-                <OptimizedFishImage
-                  uri={item.imageUrl}
-                  style={styles.flashImage}
-                  resizeMode="cover"
-                  testID={`flash-image-${item.id}`}
-                />
-              </TouchableOpacity>
-
-              <Text style={styles.flashFishName} numberOfLines={2}>
-                {item.name}
-              </Text>
-              {Boolean(item.unitBasis) && (
-                <Text style={styles.flashWeightText}>
-                  {item.unitBasis}
-                </Text>
-              )}
-
-              <View style={styles.pricingRow}>
-                <Text style={styles.currentPrice}>
-                  ₹{item.pricing?.effectivePrice || item.unitPrice}
-                </Text>
-                <Text style={styles.originalPrice}>₹{item.unitPrice}</Text>
-              </View>
-
-              <View style={styles.flashCardActionRow}>
-                {qty > 0 && isPhysicalAvailable && isOnlineBookable ? (
-                  <View style={styles.stepperContainerMini}>
-                    <TouchableOpacity
-                      style={styles.stepperBtnMini}
-                      onPress={() => onDecrement && onDecrement(item)}
-                    >
-                      <Text style={styles.stepperGlyph}>−</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.stepperQtyTextMini}>{qty}</Text>
-                    <TouchableOpacity
-                      style={styles.stepperBtnMini}
-                      onPress={() => onIncrement ? onIncrement(item) : onAddToCart(item)}
-                    >
-                      <Text style={styles.stepperGlyph}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[
-                      styles.addBtnGreen,
-                      !isPhysicalAvailable && styles.addBtnDisabled,
-                      isPhysicalAvailable && !isOnlineBookable && styles.inStoreBtnMini,
-                    ]}
-                    onPress={() => onAddToCart(item)}
-                    disabled={addingFishId === item.id || !isPhysicalAvailable}
-                    activeOpacity={0.8}
-                  >
-                    {addingFishId === item.id ? (
-                      <ActivityIndicator size="small" color={Colors.textWhite} />
-                    ) : (
-                      <Text
-                        style={[
-                          styles.addBtnGreenText,
-                          !isPhysicalAvailable && styles.addBtnDisabledText,
-                          isPhysicalAvailable && !isOnlineBookable && styles.inStoreBtnMiniText,
-                        ]}
-                      >
-                        {!isPhysicalAvailable ? 'SOLD' : !isOnlineBookable ? 'IN STORE' : '+ ADD'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-});
-
-/**
- * Previously bought horizontal carousel.
- * Memoized to update only when fishList or favorites change.
- */
-const PreviouslyBoughtCarousel = React.memo(function PreviouslyBoughtCarousel({
-  fishList,
-  favorites,
-  cartQuantities = {},
-  onToggleFav,
-  onAddToCart,
-  onIncrement,
-  onDecrement,
-  onNavigate,
-}) {
-  if (!fishList || fishList.length === 0) return null;
-
-  return (
-    <View style={styles.previouslyBoughtContainer}>
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionHeading}>Previously bought</Text>
-        <TouchableOpacity onPress={() => onNavigate('BOOKING_HISTORY')}>
-          <Text style={styles.seeAllText}>Order History →</Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.prevBoughtScroll}
-      >
-        {fishList.slice(0, 4).map((item) => {
-          const qty = cartQuantities[item.id] || 0;
-          const isPhysicalAvailable = Boolean(item.physicalAvailable);
-          const isOnlineBookable = Boolean(item.onlineBookable);
-
-          return (
-            <View key={`prev-${item.id}`} style={styles.prevBoughtCard}>
-              <TouchableOpacity
-                style={styles.prevHeartBtn}
-                onPress={() => onToggleFav(item.id)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={[styles.heartIcon, favorites[item.id] && styles.heartActive]}>
-                  {favorites[item.id] ? '♥' : '♡'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => onNavigate('FISH_DETAILS', { fishId: item.id, fish: item })}
-                style={styles.prevImageBox}
-                activeOpacity={0.88}
-              >
-                <OptimizedFishImage
-                  uri={item.imageUrl}
-                  style={styles.prevImage}
-                  resizeMode="cover"
-                  testID={`prev-image-${item.id}`}
-                />
-              </TouchableOpacity>
-
-              <Text style={styles.prevFishName} numberOfLines={2}>
-                {item.name}
-              </Text>
-
-              <View style={styles.prevPricingRow}>
-                <Text style={styles.prevPriceText}>
-                  ₹{item.pricing?.effectivePrice || item.unitPrice}
-                </Text>
-                {Boolean(item.pricing?.hasDiscount) && (
-                  <Text style={styles.prevStrikePrice}>₹{item.unitPrice}</Text>
-                )}
-              </View>
-
-              <View style={styles.prevActionRow}>
-                {qty > 0 && isPhysicalAvailable && isOnlineBookable ? (
-                  <View style={styles.stepperContainerMini}>
-                    <TouchableOpacity
-                      style={styles.stepperBtnMini}
-                      onPress={() => onDecrement && onDecrement(item)}
-                    >
-                      <Text style={styles.stepperGlyph}>−</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.stepperQtyTextMini}>{qty}</Text>
-                    <TouchableOpacity
-                      style={styles.stepperBtnMini}
-                      onPress={() => onIncrement ? onIncrement(item) : onAddToCart(item)}
-                    >
-                      <Text style={styles.stepperGlyph}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[
-                      styles.prevAddBtn,
-                      !isPhysicalAvailable && styles.addBtnDisabled,
-                      isPhysicalAvailable && !isOnlineBookable && styles.inStoreBtnMini,
-                    ]}
-                    onPress={() => onAddToCart(item)}
-                    disabled={!isPhysicalAvailable}
-                  >
-                    <Text
-                      style={[
-                        styles.prevAddBtnText,
-                        !isPhysicalAvailable && styles.addBtnDisabledText,
-                        isPhysicalAvailable && !isOnlineBookable && styles.inStoreBtnMiniText,
-                      ]}
-                    >
-                      {!isPhysicalAvailable ? 'SOLD' : !isOnlineBookable ? 'IN STORE' : '+ ADD'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-});
-
-/**
- * Available Fishes section header, Category Discovery Pills, and Availability Filter Chips.
- * Memoized to re-render only when categories or active filter selections change.
- */
-const CatalogueHeaderControls = React.memo(function CatalogueHeaderControls({
-  categories,
-  selectedCategoryId,
-  onSelectCategory,
-  availabilityFilter,
-  onSelectAvailability,
-}) {
-  const filters = [
-    { key: 'ALL', label: 'All Catch' },
-    { key: 'BOOKABLE', label: 'Online Bookable' },
-    { key: 'IN_STORE', label: 'In-Store Only' },
-    { key: 'DISCOUNT', label: 'Offers' },
-  ];
-
-  return (
-    <View style={styles.catalogueHeaderWrapper}>
-      {/* Primary Fish Catalogue Section Title */}
-      <View style={styles.availableSectionHeader}>
-        <View>
-          <Text style={styles.sectionHeading}>Available Fishes</Text>
-          <Text style={styles.availableSub}>
-            Live-fish retail prepared fresh to order at store counter
-          </Text>
-        </View>
-      </View>
-
-      {/* Dynamic Category Discovery Pills */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryScroll}
-      >
-        <TouchableOpacity
-          style={[
-            styles.categoryPill,
-            selectedCategoryId === null && styles.categoryPillActive,
-          ]}
-          onPress={() => onSelectCategory(null)}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.categoryPillText,
-              selectedCategoryId === null && styles.categoryPillTextActive,
-            ]}
-          >
-            All Fish
-          </Text>
-        </TouchableOpacity>
-
-        {categories.map((cat) => {
-          const isActive = selectedCategoryId === cat.id;
-          return (
-            <TouchableOpacity
-              key={cat.id}
-              style={[styles.categoryPill, isActive && styles.categoryPillActive]}
-              onPress={() => onSelectCategory(isActive ? null : cat.id)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.categoryPillText,
-                  isActive && styles.categoryPillTextActive,
-                ]}
-              >
-                {cat.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      {/* Availability Filter Chips */}
-      <View style={styles.filterRow}>
-        {filters.map((f) => {
-          const isActive = availabilityFilter === f.key;
-          return (
-            <TouchableOpacity
-              key={f.key}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
-              onPress={() => onSelectAvailability(f.key)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  isActive && styles.filterChipTextActive,
-                ]}
-              >
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-});
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F8FAFC',
   },
-  topHeader: {
-    backgroundColor: Colors.brandNavy,
-    paddingHorizontal: Spacing.screenPadding,
-    paddingTop: 12,
-    paddingBottom: 14,
-    borderBottomLeftRadius: Radii.xl,
-    borderBottomRightRadius: Radii.xl,
-  },
-  headerRowTop: {
+  header: {
+    backgroundColor: '#1E56A0',
+    paddingTop: Platform.OS === 'android' ? 12 : 8,
+    paddingBottom: 8,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  headerLeftGroup: {
-    flex: 1,
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+  },
+  headerLogoCard: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
     marginRight: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  headerLogoBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.sm,
-    backgroundColor: Colors.surface,
+  headerLogoImage: {
+    width: 66,
+    height: 32,
   },
-  locationContainer: {
-    flex: 1,
-  },
-  locationTitleRow: {
+  locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  locationTitleText: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: Colors.textWhite,
-    fontSize: 14,
-  },
-  locationChevron: {
-    color: Colors.actionGreen,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  locationSubtitleText: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    fontSize: 11,
-    marginTop: 1,
-  },
-  headerRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  clubPassPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: Radii.pill,
+    borderColor: 'rgba(255, 255, 255, 0.32)',
+  },
+  locationPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginLeft: 4,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  balancePill: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 16,
+    marginRight: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  balancePillText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#1E56A0',
+  },
+  savePill: {
+    backgroundColor: '#10B981',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    gap: 5,
+    borderRadius: 16,
+    marginRight: 8,
   },
-  clubPassText: {
-    color: Colors.textWhite,
+  savePillText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
-  userAvatarBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.brandNavyLight,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+  profileBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  avatarInitials: {
-    color: Colors.textWhite,
-    fontSize: 14,
-    fontWeight: '700',
+  profileBtnText: {
+    color: '#1E56A0',
+    fontWeight: '800',
+    fontSize: 13,
   },
-  searchBarRow: {
+  searchWrapper: {
+    backgroundColor: '#1E56A0',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    paddingTop: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#16437E',
+  },
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.lg,
-    height: 44,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
     paddingHorizontal: 12,
-    gap: 8,
+    height: 42,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
   },
   searchInput: {
     flex: 1,
+    marginLeft: 8,
     fontSize: 13,
-    color: Colors.textPrimary,
-    fontWeight: '400',
-    paddingVertical: 0,
-  },
-  clearSearchBtn: {
-    padding: 4,
+    color: '#0F2C59',
   },
   clearSearchText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontWeight: '700',
+    fontSize: 14,
+    color: '#94A3B8',
+    paddingHorizontal: 4,
   },
-  scrollBody: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 110, // Prevents content occlusion by sticky cart bar & bottom nav
+  mainScroll: {
+    flex: 1,
   },
-  gridRow: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 0,
+  mainScrollContent: {
+    paddingBottom: 115,
   },
-  bannersWrapper: {
-    marginBottom: 6,
+  
+  gradientHeaderWrapper: {
+    position: 'relative',
+    backgroundColor: '#164682',
+    overflow: 'hidden',
   },
-  quotaBanner: {
+  headerTransparent: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Colors.warningSubtle,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: Radii.lg,
-    padding: 10,
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 10 : 6,
+    paddingBottom: 6,
+    backgroundColor: 'transparent',
   },
-  quotaMedalCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#FEF3C7',
-    alignItems: 'center',
-    justifyContent: 'center',
+  searchWrapperTransparent: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 14,
+    backgroundColor: 'transparent',
   },
-  quotaTitle: {
+  pillsOuter: {
+    paddingTop: 4,
+    paddingBottom: 14,
+  },
+  quickPillsRow: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  quickPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  quickPillActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#164682',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  quickPillInactive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  quickPillText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#92400E',
-  },
-  quotaSubtitle: {
-    fontSize: 11,
-    color: '#B45309',
-    marginTop: 1,
-  },
-  rechargeBtn: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.borderMedium,
-    borderRadius: Radii.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  rechargeBtnText: {
-    color: Colors.brandNavy,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  liveTruckCard: {
-    backgroundColor: Colors.brandNavy,
-    borderRadius: Radii.lg,
-    padding: 10,
-    marginBottom: 8,
-    ...Shadows.card,
-  },
-  truckCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  truckLiveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  greenPulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.actionGreen,
-  },
-  truckLiveText: {
-    color: Colors.textWhite,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  etaPill: {
-    backgroundColor: 'rgba(0, 155, 112, 0.25)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: Radii.xs,
-  },
-  etaPillText: {
-    color: '#34D399',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  truckCardMidRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  truckFarmTitle: {
-    color: Colors.textWhite,
-    fontSize: 11,
     fontWeight: '600',
   },
-  truckDestSubtitle: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    marginTop: 1,
+  quickPillTextActive: {
+    color: '#164682',
+    fontWeight: '800',
   },
-  trackLiveBtn: {
-    backgroundColor: Colors.actionGreen,
+  quickPillTextInactive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  urgencyPill: {
+    backgroundColor: '#FEF3C7',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radii.sm,
-  },
-  trackLiveBtnText: {
-    color: Colors.textWhite,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  flashSaleContainer: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.lg,
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    ...Shadows.card,
-  },
-  flashHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  flashIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.actionGreenSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  flashSectionTitle: {
-    ...Typography.sectionTitle,
-    fontSize: 14,
-  },
-  flashBadgeGreen: {
-    backgroundColor: Colors.actionGreenSubtle,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: Radii.xs,
-  },
-  flashBadgeGreenText: {
-    color: Colors.actionGreen,
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  flashSectionSubtitle: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
-  flashCardsScroll: {
-    paddingRight: 10,
-    gap: 8,
-  },
-  flashCard: {
-    width: 125,
-    backgroundColor: Colors.background,
-    borderRadius: Radii.md,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  flashCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  discountTag: {
-    backgroundColor: Colors.actionGreen,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: Radii.xs,
-  },
-  discountTagText: {
-    color: Colors.textWhite,
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  heartIcon: {
-    fontSize: 14,
-    color: Colors.textMuted,
-  },
-  heartActive: {
-    color: Colors.error,
-  },
-  flashImageBox: {
-    width: '100%',
-    height: 75,
-    borderRadius: Radii.sm,
-    overflow: 'hidden',
-    backgroundColor: Colors.surface,
-    marginBottom: 4,
-  },
-  flashImage: {
-    width: '100%',
-    height: '100%',
-  },
-  flashFishName: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.brandNavy,
-    lineHeight: 14,
-    minHeight: 28,
-  },
-  flashWeightText: {
-    fontSize: 10,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  pricingRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    marginBottom: 6,
-  },
-  currentPrice: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.brandNavy,
-  },
-  originalPrice: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  flashCardActionRow: {
-    marginTop: 'auto',
-  },
-  addBtnGreen: {
-    backgroundColor: Colors.actionGreenSubtle,
-    borderWidth: 1,
-    borderColor: Colors.actionGreen,
-    borderRadius: Radii.sm,
-    paddingVertical: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnGreenText: {
-    color: Colors.actionGreen,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  addBtnDisabled: {
-    borderColor: Colors.borderMedium,
-    backgroundColor: Colors.surfaceSubtle,
-  },
-  addBtnDisabledText: {
-    color: Colors.textMuted,
-  },
-  inStoreBtnMini: {
-    borderColor: Colors.brandBlue,
-    backgroundColor: Colors.brandBlueSubtle,
-  },
-  inStoreBtnMiniText: {
-    color: Colors.brandBlue,
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  stepperContainerMini: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.actionGreenSubtle,
-    borderWidth: 1,
-    borderColor: Colors.actionGreen,
-    borderRadius: Radii.sm,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-  },
-  stepperBtnMini: {
-    paddingHorizontal: 4,
-  },
-  stepperGlyph: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.actionGreen,
-  },
-  stepperQtyTextMini: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Colors.actionGreen,
-  },
-  previouslyBoughtContainer: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.lg,
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    ...Shadows.card,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  sectionHeading: {
-    ...Typography.sectionTitle,
-    fontSize: 15,
-    color: Colors.brandNavy,
-  },
-  seeAllText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.brandBlue,
-  },
-  prevBoughtScroll: {
-    paddingRight: 10,
-    gap: 8,
-  },
-  prevBoughtCard: {
-    width: 115,
-    backgroundColor: Colors.background,
-    borderRadius: Radii.md,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    position: 'relative',
-  },
-  prevHeartBtn: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    zIndex: 2,
-  },
-  prevImageBox: {
-    width: '100%',
-    height: 65,
-    borderRadius: Radii.sm,
-    overflow: 'hidden',
-    backgroundColor: Colors.surface,
-    marginBottom: 4,
-  },
-  prevImage: {
-    width: '100%',
-    height: '100%',
-  },
-  prevFishName: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.brandNavy,
-    lineHeight: 14,
-    minHeight: 28,
-  },
-  prevPricingRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    marginTop: 2,
-    marginBottom: 6,
-  },
-  prevPriceText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.brandNavy,
-  },
-  prevStrikePrice: {
-    fontSize: 9,
-    color: Colors.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  prevActionRow: {
-    marginTop: 'auto',
-  },
-  prevAddBtn: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.actionGreen,
-    borderRadius: Radii.xs,
     paddingVertical: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 6,
   },
-  prevAddBtnText: {
-    color: Colors.actionGreen,
-    fontSize: 10,
+  urgencyPillText: {
+    color: '#B45309',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  offersSection: {
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  offersSectionHeader: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  offersSectionTitle: {
+    fontSize: 16.5,
     fontWeight: '800',
+    color: '#0F2C59',
+    letterSpacing: -0.3,
   },
-  catalogueHeaderWrapper: {
-    marginBottom: 8,
+  offersSectionSub: {
+    fontSize: 11.5,
+    color: '#425B73',
+    marginTop: 1,
+    fontWeight: '500',
   },
-  availableSectionHeader: {
-    marginBottom: 8,
+  offersScrollList: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
-  availableSub: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
+  offerCardVertical: {
+    width: 182,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.8,
+    borderColor: '#F59E0B',
+    padding: 10,
+    paddingTop: 14,
+    marginHorizontal: 4,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  categoryScroll: {
-    paddingRight: 10,
-    gap: 8,
-    marginBottom: 8,
-  },
-  categoryPill: {
+  offerDiscountBadge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: '#D90429',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: Radii.pill,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+    borderTopLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    zIndex: 10,
+    shadowColor: '#D90429',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  categoryPillActive: {
-    backgroundColor: Colors.brandNavy,
-    borderColor: Colors.brandNavy,
+  offerDiscountBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    textTransform: 'uppercase',
   },
-  categoryPillText: {
+  offerDiscountBadgePercent: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  offerImageBox: {
+    width: '100%',
+    aspectRatio: 1.35,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    position: 'relative',
+  },
+  offerFishImage: {
+    width: '100%',
+    height: '100%',
+  },
+  offerFreshPill: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: '#1E56A0',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  offerFreshPillText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '800',
+  },
+  offerTitleBox: {
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  offerFishName: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F2C59',
+    lineHeight: 16,
+    letterSpacing: -0.2,
+  },
+  offerFishTelugu: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
+    fontWeight: '500',
+  },
+  offerStockBadge: {
+    backgroundColor: '#FEF3C7',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  offerStockBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  offerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  offerPriceBlock: {
+    flexDirection: 'column',
+  },
+  offerStrikeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  offerStrikeBox: {
+    position: 'relative',
+    marginRight: 5,
+  },
+  offerStrikeText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  categoryPillTextActive: {
-    color: Colors.textWhite,
+    color: '#64748B',
     fontWeight: '700',
   },
-  filterRow: {
+  offerRedLine: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    height: 1.5,
+    backgroundColor: '#DC2626',
+  },
+  offerSavePill: {
+    backgroundColor: '#E6F8F0',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 3,
+  },
+  offerSavePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0D824D',
+  },
+  offerPriceLine: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+    alignItems: 'baseline',
+  },
+  offerPriceVal: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F2C59',
+    letterSpacing: -0.3,
+  },
+  offerPriceUnit: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  offerAddBtn: {
+    backgroundColor: '#0F2C59',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    minWidth: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offerAddBtnText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    height: 28,
+  },
+  stepperBtn: {
+    paddingHorizontal: 6,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperQtyBox: {
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperQtyText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F2C59',
+  },
+  catalogueHeaderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 10,
+  },
+  catalogueHeaderTitle: {
+    fontSize: 16.5,
+    fontWeight: '800',
+    color: '#0F2C59',
+    letterSpacing: -0.35,
+  },
+  catalogueHeaderSub: {
+    fontSize: 11.5,
+    color: '#425B73',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  filterToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  filterToggleBtnActive: {
+    borderColor: '#1E56A0',
+    backgroundColor: '#EFF6FF',
+  },
+  filterToggleBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F2C59',
+  },
+  filterToggleBtnTextActive: {
+    color: '#1E56A0',
+  },
+  filterBadgeCircle: {
+    backgroundColor: '#1E56A0',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  filterBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  categorySection: {
+    marginTop: 10,
+    paddingHorizontal: 12,
+  },
+  groupHeadingBox: {
+    paddingHorizontal: 4,
     marginBottom: 8,
   },
+  groupTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F2C59',
+    letterSpacing: -0.3,
+  },
+  groupSubtitle: {
+    fontSize: 11,
+    color: '#425B73',
+    marginTop: 1,
+    fontWeight: '500',
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  gridCardWrapper: {
+    width: '50%',
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0A1C33',
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  emptyResetBtn: {
+    backgroundColor: '#0A1C33',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  emptyResetBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(10, 28, 51, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'android' ? 24 : 36,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#CBD5E1',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0A1C33',
+  },
+  modalResetText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  filterSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  filterChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+  },
   filterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radii.sm,
-    backgroundColor: Colors.surfaceSubtle,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: '#E2E8F0',
   },
   filterChipActive: {
-    backgroundColor: Colors.actionGreenSubtle,
-    borderColor: Colors.actionGreen,
+    backgroundColor: '#0A1C33',
+    borderColor: '#0A1C33',
   },
   filterChipText: {
-    fontSize: 11,
+    fontSize: 12,
+    color: '#475569',
     fontWeight: '600',
-    color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.actionGreen,
+    color: '#FFFFFF',
     fontWeight: '700',
+  },
+  modalApplyBtn: {
+    backgroundColor: '#0A1C33',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  modalApplyBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
   stickyCartBar: {
     position: 'absolute',
-    bottom: 12,
-    left: 12,
-    right: 12,
-    height: 52,
-    backgroundColor: Colors.brandNavy,
-    borderRadius: Radii.lg,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#0A1C33',
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    zIndex: 100,
-    ...Shadows.floatingBar,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   stickyCartInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
   },
   stickyCartIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: Radii.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#0284C7',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
   },
   stickyCartTitle: {
-    color: Colors.textWhite,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   stickyCartSubtitle: {
-    color: 'rgba(255, 255, 255, 0.65)',
-    fontSize: 10,
+    fontSize: 11,
+    color: '#94A3B8',
     marginTop: 1,
   },
   stickyCartCta: {
-    backgroundColor: Colors.actionGreen,
+    backgroundColor: '#009B70',
     paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: Radii.pill,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   stickyCartCtaText: {
-    color: Colors.textWhite,
-    fontSize: 12,
+    color: '#FFFFFF',
+    fontSize: 12.5,
     fontWeight: '800',
   },
-  footerContainer: {
-    paddingVertical: 12,
-    alignItems: 'center',
+  // Floating Cart Button
+  
+  weightGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+    marginBottom: 14,
   },
-  showMoreBtn: {
-    backgroundColor: Colors.brandBlueSubtle,
+  weightCard: {
+    width: '48%',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    position: 'relative',
+    alignItems: 'flex-start',
+  },
+  weightCardActive: {
+    borderColor: '#1B4E8C',
+    backgroundColor: '#EFF6FF',
+    shadowColor: '#1B4E8C',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  weightCardLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 2,
+    marginTop: 2,
+  },
+  weightCardLabelActive: {
+    color: '#1B4E8C',
+  },
+  weightCardServes: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  weightPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  weightCardPrice: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  weightCardPriceActive: {
+    color: '#1B4E8C',
+  },
+  weightCardOriginalPrice: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  customWeightContainer: {
+    marginBottom: 16,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
-    borderColor: Colors.brandBlue,
-    borderRadius: Radii.md,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    borderColor: '#CBD5E1',
+  },
+  customWeightPrompt: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  customInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#1B4E8C',
+    overflow: 'hidden',
+  },
+  customWeightInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  kgSuffixBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderLeftWidth: 1,
+    borderLeftColor: '#DBEAFE',
+  },
+  kgSuffixText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1B4E8C',
+  },
+  fullWidthAddCta: {
+    width: '100%',
+    backgroundColor: '#1E56A0',
+    borderRadius: 14,
+    paddingVertical: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
+    shadowColor: '#1E56A0',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  showMoreBtnText: {
-    color: Colors.brandBlue,
-    fontSize: 13,
+  fullWidthAddCtaDisabled: {
+    backgroundColor: '#94A3B8',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  fullWidthAddCtaText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  floatingCartFab: {
+    position: 'absolute',
+    bottom: 12,
+    right: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#1E56A0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1E56A0',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 40,
+  },
+  floatingCartBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    backgroundColor: '#DC2626',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  floatingCartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  // Pack & Quantity Selector Modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  packModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: Platform.OS === 'android' ? 24 : 34,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 30,
+    elevation: 16,
+  },
+  packHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  packThumbImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    marginRight: 14,
+  },
+  packHeaderText: {
+    flex: 1,
+  },
+  packFishName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F2C59',
+  },
+  packFishTelugu: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  packBaseRate: {
+    fontSize: 12.5,
     fontWeight: '700',
+    color: '#1E56A0',
+    marginTop: 3,
   },
-  footerSpacing: {
-    height: 30,
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  packSectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  packOptionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  packCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  packCardActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#1B4E8C',
+    borderWidth: 2,
+  },
+  popularBadge: {
+    position: 'absolute',
+    top: -9,
+    backgroundColor: '#1B4E8C',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    elevation: 2,
+  },
+  popularBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  packCardLabel: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F2C59',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  packCardLabelActive: {
+    color: '#1B4E8C',
+  },
+  packCardServes: {
+    fontSize: 9.5,
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  packPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  packCardPrice: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F2C59',
+  },
+  packCardPriceActive: {
+    color: '#1B4E8C',
+  },
+  packCardOriginalPrice: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  packBottomActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  packStepperCombined: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    height: 48,
+    paddingHorizontal: 4,
+  },
+  packStepperBtnCombined: {
+    width: 38,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  packStepperQtyCombined: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F2C59',
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  packAddCtaCombined: {
+    flex: 1,
+    marginLeft: 12,
+    backgroundColor: '#1E56A0',
+    borderRadius: 12,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1E56A0',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  packAddCtaTextCombined: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  // Empty Cart Bottom Sheet
+  emptyCartSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'android' ? 28 : 36,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 30,
+    elevation: 16,
+  },
+  emptyCartIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  emptyCartTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F2C59',
+    marginBottom: 6,
+  },
+  emptyCartSubtitle: {
+    fontSize: 13.5,
+    color: '#64748B',
+    marginBottom: 22,
+    textAlign: 'center',
+  },
+  browseFishBtn: {
+    width: '100%',
+    backgroundColor: '#1E56A0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1E56A0',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  browseFishBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
 });
