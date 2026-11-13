@@ -353,6 +353,22 @@ export async function middleware(request) {
     const isValidAdmin = Boolean(adminPayload && (adminPayload.role === 'ADMIN' || adminPayload.is_super_admin));
 
     if (isLoginPage) {
+      // If navigating to login with expired/unauthenticated flag, purge stale cookie and serve login directly
+      const hasExpiredFlag = urlObj.searchParams.get('expired') === 'true';
+      if (hasExpiredFlag) {
+        const response = (isSubdomain && pathname !== internalPathname)
+          ? NextResponse.rewrite(new URL(internalPathname, request.url))
+          : NextResponse.next();
+        response.cookies.set('admin_session', '', {
+          path: '/',
+          maxAge: 0,
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+        });
+        return response;
+      }
+
       if (isValidAdmin) {
         return NextResponse.redirect(new URL(isSubdomain ? '/' : '/admin', request.url));
       }
@@ -383,6 +399,29 @@ export async function middleware(request) {
     const isValidWorker = Boolean(workerPayload && workerPayload.role === 'WORKER');
 
     if (isWorkerLogin) {
+      // If navigating to worker login with expired/unauthenticated flag, purge stale cookie and serve login directly
+      const hasExpiredFlag = urlObj.searchParams.get('expired') === 'true';
+      if (hasExpiredFlag) {
+        const response = (isSubdomain && pathname !== internalPathname)
+          ? NextResponse.rewrite(new URL(internalPathname, request.url))
+          : NextResponse.next();
+        response.cookies.set('worker_session', '', {
+          path: '/',
+          maxAge: 0,
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+        });
+        response.cookies.set('pf_session', '', {
+          path: '/',
+          maxAge: 0,
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+        });
+        return response;
+      }
+
       if (isValidWorker) {
         return NextResponse.redirect(new URL(isSubdomain ? '/' : '/worker', request.url));
       }

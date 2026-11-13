@@ -201,4 +201,34 @@ test('Subdomain Routing Unit Tests', async (t) => {
     const rewriteHeader = res.headers.get('x-middleware-rewrite');
     assert.ok(rewriteHeader && rewriteHeader.includes('/_not-found'), `Expected rewrite to /_not-found, got: ${rewriteHeader}`);
   });
+
+  await t.test('19. admin.pondfish.in/login?expired=true clears stale cookie and rewrites to /admin/login without looping', async () => {
+    const req = new Request('https://admin.pondfish.in/login?expired=true', {
+      headers: {
+        host: 'admin.pondfish.in',
+        cookie: 'admin_session=some-stale-jwt-token',
+      },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    const rewriteHeader = res.headers.get('x-middleware-rewrite');
+    assert.ok(rewriteHeader && rewriteHeader.includes('/admin/login'), `Expected rewrite to /admin/login, got: ${rewriteHeader}`);
+    const setCookie = res.headers.get('set-cookie');
+    assert.ok(setCookie && setCookie.includes('admin_session=;'), `Expected admin_session cookie to be cleared, got: ${setCookie}`);
+  });
+
+  await t.test('20. worker.pondfish.in/login?expired=true clears stale cookie and rewrites to /worker/login without looping', async () => {
+    const req = new Request('https://worker.pondfish.in/login?expired=true', {
+      headers: {
+        host: 'worker.pondfish.in',
+        cookie: 'worker_session=some-stale-jwt-token',
+      },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    const rewriteHeader = res.headers.get('x-middleware-rewrite');
+    assert.ok(rewriteHeader && rewriteHeader.includes('/worker/login'), `Expected rewrite to /worker/login, got: ${rewriteHeader}`);
+    const setCookie = res.headers.get('set-cookie');
+    assert.ok(setCookie && setCookie.includes('worker_session=;'), `Expected worker_session cookie to be cleared, got: ${setCookie}`);
+  });
 });

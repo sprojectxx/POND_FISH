@@ -41,7 +41,7 @@ export async function GET(request) {
     }
 
     if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED') {
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           success: false,
           error: {
@@ -51,6 +51,15 @@ export async function GET(request) {
         },
         { status: 401 }
       );
+      // Explicitly purge revoked or expired HttpOnly cookie so browser cannot loop
+      response.cookies.set('admin_session', '', {
+        path: '/',
+        maxAge: 0,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      });
+      return response;
     }
 
     if (error.code === 'FORBIDDEN') {

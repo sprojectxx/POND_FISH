@@ -70,7 +70,7 @@ export async function GET(request) {
     }
 
     if (error.code === 'UNAUTHORIZED' || error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED' || error.code === 'WORKER_NOT_FOUND') {
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           success: false,
           error: {
@@ -80,6 +80,22 @@ export async function GET(request) {
         },
         { status: 401 }
       );
+      // Explicitly purge revoked worker cookie
+      response.cookies.set('worker_session', '', {
+        path: '/',
+        maxAge: 0,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      });
+      response.cookies.set('pf_session', '', {
+        path: '/',
+        maxAge: 0,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      });
+      return response;
     }
 
     console.error('[API ERROR] GET /api/v1/worker/auth/me:', error.message);
