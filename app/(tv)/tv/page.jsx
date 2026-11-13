@@ -28,6 +28,8 @@ export default function TVPortalPage() {
 
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const heartbeatIntervalRef = useRef(null);
+  const statusDebounceRef = useRef(null);
   const audioCtxRef = useRef(null);
   const seenTxnIdsRef = useRef(new Set());
 
@@ -187,7 +189,7 @@ export default function TVPortalPage() {
   // Authoritative native WebSocket connection setup
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return;
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
       return;
     }
 
@@ -199,13 +201,30 @@ export default function TVPortalPage() {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (statusDebounceRef.current) {
+          clearTimeout(statusDebounceRef.current);
+          statusDebounceRef.current = null;
+        }
         setConnectionStatus('CONNECTED');
         fetchRecentTransactions();
+
+        // Keep connection warm with 15s ping heartbeat to prevent idle proxy disconnects
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send(JSON.stringify({ type: 'ping' }));
+            } catch {}
+          }
+        }, 15000);
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === 'pong') {
+            return;
+          }
           if (msg.event === 'successful_transaction' && msg.data) {
             handleIncomingTransaction(msg.data);
           }
@@ -214,17 +233,28 @@ export default function TVPortalPage() {
         }
       };
 
-      ws.onclose = () => {
-        setConnectionStatus('RECONNECTING');
+      const handleDisconnect = () => {
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+
+        // Debounce RECONNECTING badge update by 1.2s to prevent brief handshake flickers
+        if (!statusDebounceRef.current) {
+          statusDebounceRef.current = setTimeout(() => {
+            setConnectionStatus('RECONNECTING');
+            statusDebounceRef.current = null;
+          }, 1200);
+        }
+
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = setTimeout(() => {
           connectWebSocket();
         }, 3000);
       };
 
-      ws.onerror = () => {
-        setConnectionStatus('RECONNECTING');
-      };
+      ws.onclose = handleDisconnect;
+      ws.onerror = handleDisconnect;
     } catch {
       setConnectionStatus('RECONNECTING');
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
@@ -240,11 +270,20 @@ export default function TVPortalPage() {
     connectWebSocket();
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+      if (statusDebounceRef.current) {
+        clearTimeout(statusDebounceRef.current);
+        statusDebounceRef.current = null;
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
       }
     };
   }, [fetchRecentTransactions, connectWebSocket]);

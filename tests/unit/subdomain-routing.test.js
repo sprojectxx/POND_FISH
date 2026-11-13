@@ -161,4 +161,44 @@ test('Subdomain Routing Unit Tests', async (t) => {
     assert.ok(res, 'Middleware must return a response');
     assert.strictEqual(res.headers.get('x-middleware-rewrite'), null, 'www domain must not be rewritten');
   });
+
+  await t.test('15. Stealth Isolation: pondfish.in/admin returns 404 rewrite to /_not-found', async () => {
+    const req = new Request('https://pondfish.in/admin', {
+      headers: { host: 'pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    const rewriteHeader = res.headers.get('x-middleware-rewrite');
+    assert.ok(rewriteHeader && rewriteHeader.includes('/_not-found'), `Expected rewrite to /_not-found, got: ${rewriteHeader}`);
+  });
+
+  await t.test('16. Stealth Isolation: pondfish.in/admin/login returns 404 rewrite to /_not-found', async () => {
+    const req = new Request('https://pondfish.in/admin/login', {
+      headers: { host: 'pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    const rewriteHeader = res.headers.get('x-middleware-rewrite');
+    assert.ok(rewriteHeader && rewriteHeader.includes('/_not-found'), `Expected rewrite to /_not-found, got: ${rewriteHeader}`);
+  });
+
+  await t.test('17. Stealth Isolation: pondfish.in/worker returns 404 rewrite to /_not-found', async () => {
+    const req = new Request('https://pondfish.in/worker', {
+      headers: { host: 'pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    const rewriteHeader = res.headers.get('x-middleware-rewrite');
+    assert.ok(rewriteHeader && rewriteHeader.includes('/_not-found'), `Expected rewrite to /_not-found, got: ${rewriteHeader}`);
+  });
+
+  await t.test('18. Stealth Isolation: pondfish.in/tv returns 404 rewrite to /_not-found', async () => {
+    const req = new Request('https://pondfish.in/tv', {
+      headers: { host: 'pondfish.in' },
+    });
+    const res = await middleware(req);
+    assert.ok(res, 'Middleware must return a response');
+    const rewriteHeader = res.headers.get('x-middleware-rewrite');
+    assert.ok(rewriteHeader && rewriteHeader.includes('/_not-found'), `Expected rewrite to /_not-found, got: ${rewriteHeader}`);
+  });
 });

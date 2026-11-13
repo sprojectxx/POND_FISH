@@ -188,6 +188,23 @@ export async function middleware(request) {
     }
   }
 
+  // Stealth Isolation: Internal portals (Admin, Worker, TV) are strictly accessible
+  // ONLY via their dedicated subdomains (admin.pondfish.in, worker.pondfish.in, tv.pondfish.in).
+  // Any attempt to access /admin, /worker, or /tv directly from the public storefront domain returns 404 Not Found.
+  const isDedicatedPortalSubdomain = Boolean(portalPrefix);
+  const isPublicStorefrontHost = hostname === 'pondfish.in' || hostname === 'www.pondfish.in';
+
+  if (!isDedicatedPortalSubdomain && isPublicStorefrontHost && !pathname.startsWith('/api')) {
+    const isInternalPortalPath =
+      pathname === '/admin' || pathname.startsWith('/admin/') ||
+      pathname === '/worker' || pathname.startsWith('/worker/') ||
+      pathname === '/tv' || pathname.startsWith('/tv/');
+
+    if (isInternalPortalPath) {
+      return NextResponse.rewrite(new URL('/_not-found', request.url), { status: 404 });
+    }
+  }
+
   // Session token extraction from cookies or Authorization header
   const authHeader = request.headers?.get ? request.headers.get('authorization') : null;
   const bearerToken = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7).trim() : null;

@@ -289,7 +289,11 @@ function FishCatalogueContent() {
         hasActiveFilters ? (
           <EmptyState
             title="No Matching Fish Varieties"
-            message="No fish match your search or filter criteria. Try clearing filters to see the full daily harvest."
+            message={
+              selectedCategory && search
+                ? `No fish match "${search}" in this category. Try clearing filters to search across all fish varieties.`
+                : "No fish match your search or filter criteria. Try clearing filters to see the full daily harvest."
+            }
             actionLabel="Reset Filters"
             onAction={clearFilters}
           />
