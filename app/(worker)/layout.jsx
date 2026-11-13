@@ -10,6 +10,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { getWorkerLoginUrl } from '@/lib/portal-routing';
 import './worker.css';
 
 export default function WorkerLayout({ children }) {
@@ -68,7 +69,7 @@ export default function WorkerLayout({ children }) {
             setWorker(null);
             setCachedProfile(null);
             setSessionState('UNAUTHENTICATED');
-            router.replace('/worker/login');
+            router.replace(getWorkerLoginUrl());
             return null;
           }
           // Server error (e.g. 500, 503)
@@ -87,7 +88,7 @@ export default function WorkerLayout({ children }) {
         } else if (json) {
           setWorker(null);
           setSessionState('UNAUTHENTICATED');
-          router.replace('/worker/login');
+          router.replace(getWorkerLoginUrl());
         }
       })
       .catch((err) => {
@@ -121,7 +122,7 @@ export default function WorkerLayout({ children }) {
           setWorker(null);
           setCachedProfile(null);
           setSessionState('UNAUTHENTICATED');
-          window.location.href = '/worker/login';
+          window.location.href = getWorkerLoginUrl();
           return;
         }
 
@@ -139,7 +140,7 @@ export default function WorkerLayout({ children }) {
       setWorker(null);
       setCachedProfile(null);
       setSessionState('UNAUTHENTICATED');
-      window.location.href = '/worker/login';
+      window.location.href = getWorkerLoginUrl();
     } catch {
       // Network failure during logout: do not claim session is revoked
       setLogoutError('Network error prevented session revocation. Check your connection and retry.');

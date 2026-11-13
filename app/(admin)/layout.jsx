@@ -11,6 +11,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { getAdminLoginUrl, isPortalSubdomain } from '@/lib/portal-routing';
 import './admin.css';
 
 export default function AdminLayout({ children }) {
@@ -78,8 +79,9 @@ export default function AdminLayout({ children }) {
       if (res.status === 401) {
         if (typeof window !== 'undefined') {
           localStorage.removeItem('pondfish_admin_user');
-          const currentPath = window.location.pathname || '/admin';
-          window.location.href = `/admin/login?expired=true&redirect=${encodeURIComponent(currentPath)}`;
+          const isSub = isPortalSubdomain('admin');
+          const currentPath = window.location.pathname || (isSub ? '/' : '/admin');
+          window.location.href = getAdminLoginUrl(`expired=true&redirect=${encodeURIComponent(currentPath)}`);
         }
         return;
       }
@@ -173,7 +175,9 @@ export default function AdminLayout({ children }) {
 
     if (typeof window !== 'undefined') {
       localStorage.removeItem('pondfish_admin_user');
-      window.location.href = '/admin/login';
+      setAdminUser(null);
+      setCheckingAuth(false);
+      window.location.href = getAdminLoginUrl();
     }
   };
 
