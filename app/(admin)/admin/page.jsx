@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { MetricCard, StatusBadge } from '@/components/ui';
+import { getAdminLoginUrl, isPortalSubdomain } from '@/lib/portal-routing';
 
 export default function AdminDashboardPage() {
   const [metrics, setMetrics] = useState(null);
@@ -32,7 +33,9 @@ export default function AdminDashboardPage() {
       const res = await fetch(url);
 
       if (res.status === 401) {
-        window.location.href = '/admin/login?redirect=/admin';
+        const isSub = isPortalSubdomain('admin');
+        const dest = isSub ? '/' : '/admin';
+        window.location.href = getAdminLoginUrl(`redirect=${encodeURIComponent(dest)}`);
         return;
       }
 
