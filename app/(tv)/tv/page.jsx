@@ -32,6 +32,7 @@ export default function TVPortalPage() {
   const statusDebounceRef = useRef(null);
   const audioCtxRef = useRef(null);
   const seenTxnIdsRef = useRef(new Set());
+  const failedPollsRef = useRef(0);
 
   // Update live clock every second
   useEffect(() => {
@@ -127,26 +128,6 @@ export default function TVPortalPage() {
     }
   }
 
-  // REST Hydration: Fetch today's transactions from backend
-  const fetchRecentTransactions = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/public/transactions/recent?limit=50');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-
-      if (json.success && Array.isArray(json.data?.transactions)) {
-        const fetched = json.data.transactions;
-        setTransactions(fetched);
-        // Track seen IDs for deduplication - reconcile state on hydration and reconnect
-        seenTxnIdsRef.current = new Set(fetched.map((tx) => tx.id));
-      }
-    } catch (err) {
-      console.warn('[TV PORTAL] Hydration error:', err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // Handle new incoming transaction with deduplication, structural validation and highlight
   const handleIncomingTransaction = useCallback(
     (newTx) => {
@@ -186,7 +167,53 @@ export default function TVPortalPage() {
     [playCounterChime]
   );
 
-  // Authoritative native WebSocket connection setup
+  // High-availability transaction polling & state reconciliation
+  const pollTransactions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/public/transactions/recent?limit=50', {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+
+      if (json.success && Array.isArray(json.data?.transactions)) {
+        const fetched = json.data.transactions;
+        const currentSeen = seenTxnIdsRef.current;
+
+        // Detect newly arrived transactions
+        const newlyArrived = [];
+        for (const tx of fetched) {
+          if (!currentSeen.has(tx.id)) {
+            newlyArrived.push(tx);
+          }
+        }
+
+        if (newlyArrived.length > 0 && currentSeen.size > 0) {
+          for (const newTx of newlyArrived) {
+            handleIncomingTransaction(newTx);
+          }
+        } else if (currentSeen.size === 0) {
+          setTransactions(fetched);
+          seenTxnIdsRef.current = new Set(fetched.map((tx) => tx.id));
+        }
+
+        // Active polling success indicates healthy live counter feed
+        setConnectionStatus('CONNECTED');
+        failedPollsRef.current = 0;
+      }
+    } catch (err) {
+      console.warn('[TV PORTAL] Polling error:', err.message);
+      failedPollsRef.current = (failedPollsRef.current || 0) + 1;
+      // Fail closed to OFFLINE strictly after 3 consecutive failed cycles (~15s)
+      if (failedPollsRef.current >= 3) {
+        setConnectionStatus('OFFLINE');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [handleIncomingTransaction]);
+
+  // Authoritative native WebSocket connection setup with resilient fallback
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return;
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
@@ -206,7 +233,8 @@ export default function TVPortalPage() {
           statusDebounceRef.current = null;
         }
         setConnectionStatus('CONNECTED');
-        fetchRecentTransactions();
+        failedPollsRef.current = 0;
+        pollTransactions();
 
         // Keep connection warm with 15s ping heartbeat to prevent idle proxy disconnects
         if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
@@ -239,37 +267,47 @@ export default function TVPortalPage() {
           heartbeatIntervalRef.current = null;
         }
 
-        // Debounce RECONNECTING badge update by 1.2s to prevent brief handshake flickers
-        if (!statusDebounceRef.current) {
-          statusDebounceRef.current = setTimeout(() => {
-            setConnectionStatus('RECONNECTING');
-            statusDebounceRef.current = null;
-          }, 1200);
+        // Only transition to RECONNECTING if HTTP polling is also failing
+        if (failedPollsRef.current >= 2) {
+          if (!statusDebounceRef.current) {
+            statusDebounceRef.current = setTimeout(() => {
+              setConnectionStatus('RECONNECTING');
+              statusDebounceRef.current = null;
+            }, 1200);
+          }
         }
 
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = setTimeout(() => {
           connectWebSocket();
-        }, 3000);
+        }, 15000);
       };
 
       ws.onclose = handleDisconnect;
       ws.onerror = handleDisconnect;
     } catch {
-      setConnectionStatus('RECONNECTING');
+      if (failedPollsRef.current >= 2) {
+        setConnectionStatus('RECONNECTING');
+      }
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = setTimeout(() => {
         connectWebSocket();
-      }, 3000);
+      }, 15000);
     }
-  }, [fetchRecentTransactions, handleIncomingTransaction]);
+  }, [pollTransactions, handleIncomingTransaction]);
 
-  // Mount lifecycle: hydrate and establish native WebSocket connection
+  // Mount lifecycle: hydrate, establish real-time socket, and maintain continuous polling fallback
   useEffect(() => {
-    fetchRecentTransactions();
+    pollTransactions();
     connectWebSocket();
 
+    // 5-second polling interval ensures live data even if WebSocket upgrade is rejected by edge CDN
+    const pollInterval = setInterval(() => {
+      pollTransactions();
+    }, 5000);
+
     return () => {
+      clearInterval(pollInterval);
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
         heartbeatIntervalRef.current = null;
@@ -286,7 +324,7 @@ export default function TVPortalPage() {
         wsRef.current.close();
       }
     };
-  }, [fetchRecentTransactions, connectWebSocket]);
+  }, [pollTransactions, connectWebSocket]);
 
   return (
     <div className="pf-tv-shell" style={styles.container}>

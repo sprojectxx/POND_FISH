@@ -25,7 +25,18 @@ export default function WorkerLayout({ children }) {
   const [logoutError, setLogoutError] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const isLoginPage = pathname === '/worker/login' || pathname?.startsWith('/worker/login') || pathname === '/login' || pathname?.startsWith('/login');
+  const isBrowser = typeof window !== 'undefined';
+  const browserPath = isBrowser ? window.location.pathname : '';
+  const isLoginPage = Boolean(
+    pathname === '/worker/login' ||
+    pathname?.startsWith('/worker/login') ||
+    pathname === '/login' ||
+    pathname?.startsWith('/login') ||
+    browserPath === '/worker/login' ||
+    browserPath.startsWith('/worker/login') ||
+    browserPath === '/login' ||
+    browserPath.startsWith('/login')
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -69,7 +80,15 @@ export default function WorkerLayout({ children }) {
             setWorker(null);
             setCachedProfile(null);
             setSessionState('UNAUTHENTICATED');
-            router.replace(getWorkerLoginUrl());
+            const curPath = typeof window !== 'undefined' ? (window.location.pathname || '') : '';
+            if (
+              curPath !== '/login' &&
+              !curPath.startsWith('/login') &&
+              curPath !== '/worker/login' &&
+              !curPath.startsWith('/worker/login')
+            ) {
+              router.replace(getWorkerLoginUrl());
+            }
             return null;
           }
           // Server error (e.g. 500, 503)

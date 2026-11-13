@@ -16,7 +16,18 @@ import './admin.css';
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
-  const isLoginPage = pathname === '/admin/login' || pathname?.startsWith('/admin/login') || pathname === '/login' || pathname?.startsWith('/login');
+  const isBrowser = typeof window !== 'undefined';
+  const browserPath = isBrowser ? window.location.pathname : '';
+  const isLoginPage = Boolean(
+    pathname === '/admin/login' ||
+    pathname?.startsWith('/admin/login') ||
+    pathname === '/login' ||
+    pathname?.startsWith('/login') ||
+    browserPath === '/admin/login' ||
+    browserPath.startsWith('/admin/login') ||
+    browserPath === '/login' ||
+    browserPath.startsWith('/login')
+  );
 
   const [adminUser, setAdminUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);
@@ -48,7 +59,17 @@ export default function AdminLayout({ children }) {
   };
 
   const verifyAuth = useCallback(async () => {
-    if (isLoginPage) {
+    const isLogin = Boolean(
+      isLoginPage ||
+      (typeof window !== 'undefined' && (
+        window.location.pathname === '/login' ||
+        window.location.pathname.startsWith('/login') ||
+        window.location.pathname === '/admin/login' ||
+        window.location.pathname.startsWith('/admin/login')
+      ))
+    );
+
+    if (isLogin) {
       setCheckingAuth(false);
       setNetworkError(false);
       setServiceError(null);
@@ -79,9 +100,22 @@ export default function AdminLayout({ children }) {
       if (res.status === 401) {
         if (typeof window !== 'undefined') {
           localStorage.removeItem('pondfish_admin_user');
-          const isSub = isPortalSubdomain('admin');
-          const currentPath = window.location.pathname || (isSub ? '/' : '/admin');
-          window.location.href = getAdminLoginUrl(`expired=true&redirect=${encodeURIComponent(currentPath)}`);
+          setAdminUser(null);
+          setCheckingAuth(false);
+
+          const currentPath = window.location.pathname || '';
+          const alreadyOnLogin =
+            currentPath === '/login' ||
+            currentPath.startsWith('/login') ||
+            currentPath === '/admin/login' ||
+            currentPath.startsWith('/admin/login');
+
+          // Circuit breaker: NEVER redirect if already on login page to prevent freeze loops
+          if (!alreadyOnLogin) {
+            const isSub = isPortalSubdomain('admin');
+            const targetPath = currentPath || (isSub ? '/' : '/admin');
+            window.location.href = getAdminLoginUrl(`expired=true&redirect=${encodeURIComponent(targetPath)}`);
+          }
         }
         return;
       }
@@ -184,6 +218,19 @@ export default function AdminLayout({ children }) {
   // If on login page, render without admin shell
   if (isLoginPage) {
     return <>{children}</>;
+  }
+
+  // Also if mounted and window.location is on login page, render children directly
+  if (mounted && typeof window !== 'undefined') {
+    const curPath = window.location.pathname || '';
+    if (
+      curPath === '/login' ||
+      curPath.startsWith('/login') ||
+      curPath === '/admin/login' ||
+      curPath.startsWith('/admin/login')
+    ) {
+      return <>{children}</>;
+    }
   }
 
   // If checking authentication, show loading shell

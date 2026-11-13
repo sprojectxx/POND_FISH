@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { MapPin, Clock, Phone, Store, ShieldCheck, Tv, Globe } from './Icons';
+import { MapPin, Clock, Phone, Globe } from './Icons';
 
 export default function Footer() {
   return (
@@ -48,21 +48,6 @@ export default function Footer() {
               <Link href="/#how-it-works" className="pf-footer-link">How It Works</Link>
               <Link href="/about" className="pf-footer-link">About PondFish</Link>
               <Link href="/contact" className="pf-footer-link">Store Counter Contact</Link>
-
-              <div style={{ marginTop: '8px', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <Link href="/worker/login" className="pf-footer-link" style={{ color: '#93CCFF', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Store size={13} color="#93CCFF" />
-                  <span>Worker Tablet Portal</span>
-                </Link>
-                <Link href="/admin/login" className="pf-footer-link" style={{ color: '#93CCFF', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <ShieldCheck size={13} color="#93CCFF" />
-                  <span>Admin Control Center</span>
-                </Link>
-                <Link href="/tv" target="_blank" className="pf-footer-link" style={{ color: '#93CCFF', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Tv size={13} color="#93CCFF" />
-                  <span>Live Shop TV Display</span>
-                </Link>
-              </div>
             </div>
           </div>
 
