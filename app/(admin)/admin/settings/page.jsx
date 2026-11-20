@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState(null);
@@ -155,29 +156,38 @@ export default function AdminSettingsPage() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#0F2C59' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Store Operations', href: '/admin/settings', exact: true },
+          { label: 'Reports & Exports', href: '/admin/reports' },
+          { label: 'Activity Log', href: '/admin/audit' },
+          { label: 'Order Alerts', href: '/admin/exceptions' },
+          { label: 'Security & Passwords', href: '/admin/security' },
+          { label: 'My Profile', href: '/admin/profile' },
+        ]}
+      />
+
       {/* Page Header */}
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 6px 0', color: '#0F2C59' }}>
           Business & Store Settings
         </h1>
-        <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
-          Centrally configure store operations, business hours, GPS destination, and lifecycle rules.
-        </p>
+        
       </div>
 
       {/* Notifications */}
       {successMsg && (
         <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#159C57', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: 'transparent', border: 'none', color: '#A7F3D0', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setSuccessMsg(null)} style={{ background: 'transparent', border: 'none', color: '#A7F3D0', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
       {error && (
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#DC2626', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{error}</span>
-          <button onClick={() => setError(null)} style={{ background: 'transparent', border: 'none', color: '#FECACA', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setError(null)} style={{ background: 'transparent', border: 'none', color: '#FECACA', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
@@ -393,7 +403,7 @@ export default function AdminSettingsPage() {
           {/* 3. FLEET & TRUCK CONFIGURATION */}
           <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1E56A0', margin: '0 0 16px 0' }}>
-              🚛 Fleet & Vehicle Information
+               Fleet & Vehicle Information
             </h2>
             <form onSubmit={handleTruckInfoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
@@ -448,10 +458,10 @@ export default function AdminSettingsPage() {
             </form>
           </div>
 
-          {/* 4. OPERATIONAL LIFECYCLE RULES */}
+          {/* 4. STORE OPERATING RULES */}
           <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1E56A0', margin: '0 0 16px 0' }}>
-              Operational Lifecycle Rules
+              Store Operating Rules
             </h2>
             <form onSubmit={handleOperationalRulesSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>

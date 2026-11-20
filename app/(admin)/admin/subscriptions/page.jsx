@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminCustomerSubscriptionsPage() {
   // Search & Selection State
@@ -272,15 +273,19 @@ export default function AdminCustomerSubscriptionsPage() {
   const isAdjustNegative = adjustDirection === 'DEDUCT' && adjustAmountNum > currentCreditNum;
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: '1440px', margin: '0 auto', color: '#0F2C59' }}>
+    <div style={{ color: '#0F2C59', maxWidth: '1400px', margin: '0 auto' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Customer Subscribers & Wallets', href: '/admin/subscriptions', exact: true },
+          { label: 'Subscription Plan Packages', href: '/admin/subscriptions/plans' },
+        ]}
+      />
+
       {/* Page Title */}
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '26px', fontWeight: '700', margin: '0 0 6px 0', letterSpacing: '-0.02em', color: '#0F2C59' }}>
+        <h1 style={{ fontSize: '26px', fontWeight: '800', margin: 0, letterSpacing: '-0.02em', color: '#0F2C59' }}>
           Customer Subscription Management
         </h1>
-        <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
-          ADMIN-09 — Customer search, active subscription review, admin-assisted cash & Razorpay purchase, and traceable credit ledger
-        </p>
       </div>
 
       {/* Feedback Alerts */}
@@ -321,7 +326,7 @@ export default function AdminCustomerSubscriptionsPage() {
       )}
 
       {/* Main 2-Column Split: Customer Search List (Left) & Customer Subscription Details (Right) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '24px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 360px) minmax(0, 1fr)', gap: '24px', alignItems: 'start' }}>
 
         {/* Left Column: Customer Search & Selection */}
         <div style={{
@@ -359,6 +364,7 @@ export default function AdminCustomerSubscriptionsPage() {
               <button
                 id="btn-search-customers"
                 onClick={() => handleSearch(searchQuery)}
+                title="Search Customers"
                 style={{
                   background: '#0284C7',
                   color: '#FFFFFF',
@@ -368,9 +374,13 @@ export default function AdminCustomerSubscriptionsPage() {
                   fontSize: '13px',
                   fontWeight: '600',
                   cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  whiteSpace: 'nowrap',
                 }}
               >
-
+                 Search
               </button>
             </div>
           </div>
@@ -395,15 +405,15 @@ export default function AdminCustomerSubscriptionsPage() {
                     style={{
                       padding: '12px 14px',
                       borderRadius: '8px',
-                      background: isSelected ? 'rgba(2, 132, 199, 0.15)' : 'transparent',
-                      border: isSelected ? '1px solid #0284C7' : '1px solid transparent',
+                      background: isSelected ? 'rgba(2, 132, 199, 0.12)' : '#F8FAFC',
+                      border: isSelected ? '1px solid #0284C7' : '1px solid #E2E8F0',
                       cursor: 'pointer',
-                      marginBottom: '6px',
+                      marginBottom: '8px',
                       transition: 'all 0.15s ease',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: '600', color: isSelected ? '#38BDF8' : '#F8FAFC', fontSize: '14px' }}>
+                      <span style={{ fontWeight: '700', color: isSelected ? '#0284C7' : '#0F2C59', fontSize: '14px' }}>
                         {cust.name}
                       </span>
                       <span style={{
@@ -429,7 +439,7 @@ export default function AdminCustomerSubscriptionsPage() {
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748B' }}>
-                      <span>📱 {cust.mobileNumber}</span>
+                      <span> {cust.mobileNumber}</span>
                       <span style={{ color: cust.creditBalance > 0 ? '#10B981' : '#94A3B8', fontWeight: '600' }}>
                         ₹{Number(cust.creditBalance).toFixed(0)} credit
                       </span>
@@ -450,7 +460,7 @@ export default function AdminCustomerSubscriptionsPage() {
             </div>
           ) : !customerDetails ? (
             <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '80px', textAlign: 'center', color: '#64748B', border: '1px solid #E2E8F0' }}>
-              <div style={{ fontSize: '32px', marginBottom: '8px' }}>👈</div>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}></div>
               <div style={{ fontSize: '16px', fontWeight: '600', color: '#0F2C59', marginBottom: '4px' }}>
                 Select a Customer
               </div>
@@ -492,7 +502,7 @@ export default function AdminCustomerSubscriptionsPage() {
                       </span>
                     </div>
                     <div style={{ fontSize: '13px', color: '#64748B' }}>
-                      📱 {customerDetails.customer.mobileNumber} {customerDetails.customer.area ? `• ${customerDetails.customer.area}` : ''}
+                       {customerDetails.customer.mobileNumber} {customerDetails.customer.area ? `• ${customerDetails.customer.area}` : ''}
                     </div>
                   </div>
 
@@ -516,7 +526,7 @@ export default function AdminCustomerSubscriptionsPage() {
                         boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
                       }}
                     >
-                      <span>➕</span>
+                      <span>+</span>
                       <span>Add Subscription</span>
                     </button>
                     <button
@@ -536,7 +546,7 @@ export default function AdminCustomerSubscriptionsPage() {
                         gap: '6px',
                       }}
                     >
-                      <span>⚖️</span>
+                      
                       <span>Adjust Credit</span>
                     </button>
                   </div>
@@ -734,13 +744,13 @@ export default function AdminCustomerSubscriptionsPage() {
                 <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                   <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: '#0F2C59' }}>
-                      Authoritative Credit Ledger (Opening, Movement, Closing)
+                      Wallet & Credits Ledger
                     </span>
                     <button
                       onClick={() => fetchLedger(selectedCustomerId)}
-                      style={{ background: 'none', border: 'none', color: '#1E56A0', fontSize: '12px', cursor: 'pointer' }}
+                      style={{ background: 'none', border: 'none', color: '#1E56A0', fontSize: '12px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
-                      Refresh Ledger
+                       Refresh Ledger
                     </button>
                   </div>
 
@@ -971,7 +981,7 @@ export default function AdminCustomerSubscriptionsPage() {
                         cursor: 'pointer',
                       }}
                     >
-                      💵 Cash Payment
+                       Cash Payment
                     </button>
                     <button
                       type="button"
@@ -1195,7 +1205,7 @@ export default function AdminCustomerSubscriptionsPage() {
                         cursor: 'pointer',
                       }}
                     >
-                      ➕ Add Credit
+                      + Add Credit
                     </button>
                     <button
                       type="button"
@@ -1213,7 +1223,7 @@ export default function AdminCustomerSubscriptionsPage() {
                         cursor: 'pointer',
                       }}
                     >
-                      ➖ Deduct Credit
+                      - Deduct Credit
                     </button>
                   </div>
                 </div>

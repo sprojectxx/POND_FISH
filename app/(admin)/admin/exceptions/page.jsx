@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminExceptionsPage() {
   const [exceptions, setExceptions] = useState([]);
@@ -118,15 +119,24 @@ export default function AdminExceptionsPage() {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Store Operations', href: '/admin/settings', exact: true },
+          { label: 'Reports & Exports', href: '/admin/reports' },
+          { label: 'Activity Log', href: '/admin/audit' },
+          { label: 'Order Alerts', href: '/admin/exceptions' },
+          { label: 'Security & Passwords', href: '/admin/security' },
+          { label: 'My Profile', href: '/admin/profile' },
+        ]}
+      />
+
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 6px 0', color: '#0F2C59' }}>
-            Operational Exceptions Center
+            Order Alerts
           </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
-            Centralized monitoring of failed transactions, overdue bookings, stock discrepancies, and delivery signals.
-          </p>
+          
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', background: '#FFFFFF', padding: '6px 12px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
           <span style={{ color: exceptions.length > 0 ? '#F97316' : '#22C55E' }}>
@@ -139,14 +149,14 @@ export default function AdminExceptionsPage() {
       {successMsg && (
         <div style={{ background: '#064E3B', border: '1px solid #059669', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#A7F3D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: 'transparent', border: 'none', color: '#A7F3D0', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setSuccessMsg(null)} style={{ background: 'transparent', border: 'none', color: '#A7F3D0', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
       {error && (
         <div style={{ background: '#7F1D1D', border: '1px solid #DC2626', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#FECACA', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{error}</span>
-          <button onClick={() => setError(null)} style={{ background: 'transparent', border: 'none', color: '#FECACA', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setError(null)} style={{ background: 'transparent', border: 'none', color: '#FECACA', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
@@ -199,7 +209,7 @@ export default function AdminExceptionsPage() {
           </div>
         ) : exceptions.length === 0 ? (
           <div style={{ padding: '60px', textAlign: 'center', color: '#64748B' }}>
-            <p style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#22C55E' }}>🎉 No operational exceptions detected.</p>
+            <p style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#22C55E' }}>No operational exceptions detected.</p>
             <span style={{ fontSize: '13px', color: '#64748B' }}>
               All payments, inventory balances, bookings, and GPS journeys are operating within normal parameters.
             </span>
@@ -295,7 +305,7 @@ export default function AdminExceptionsPage() {
                 onClick={() => setSelectedException(null)}
                 style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
-                ✕
+                &times;
               </button>
             </div>
 

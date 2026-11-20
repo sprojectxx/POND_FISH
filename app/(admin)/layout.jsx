@@ -29,33 +29,41 @@ export default function AdminLayout({ children }) {
     browserPath.startsWith('/login')
   );
 
-  const [adminUser, setAdminUser] = useState(null);
-  const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);
+  const [adminUser, setAdminUser] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('pondfish_admin_user');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return null;
+  });
+  const [checkingAuth, setCheckingAuth] = useState(() => {
+    if (isLoginPage) return false;
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('pondfish_admin_user');
+        if (cached) return false; // Optimistic authentication: don't block navigation when session is cached
+      } catch {}
+    }
+    return true;
+  });
   const [networkError, setNetworkError] = useState(false);
   const [serviceError, setServiceError] = useState(null);
   const [permissionError, setPermissionError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   const abortControllerRef = useRef(null);
 
   useEffect(() => {
     setMounted(true);
-    try {
-      const saved = localStorage.getItem('pondfish_admin_sidebar_collapsed');
-      if (saved === 'true') setSidebarCollapsed(true);
-    } catch {}
   }, []);
 
   const toggleSidebar = () => {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('pondfish_admin_sidebar_collapsed', String(next));
-      } catch {}
-      return next;
-    });
+    setSidebarOpen((prev) => !prev);
   };
 
   const verifyAuth = useCallback(async () => {
@@ -83,7 +91,10 @@ export default function AdminLayout({ children }) {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    setCheckingAuth(true);
+    const hasCachedUser = Boolean(adminUser || (typeof window !== 'undefined' && localStorage.getItem('pondfish_admin_user')));
+    if (!hasCachedUser) {
+      setCheckingAuth(true);
+    }
     setNetworkError(false);
     setServiceError(null);
     setPermissionError(null);
@@ -252,8 +263,8 @@ export default function AdminLayout({ children }) {
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
           </div>
-          <div style={{ fontSize: '16px', fontWeight: '800', color: '#0F2C59', marginBottom: '4px' }}>Verifying Administrator Credentials...</div>
-          <div style={{ fontSize: '13px', color: '#64748B' }}>Connecting to secure enterprise session</div>
+          <div style={{ fontSize: '16px', fontWeight: '800', color: '#0F2C59', marginBottom: '4px' }}>Loading Dashboard...</div>
+          <div style={{ fontSize: '13px', color: '#64748B' }}>Connecting to secure session</div>
         </div>
       </div>
     );
@@ -409,165 +420,106 @@ export default function AdminLayout({ children }) {
   const renderNavItems = (onLinkClick) => (
     <>
       <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', margin: '8px 8px 4px', fontWeight: '700' }}>
-        Operations
+        Core Operations
       </div>
       <Link
         href="/admin"
         onClick={onLinkClick}
         style={getNavLinkStyle(pathname === '/admin')}
       >
-        Executive Dashboard
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        <span>Dashboard</span>
       </Link>
       <Link
         id="nav-admin-bookings"
         href="/admin/bookings"
         onClick={onLinkClick}
-        style={getNavLinkStyle(pathname?.startsWith('/admin/bookings'))}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/bookings') || pathname?.startsWith('/admin/transactions'))}
       >
-        Bookings
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+        </svg>
+        <span>Orders &amp; Sales</span>
       </Link>
-      <Link
-        id="nav-admin-transactions"
-        href="/admin/transactions"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname?.startsWith('/admin/transactions'))}
-      >
-        Transactions
-      </Link>
-      <Link
-        id="nav-admin-notifications"
-        href="/admin/notifications"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname?.startsWith('/admin/notifications'))}
-      >
-        Notifications
-      </Link>
-      <Link
-        href="/admin/journeys"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname?.startsWith('/admin/journeys'))}
-      >
-        GPS Truck Journey
-      </Link>
-      <Link
-        href="/admin/settings"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/settings')}
-      >
-        Business Settings
-      </Link>
-      <Link
-        href="/admin/reports"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/reports' || pathname === '/admin/exports')}
-      >
-        Reports & Exports
-      </Link>
-
-      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
-        Catalog & Sales
-      </div>
       <Link
         id="nav-admin-fish"
         href="/admin/fish"
         onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/fish')}
+        style={getNavLinkStyle(pathname === '/admin/fish' || pathname === '/admin/categories' || pathname === '/admin/discounts')}
       >
-        Fish Management
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <span>Fish &amp; Inventory</span>
       </Link>
       <Link
-        id="nav-admin-categories"
-        href="/admin/categories"
+        id="nav-admin-journeys"
+        href="/admin/journeys"
         onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/categories')}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/journeys'))}
       >
-        Categories
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+        </svg>
+        <span>Live Delivery Truck</span>
       </Link>
       <Link
-        id="nav-admin-discounts"
-        href="/admin/discounts"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/discounts')}
-      >
-        Discounts
-      </Link>
-
-      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
-        Subscriptions
-      </div>
-      <Link
-        id="nav-admin-subscription-plans"
-        href="/admin/subscriptions/plans"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/subscriptions/plans')}
-      >
-        Subscription Plans
-      </Link>
-      <Link
-        id="nav-admin-customer-subscriptions"
+        id="nav-admin-subscriptions"
         href="/admin/subscriptions"
         onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/subscriptions')}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/subscriptions'))}
       >
-        Customer Subscriptions
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+        </svg>
+        <span>Subscriptions</span>
       </Link>
 
       <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
-        People & Teams
+        Store Management
       </div>
       <Link
         id="nav-admin-customers"
         href="/admin/customers"
         onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/customers')}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/customers') || pathname?.startsWith('/admin/notifications'))}
       >
-        Customers
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <span>Customers &amp; Alerts</span>
       </Link>
       <Link
         id="nav-admin-workers"
         href="/admin/workers"
         onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/workers')}
+        style={getNavLinkStyle(pathname?.startsWith('/admin/workers'))}
       >
-        Workers
-      </Link>
-
-      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
-        Governance
-      </div>
-      <Link
-        href="/admin/audit"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/audit' || pathname === '/admin/audit-logs')}
-      >
-        Audit Trail
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
+        </svg>
+        <span>Staff &amp; Shifts</span>
       </Link>
       <Link
-        href="/admin/exceptions"
+        id="nav-admin-settings"
+        href="/admin/settings"
         onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/exceptions')}
+        style={getNavLinkStyle(
+          pathname === '/admin/settings' ||
+          pathname?.startsWith('/admin/reports') ||
+          pathname?.startsWith('/admin/exports') ||
+          pathname?.startsWith('/admin/audit') ||
+          pathname?.startsWith('/admin/exceptions') ||
+          pathname?.startsWith('/admin/security') ||
+          pathname?.startsWith('/admin/profile')
+        )}
       >
-        Exceptions Center
-      </Link>
-      <Link
-        id="nav-admin-security"
-        href="/admin/security"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/security')}
-      >
-        Admin Security
-      </Link>
-
-      <div style={{ margin: '14px 0 4px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '14px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255, 255, 255, 0.4)', paddingLeft: '8px', fontWeight: '700' }}>
-        Account
-      </div>
-      <Link
-        id="nav-admin-profile"
-        href="/admin/profile"
-        onClick={onLinkClick}
-        style={getNavLinkStyle(pathname === '/admin/profile')}
-      >
-        Profile & Identity
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>Store Settings</span>
       </Link>
       <button
         id="nav-admin-logout"
@@ -637,8 +589,18 @@ export default function AdminLayout({ children }) {
 
   return (
     <div className="pf-admin-shell">
-      {/* Desktop Sidebar Navigation */}
-      <aside className={`pf-admin-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      {/* Invisible hover-sensor on the left screen edge to smoothly reveal sidebar on mouse hover */}
+      <div
+        className="pf-admin-sidebar-hover-trigger"
+        onMouseEnter={() => setSidebarHovered(true)}
+      />
+
+      {/* Desktop Sidebar Navigation - Disappearing / Hover-Reveal */}
+      <aside
+        className={`pf-admin-sidebar ${(sidebarHovered || sidebarOpen) ? 'visible' : ''}`}
+        onMouseEnter={() => setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
+      >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', paddingLeft: '4px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
@@ -661,72 +623,56 @@ export default function AdminLayout({ children }) {
             <span style={{ fontSize: '22px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '-0.06em', lineHeight: 1 }}>
               Pond<span style={{ color: '#38BDF8' }}>Fish</span>
             </span>
-            <span style={{ fontSize: '10px', fontWeight: '800', background: 'rgba(56, 189, 248, 0.2)', color: '#38BDF8', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Admin
-            </span>
           </div>
-
-          <button
-            type="button"
-            className="pf-admin-sidebar-collapse-btn"
-            onClick={toggleSidebar}
-            title="Minimize Sidebar"
-            aria-label="Minimize Sidebar"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#CBD5E1', flex: 1, overflowY: 'auto' }}>
-          {renderNavItems()}
+          {renderNavItems(() => {
+            setSidebarHovered(false);
+            setSidebarOpen(false);
+            setMobileMenuOpen(false);
+          })}
         </nav>
 
         {/* User Mini Card at bottom of sidebar */}
         {renderUserCard()}
       </aside>
 
-      {/* Main Content Area */}
-      <div className={`pf-admin-content-wrapper ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {/* Main Content Area - Always 100% full-width stable layout */}
+      <div className="pf-admin-content-wrapper">
         {/* Top Header */}
         <header className="pf-admin-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Hamburger Button on mobile */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {/* Menu Toggle Button (Hover or Click to open navigation) */}
             <button
               type="button"
-              className="pf-admin-hamburger"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle admin navigation"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              onMouseEnter={() => setSidebarHovered(true)}
+              aria-label="Toggle navigation menu"
+              title="Navigation Menu"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                background: (sidebarHovered || sidebarOpen) ? '#0F2C59' : '#FFFFFF',
+                color: (sidebarHovered || sidebarOpen) ? '#FFFFFF' : '#0F2C59',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+              }}
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0F2C59" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="12" x2="21" y2="12" />
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
 
-            {/* Desktop Sidebar Toggle / Minimize Button */}
-            <button
-              type="button"
-              className="pf-admin-desktop-sidebar-toggle"
-              onClick={toggleSidebar}
-              title={sidebarCollapsed ? "Expand Sidebar" : "Minimize Sidebar"}
-              aria-label={sidebarCollapsed ? "Expand Sidebar" : "Minimize Sidebar"}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <line x1="9" y1="3" x2="9" y2="21" />
-                {sidebarCollapsed ? (
-                  <path d="M13 15l3-3-3-3" />
-                ) : (
-                  <path d="M16 15l-3-3 3-3" />
-                )}
-              </svg>
-              <span>{sidebarCollapsed ? 'Expand Menu' : 'Minimize'}</span>
-            </button>
-
-            {/* Logo on header */}
+            {/* Logo on header - No Admin badge, No | Operations */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{
                 width: '28px',
@@ -750,46 +696,37 @@ export default function AdminLayout({ children }) {
               <span style={{ fontSize: '18px', fontWeight: '900', color: '#0F2C59', letterSpacing: '-0.06em', lineHeight: 1 }}>
                 Pond<span style={{ color: '#2670B7' }}>Fish</span>
               </span>
-              <span style={{ fontSize: '9px', fontWeight: '800', background: '#E0F2FE', color: '#0369A1', padding: '2px 5px', borderRadius: '4px', textTransform: 'uppercase' }}>
-                Admin
-              </span>
             </div>
-
-            <span className="pf-admin-header-subtitle" style={{ fontSize: '13px', color: '#64748B', fontWeight: '600' }}>
-              | Operations
-            </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span className="pf-admin-session-badge" style={{
               fontSize: '11px',
               fontWeight: '800',
               color: '#166534',
               background: '#DCFCE7',
-              padding: '3px 10px',
+              padding: '4px 10px',
               borderRadius: '12px',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
+              gap: '6px',
             }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16A34A', display: 'inline-block' }}></span>
               ACTIVE
             </span>
 
-            <span className="pf-admin-header-userinfo" style={{ fontSize: '13px', color: '#0F2C59', fontWeight: '600' }}>
-              {adminUser ? `${adminUser.name}` : 'Administrator'}
-            </span>
             <button
               onClick={handleLogout}
               style={{
                 background: '#FFFFFF',
                 border: '1px solid #CBD5E1',
                 color: '#DC2626',
-                padding: '5px 12px',
+                padding: '6px 14px',
                 borderRadius: '8px',
                 fontSize: '12px',
                 fontWeight: '700',
                 cursor: 'pointer',
+                transition: 'all 0.15s ease',
               }}
             >
               Sign Out

@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useTransition } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 const STATUS_CONFIG = {
   CREATED: { label: 'Created', bg: '#F1F5F9', text: '#64748B', border: '#E2E8F0' },
@@ -207,30 +208,22 @@ export default function AdminBookingsPage() {
   );
 
   return (
-    <div style={{ maxWidth: '1440px', margin: '0 auto', color: '#0F2C59', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Online Bookings', href: '/admin/bookings' },
+          { label: 'Counter POS Bills & Transactions', href: '/admin/transactions' },
+        ]}
+      />
+
       {/* Header Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-
             <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#0F2C59' }}>
               Bookings Management
             </h1>
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: '700',
-                background: '#E8F1F5', color: '#1E56A0',
-                padding: '2px 8px',
-                borderRadius: '12px',
-              }}
-            >
-              ADMIN-12
-            </span>
           </div>
-          <p style={{ color: '#64748B', fontSize: '13px', margin: '6px 0 0' }}>
-            Supervise online customer bookings, monitor 48-hour pickup expiration, inspect worker collection state, and perform approved operational cancellations.
-          </p>
         </div>
 
         <button
@@ -238,18 +231,39 @@ export default function AdminBookingsPage() {
           onClick={() => fetchBookings(pagination.page)}
           disabled={loading}
           style={{
-            background: '#FFFFFF', border: '1px solid #E2E8F0', color: '#1E56A0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+            background: '#FFFFFF',
+            border: '1px solid #CBD5E1',
+            color: '#1E56A0',
+            boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
             padding: '8px 16px',
-            borderRadius: '6px',
+            borderRadius: '8px',
             fontSize: '13px',
-            fontWeight: '600',
+            fontWeight: '700',
             cursor: loading ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
           }}
         >
-          Refresh
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              transition: 'transform 0.3s ease',
+              transform: loading ? 'rotate(180deg)' : 'none',
+            }}
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          <span>Refresh</span>
         </button>
       </div>
 
@@ -274,7 +288,7 @@ export default function AdminBookingsPage() {
             onClick={() => setErrorMsg(null)}
             style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer', fontSize: '16px' }}
           >
-            ✕
+            &times;
           </button>
         </div>
       )}
@@ -294,12 +308,12 @@ export default function AdminBookingsPage() {
             fontSize: '13px',
           }}
         >
-          <span>✓ {successMsg}</span>
+          <span>{successMsg}</span>
           <button
             onClick={() => setSuccessMsg(null)}
             style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer', fontSize: '16px' }}
           >
-            ✕
+            &times;
           </button>
         </div>
       )}
@@ -417,129 +431,149 @@ export default function AdminBookingsPage() {
       <div
         style={{
           background: '#FFFFFF',
-          borderRadius: '10px',
-          border: '1px solid #E2E8F0',
-          padding: '16px',
+          borderRadius: '12px',
+          border: '1px solid #CBD5E1',
+          padding: '14px 18px',
           marginBottom: '20px',
           display: 'flex',
           flexWrap: 'wrap',
-          gap: '10px',
+          gap: '12px',
           alignItems: 'center',
+          boxShadow: '0 2px 6px rgba(15, 44, 89, 0.03)',
           width: '100%',
           boxSizing: 'border-box',
         }}
       >
-        {/* Search Input */}
-        <div style={{ flex: '1 1 260px', width: '100%', minWidth: 0, position: 'relative' }}>
+        {/* Search Input with Search Icon */}
+        <div style={{ flex: '2 1 260px', position: 'relative' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
           <input
             id="input-search-bookings"
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by Booking ID, Customer, Phone, Fish, or Amount..."
+            placeholder="Search by Booking ID, Customer, Phone, Fish..."
             style={{
               width: '100%',
               background: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: '6px',
-              padding: '10px 14px',
+              border: '1px solid #CBD5E1',
+              borderRadius: '8px',
+              padding: '9px 12px 9px 36px',
               color: '#0F2C59',
               fontSize: '13px',
               boxSizing: 'border-box',
+              outline: 'none',
             }}
           />
         </div>
 
         {/* Status Dropdown */}
-        <select
-          id="select-status-filter"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            flex: '1 1 130px',
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
-            boxSizing: 'border-box',
-            minWidth: 0,
-          }}
-        >
-          <option value="ALL">All Statuses</option>
-          <option value="CREATED">Created</option>
-          <option value="CONFIRMED">Confirmed</option>
-          <option value="PENDING_COLLECTION">Pending Collection</option>
-          <option value="COMPLETED">Completed</option>
-          <option value="CANCELLED">Cancelled</option>
-          <option value="EXPIRED">Expired</option>
-        </select>
+        <div style={{ flex: '1 1 130px', minWidth: '120px' }}>
+          <select
+            id="select-status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{
+              width: '100%',
+              background: '#F8FAFC',
+              border: '1px solid #CBD5E1',
+              borderRadius: '8px',
+              padding: '9px 12px',
+              color: '#0F2C59',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              boxSizing: 'border-box',
+              outline: 'none',
+            }}
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="CREATED">Created</option>
+            <option value="CONFIRMED">Confirmed</option>
+            <option value="PENDING_COLLECTION">Pending Collection</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+            <option value="EXPIRED">Expired</option>
+          </select>
+        </div>
 
         {/* Source Dropdown */}
-        <select
-          id="select-source-filter"
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
+        <div style={{ flex: '1 1 120px', minWidth: '110px' }}>
+          <select
+            id="select-source-filter"
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            style={{
+              width: '100%',
+              background: '#F8FAFC',
+              border: '1px solid #CBD5E1',
+              borderRadius: '8px',
+              padding: '9px 12px',
+              color: '#0F2C59',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              boxSizing: 'border-box',
+              outline: 'none',
+            }}
+          >
+            <option value="ALL">All Sources</option>
+            <option value="Online">Online</option>
+            <option value="Physical-store">Physical-store</option>
+          </select>
+        </div>
+
+        {/* Modern Date Range Box */}
+        <div
           style={{
-            flex: '1 1 130px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
             background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
+            border: '1px solid #CBD5E1',
+            borderRadius: '8px',
+            padding: '5px 10px',
             boxSizing: 'border-box',
-            minWidth: 0,
           }}
         >
-          <option value="ALL">All Sources</option>
-          <option value="Online">Online</option>
-          <option value="Physical-store">Physical-store</option>
-        </select>
-
-        {/* Date From */}
-        <div style={{ flex: '1 1 130px', display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-          <span style={{ fontSize: '11px', color: '#64748B', fontWeight: '600' }}>FROM</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
           <input
             id="input-date-from"
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
+            title="From Date"
             style={{
-              flex: 1,
-              width: '100%',
-              background: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: '6px',
-              padding: '9px 10px',
+              border: 'none',
+              background: 'transparent',
               color: '#0F2C59',
-              fontSize: '13px',
-              boxSizing: 'border-box',
-              minWidth: 0,
+              fontSize: '12px',
+              padding: '3px 0',
+              outline: 'none',
             }}
           />
-        </div>
-
-        {/* Date To */}
-        <div style={{ flex: '1 1 130px', display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-          <span style={{ fontSize: '11px', color: '#64748B', fontWeight: '600' }}>TO</span>
+          <span style={{ color: '#94A3B8', fontSize: '11px', fontWeight: '700' }}>&rarr;</span>
           <input
             id="input-date-to"
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
+            title="To Date"
             style={{
-              flex: 1,
-              width: '100%',
-              background: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: '6px',
-              padding: '9px 10px',
+              border: 'none',
+              background: 'transparent',
               color: '#0F2C59',
-              fontSize: '13px',
-              boxSizing: 'border-box',
-              minWidth: 0,
+              fontSize: '12px',
+              padding: '3px 0',
+              outline: 'none',
             }}
           />
         </div>
@@ -549,18 +583,19 @@ export default function AdminBookingsPage() {
             id="btn-clear-filters"
             onClick={clearFilters}
             style={{
-              background: '#E2E8F0',
-              border: 'none',
-              color: '#425B73',
-              padding: '10px 14px',
-              borderRadius: '6px',
-              fontSize: '13px',
+              background: '#F1F5F9',
+              border: '1px solid #CBD5E1',
+              color: '#64748B',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: '700',
               cursor: 'pointer',
-              fontWeight: '600',
-              boxSizing: 'border-box',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease',
             }}
           >
-            Clear Filters
+            Reset Filters
           </button>
         )}
       </div>
@@ -593,7 +628,7 @@ export default function AdminBookingsPage() {
             textAlign: 'center',
           }}
         >
-          ↔ Scroll horizontally to view all columns
+          Scroll horizontally to view all columns
         </div>
         <div
           className="pf-admin-table-scroll"
@@ -754,7 +789,7 @@ export default function AdminBookingsPage() {
                       <td style={{ padding: '14px 16px', fontSize: '12px' }}>
                         {isCompleted ? (
                           <div>
-                            <span style={{ color: '#10B981', fontWeight: '600' }}>✓ Fulfilled</span>
+                            <span style={{ color: '#10B981', fontWeight: '600' }}>Fulfilled</span>
                             <div style={{ fontSize: '11px', color: '#64748B' }}>
                               {b.collection_time
                                 ? new Date(b.collection_time).toLocaleString('en-IN', {
@@ -963,7 +998,7 @@ export default function AdminBookingsPage() {
                   padding: '4px',
                 }}
               >
-                ✕
+                &times;
               </button>
             </div>
 
@@ -1163,7 +1198,7 @@ export default function AdminBookingsPage() {
                   {bookingDetail.audit_timeline && bookingDetail.audit_timeline.length > 0 && (
                     <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px' }}>
                       <div style={{ fontSize: '12px', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: '12px' }}>
-                        📋 Audit Trail
+                         Audit Trail
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                         {bookingDetail.audit_timeline.map((log) => (

@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { AdminSubNav } from '@/components/ui';
 
 const STATUS_CONFIG = {
   DRAFT: { label: 'Draft', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#CBD5E1' },
@@ -445,31 +446,23 @@ export default function AdminNotificationsPage() {
   };
 
   return (
-    <div style={{ padding: '24px 32px', color: '#0F2C59', maxWidth: '1440px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Customer Directory & Profiles', href: '/admin/customers', exact: true },
+          { label: 'Broadcasts & Notifications', href: '/admin/notifications' },
+        ]}
+      />
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <h1 style={{ fontSize: '24px', fontWeight: '700', letterSpacing: '-0.02em', margin: 0 }}>
-              Notifications & Broadcast Management
+              Notifications &amp; Broadcasts
             </h1>
-            <span
-              style={{
-                fontSize: '11px',
-                padding: '2px 8px',
-                borderRadius: '9999px',
-                background: 'rgba(56, 189, 248, 0.1)',
-                color: '#1E56A0',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                fontWeight: '600',
-              }}
-            >
-              ADMIN-15 / Sections 131–137
-            </span>
           </div>
-          <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', marginBottom: 0 }}>
-            Complete lifecycle management: Drafts, scheduling, pre-dispatch edits & cancellations, push tracking, and delivery auditing.
-          </p>
+          
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -511,7 +504,7 @@ export default function AdminNotificationsPage() {
               gap: '6px',
             }}
           >
-            <span>✍️</span> Compose Notification
+            Compose Notification
           </button>
         </div>
       </div>
@@ -592,7 +585,7 @@ export default function AdminNotificationsPage() {
           }}
         >
           <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
@@ -612,7 +605,7 @@ export default function AdminNotificationsPage() {
           }}
         >
           <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
@@ -632,7 +625,7 @@ export default function AdminNotificationsPage() {
             cursor: 'pointer',
           }}
         >
-          📢 Broadcast Campaigns & Lifecycle ({broadcastCounts.total_count})
+           Broadcast Campaigns & Lifecycle ({broadcastCounts.total_count})
         </button>
         <button
           id="tab-inbox"
@@ -648,7 +641,7 @@ export default function AdminNotificationsPage() {
             cursor: 'pointer',
           }}
         >
-          📬 Customer In-App Inbox Logs ({inboxCounts.all})
+          Customer In-App Inbox Logs ({inboxCounts.all})
         </button>
       </div>
 
@@ -752,8 +745,8 @@ export default function AdminNotificationsPage() {
                 <thead>
                   <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
                     <th style={{ padding: '12px 16px', fontWeight: '600' }}>Broadcast Details</th>
-                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Audience & Channels</th>
-                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Lifecycle State</th>
+                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Audience &amp; Channels</th>
+                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Status</th>
                     <th style={{ padding: '12px 16px', fontWeight: '600' }}>Schedule / Dispatch</th>
                     <th style={{ padding: '12px 16px', fontWeight: '600' }}>Delivery Metrics</th>
                     <th style={{ padding: '12px 16px', fontWeight: '600', textAlign: 'right' }}>Actions</th>
@@ -839,12 +832,12 @@ export default function AdminNotificationsPage() {
                           <td style={{ padding: '14px 16px', verticalAlign: 'top', fontSize: '12px' }}>
                             {b.status === 'SCHEDULED' ? (
                               <div>
-                                <span style={{ color: '#818CF8', fontWeight: '500' }}>⏰ Scheduled for:</span>
+                                <span style={{ color: '#818CF8', fontWeight: '500' }}> Scheduled for:</span>
                                 <div style={{ color: '#0F2C59', marginTop: '2px' }}>{formatDate(b.scheduled_at)}</div>
                               </div>
                             ) : b.sent_at ? (
                               <div>
-                                <span style={{ color: '#34D399', fontWeight: '500' }}>🚀 Dispatched at:</span>
+                                <span style={{ color: '#34D399', fontWeight: '500' }}>Dispatched at:</span>
                                 <div style={{ color: '#0F2C59', marginTop: '2px' }}>{formatDate(b.sent_at)}</div>
                               </div>
                             ) : (
@@ -880,7 +873,7 @@ export default function AdminNotificationsPage() {
                                       cursor: 'pointer',
                                     }}
                                   >
-                                    ✏️ Edit
+                                     Edit
                                   </button>
                                   <button
                                     onClick={() => handleSendNowExisting(b.id)}
@@ -895,7 +888,7 @@ export default function AdminNotificationsPage() {
                                       cursor: 'pointer',
                                     }}
                                   >
-                                    🚀 Send Now
+                                    Send Now
                                   </button>
                                   <button
                                     onClick={() => handleCancelBroadcast(b.id)}
@@ -910,7 +903,7 @@ export default function AdminNotificationsPage() {
                                       cursor: 'pointer',
                                     }}
                                   >
-                                    ✕ Cancel
+                                    Cancel
                                   </button>
                                 </>
                               ) : (
@@ -1021,7 +1014,7 @@ export default function AdminNotificationsPage() {
                         href={`/admin/notifications/${item.id}`}
                         style={{ color: '#1E56A0', fontSize: '12px', textDecoration: 'none' }}
                       >
-                        Details ➔
+                        Details &rarr;
                       </Link>
                     </td>
                   </tr>
@@ -1074,7 +1067,7 @@ export default function AdminNotificationsPage() {
             >
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0F2C59', margin: 0 }}>
-                  {editingBroadcastId ? '✏️ Edit Broadcast Campaign' : '✍️ Compose & Broadcast Notification'}
+                  {editingBroadcastId ? ' Edit Broadcast Campaign' : 'Compose & Broadcast Notification'}
                 </h2>
                 <p style={{ fontSize: '12px', color: '#64748B', marginTop: '2px', marginBottom: 0 }}>
                   Sections 131–137 • Targeted audience, scheduling, multi-channel push & audit trail.
@@ -1085,7 +1078,7 @@ export default function AdminNotificationsPage() {
                 onClick={() => setShowComposer(false)}
                 style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: '20px', cursor: 'pointer' }}
               >
-                ✕
+                &times;
               </button>
             </div>
 
@@ -1213,7 +1206,7 @@ export default function AdminNotificationsPage() {
               {/* Target Audience */}
               <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#1E56A0', marginBottom: '8px' }}>
-                  🎯 Target Audience
+                  Target Audience
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginBottom: '10px' }}>
                   {[
@@ -1323,7 +1316,7 @@ export default function AdminNotificationsPage() {
                       checked={composerForm.channels.includes('IN_APP')}
                       onChange={() => handleChannelToggle('IN_APP')}
                     />
-                    <span>📲 In-App Notification (Customer Bell)</span>
+                    <span>In-App Notification (Customer Bell)</span>
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
                     <input
@@ -1341,7 +1334,7 @@ export default function AdminNotificationsPage() {
               {!editingBroadcastId && (
                 <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#818CF8', marginBottom: '8px' }}>
-                    ⏰ Dispatch Timing
+                     Dispatch Timing
                   </label>
                   <div style={{ display: 'flex', gap: '16px', marginBottom: '10px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
@@ -1352,7 +1345,7 @@ export default function AdminNotificationsPage() {
                         checked={composerForm.dispatchMode === 'NOW'}
                         onChange={() => setComposerForm({ ...composerForm, dispatchMode: 'NOW' })}
                       />
-                      <span>🚀 Send Immediately Now</span>
+                      <span>Send Immediately Now</span>
                     </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
                       <input
@@ -1363,7 +1356,7 @@ export default function AdminNotificationsPage() {
                         checked={composerForm.dispatchMode === 'SCHEDULE'}
                         onChange={() => setComposerForm({ ...composerForm, dispatchMode: 'SCHEDULE' })}
                       />
-                      <span>⏰ Schedule for Later</span>
+                      <span> Schedule for Later</span>
                     </label>
                   </div>
 
@@ -1422,7 +1415,7 @@ export default function AdminNotificationsPage() {
                         cursor: 'pointer',
                       }}
                     >
-                      💾 Save as Draft
+                      Save as Draft
                     </button>
                   )}
                 </div>
@@ -1469,8 +1462,8 @@ export default function AdminNotificationsPage() {
                       : editingBroadcastId
                       ? 'Save Changes'
                       : composerForm.dispatchMode === 'SCHEDULE'
-                      ? '⏰ Schedule Broadcast'
-                      : '🚀 Send Broadcast Now'}
+                      ? ' Schedule Broadcast'
+                      : 'Send Broadcast Now'}
                   </button>
                 </div>
               </div>

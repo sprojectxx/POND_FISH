@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminAuditPage() {
   const [logs, setLogs] = useState([]);
@@ -89,18 +90,27 @@ export default function AdminAuditPage() {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Store Operations', href: '/admin/settings', exact: true },
+          { label: 'Reports & Exports', href: '/admin/reports' },
+          { label: 'Activity Log', href: '/admin/audit' },
+          { label: 'Order Alerts', href: '/admin/exceptions' },
+          { label: 'Security & Passwords', href: '/admin/security' },
+          { label: 'My Profile', href: '/admin/profile' },
+        ]}
+      />
+
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 6px 0', color: '#0F2C59' }}>
-            System Mutation Audit Trail
+            Activity Log
           </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
-            Authoritative, immutable event records of critical mutations across operations and settings.
-          </p>
+          
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', background: '#FFFFFF', padding: '6px 12px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-          <span style={{ color: '#22C55E' }}>Immutable Ledger</span>
+          <span style={{ color: '#10B981', fontWeight: '600' }}>Active Log</span>
           <span style={{ color: '#64748B' }}>|</span>
           <span style={{ color: '#64748B' }}>{pagination.total} Logged Events</span>
         </div>
@@ -214,17 +224,17 @@ export default function AdminAuditPage() {
             <span style={{ fontSize: '12px', color: '#64748B' }}>Audit entries are recorded automatically whenever mutations occur.</span>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          <div style={{ overflowX: 'auto', width: '100%' }}>
+            <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', color: '#64748B', borderBottom: '1px solid #E2E8F0' }}>
-                  <th style={{ padding: '12px 16px' }}>Timestamp</th>
-                  <th style={{ padding: '12px 16px' }}>Actor</th>
-                  <th style={{ padding: '12px 16px' }}>Action</th>
-                  <th style={{ padding: '12px 16px' }}>Entity Type</th>
-                  <th style={{ padding: '12px 16px' }}>Entity ID</th>
-                  <th style={{ padding: '12px 16px' }}>Payload Preview</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                  <th style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>Timestamp</th>
+                  <th style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>Actor</th>
+                  <th style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>Action</th>
+                  <th style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>Entity Type</th>
+                  <th style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>Entity ID</th>
+                  <th style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>Payload Preview</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -314,7 +324,7 @@ export default function AdminAuditPage() {
                 onClick={() => setSelectedLog(null)}
                 style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
-                ✕
+                &times;
               </button>
             </div>
 

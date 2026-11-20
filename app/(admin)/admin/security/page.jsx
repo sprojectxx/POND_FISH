@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminSecurityPage() {
   const [profile, setProfile] = useState(null);
@@ -168,18 +169,27 @@ export default function AdminSecurityPage() {
   }
 
   return (
-    <div style={{ color: '#0F2C59', maxWidth: '1000px' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Store Operations', href: '/admin/settings', exact: true },
+          { label: 'Reports & Exports', href: '/admin/reports' },
+          { label: 'Activity Log', href: '/admin/audit' },
+          { label: 'Order Alerts', href: '/admin/exceptions' },
+          { label: 'Security & Passwords', href: '/admin/security' },
+          { label: 'My Profile', href: '/admin/profile' },
+        ]}
+      />
+
       {/* Page Header */}
       <div style={{ marginBottom: '28px' }}>
         <div style={{ fontSize: '12px', color: '#1E56A0', fontWeight: '600', textTransform: 'uppercase', marginBottom: '4px' }}>
-          Governance / Admin Security
+          Governance / Security
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px 0' }}>
-          Admin Security & Session Governance
+          Security &amp; Passwords
         </h1>
-        <p style={{ fontSize: '14px', color: '#64748B', margin: 0 }}>
-          Manage your account credential security, active session tokens, and access policy.
-        </p>
+        
       </div>
 
       {/* Global Alerts */}
@@ -207,14 +217,14 @@ export default function AdminSecurityPage() {
           marginBottom: '24px',
           fontSize: '14px',
         }}>
-          ✓ {successMessage}
+          {successMessage}
         </div>
       )}
 
       {/* Security Posture Summary Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
         gap: '16px',
         marginBottom: '28px',
       }}>
@@ -229,19 +239,19 @@ export default function AdminSecurityPage() {
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Privilege Level</div>
           <div style={{ fontSize: '16px', fontWeight: '600', color: '#1E56A0' }}>
-            {profile?.is_super_admin ? 'SUPER ADMINISTRATOR' : 'ADMINISTRATOR'}
+            {profile?.is_super_admin ? 'SUPER ADMIN' : 'STORE ADMIN'}
           </div>
         </div>
 
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Current Session</div>
           <div style={{ fontSize: '16px', fontWeight: '600', color: '#0F2C59' }}>
-            AUTHENTICATED (JWT 12h)
+            Active Session
           </div>
         </div>
 
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Last Profile Touch</div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Last Login</div>
           <div style={{ fontSize: '14px', fontWeight: '500', color: '#425B73' }}>
             {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'N/A'}
           </div>
@@ -287,7 +297,7 @@ export default function AdminSecurityPage() {
               fontSize: '13px',
               marginBottom: '16px',
             }}>
-              ✓ {passwordSuccess}
+              {passwordSuccess}
             </div>
           )}
 
@@ -431,7 +441,7 @@ export default function AdminSecurityPage() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                     <span style={{ fontSize: '13px', fontWeight: '600', color: sess.isCurrent ? '#38BDF8' : '#F8FAFC' }}>
-                      {sess.isCurrent ? '📍 This Browser (Current Session)' : '💻 External Administrator Device'}
+                      {sess.isCurrent ? 'This Browser (Current Session)' : 'External Administrator Device'}
                     </span>
                     <span style={{ fontSize: '11px', color: '#64748B' }}>
                       IP: {sess.ip}

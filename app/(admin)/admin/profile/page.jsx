@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminProfilePage() {
   const [profile, setProfile] = useState(null);
@@ -51,7 +52,18 @@ export default function AdminProfilePage() {
   }
 
   return (
-    <div style={{ color: '#0F2C59', maxWidth: '900px' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Store Operations', href: '/admin/settings', exact: true },
+          { label: 'Reports & Exports', href: '/admin/reports' },
+          { label: 'Activity Log', href: '/admin/audit' },
+          { label: 'Order Alerts', href: '/admin/exceptions' },
+          { label: 'Security & Passwords', href: '/admin/security' },
+          { label: 'My Profile', href: '/admin/profile' },
+        ]}
+      />
+
       {/* Page Header */}
       <div style={{ marginBottom: '28px' }}>
         <div style={{ fontSize: '12px', color: '#1E56A0', fontWeight: '600', textTransform: 'uppercase', marginBottom: '4px' }}>
@@ -60,9 +72,7 @@ export default function AdminProfilePage() {
         <h1 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px 0' }}>
           Administrator Profile
         </h1>
-        <p style={{ fontSize: '14px', color: '#64748B', margin: 0 }}>
-          Operational profile details, verified credentials, and administrative activity footprint.
-        </p>
+        
       </div>
 
       {error && (
@@ -100,11 +110,12 @@ export default function AdminProfilePage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '32px',
+              fontSize: '28px',
+              fontWeight: '700',
               color: '#FFFFFF',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
             }}>
-
+              {(profile.name || 'A')[0].toUpperCase()}
             </div>
 
             <div style={{ flex: 1 }}>
@@ -254,7 +265,7 @@ export default function AdminProfilePage() {
                       </span>
                     </div>
                     <div style={{ fontSize: '11px', color: '#64748B' }}>
-                      {new Date(log.created_at).toLocaleString()}
+                      {log.timestamp || log.created_at ? new Date(log.timestamp || log.created_at).toLocaleString() : 'Recent'}
                     </div>
                   </div>
                 ))}

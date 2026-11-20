@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminSubscriptionPlansPage() {
   const [plans, setPlans] = useState([]);
@@ -280,16 +281,20 @@ export default function AdminSubscriptionPlansPage() {
   }, [plans, search, statusFilter]);
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
+    <div style={{ color: '#0F2C59', maxWidth: '1400px', margin: '0 auto' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Customer Subscribers & Wallets', href: '/admin/subscriptions', exact: true },
+          { label: 'Subscription Plan Packages', href: '/admin/subscriptions/plans' },
+        ]}
+      />
+
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
         <div>
-          <h1 style={{ fontSize: '26px', fontWeight: '800', margin: '0 0 6px 0', letterSpacing: '-0.02em', color: '#0F2C59' }}>
+          <h1 style={{ fontSize: '26px', fontWeight: '800', margin: 0, letterSpacing: '-0.02em', color: '#0F2C59' }}>
             Subscription Plans
           </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
-            ADMIN-08 — Configuration-driven subscription tiers, pricing, credit allowances, and species eligibility
-          </p>
         </div>
         <button
           id="btn-create-plan"
@@ -310,7 +315,7 @@ export default function AdminSubscriptionPlansPage() {
             transition: 'all 0.15s ease',
           }}
         >
-          <span>➕</span>
+          <span>+</span>
           <span>Create Subscription Plan</span>
         </button>
       </div>
@@ -329,7 +334,7 @@ export default function AdminSubscriptionPlansPage() {
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <span>⚠️ {errorMsg}</span>
+          <span> {errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: '16px' }}>×</button>
         </div>
       )}
@@ -347,7 +352,7 @@ export default function AdminSubscriptionPlansPage() {
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <span>✓ {successMsg}</span>
+          <span>{successMsg}</span>
           <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#16A34A', cursor: 'pointer', fontSize: '16px' }}>×</button>
         </div>
       )}
@@ -423,7 +428,7 @@ export default function AdminSubscriptionPlansPage() {
           </div>
         ) : filteredPlans.length === 0 ? (
           <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748B' }}>
-            <div style={{ fontSize: '32px', marginBottom: '10px' }}>📋</div>
+            <div style={{ fontSize: '32px', marginBottom: '10px' }}></div>
             <div style={{ fontSize: '16px', fontWeight: '700', color: '#0F2C59', marginBottom: '4px' }}>
               No Subscription Plans Found
             </div>
@@ -457,7 +462,7 @@ export default function AdminSubscriptionPlansPage() {
                 >
                   <td style={{ padding: '16px 20px', fontWeight: '700', color: '#0F2C59' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '16px' }}>💎</span>
+                      <span style={{ fontSize: '16px' }}></span>
                       <span>{p.title}</span>
                     </div>
                   </td>
@@ -499,8 +504,8 @@ export default function AdminSubscriptionPlansPage() {
                       {p.active_subscribers || 0}
                     </span>
                   </td>
-                  <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'nowrap' }}>
                       {/* Phase 2J-I: Manage Plan Fish Eligibility Button */}
                       <button
                         id={`btn-fish-plan-${p.id}`}
@@ -520,7 +525,7 @@ export default function AdminSubscriptionPlansPage() {
                           gap: '5px',
                         }}
                       >
-                        🐟 Eligible Fish {p.eligible_fish_count !== undefined ? `(${p.eligible_fish_count})` : ''}
+                         Eligible Fish {p.eligible_fish_count !== undefined ? `(${p.eligible_fish_count})` : ''}
                       </button>
                       <button
                         id={`btn-edit-plan-${p.id}`}
@@ -537,7 +542,7 @@ export default function AdminSubscriptionPlansPage() {
                           cursor: 'pointer',
                         }}
                       >
-                        ✏️ Edit
+                         Edit
                       </button>
                       <button
                         id={`btn-toggle-plan-${p.id}`}
@@ -856,7 +861,7 @@ export default function AdminSubscriptionPlansPage() {
             }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 4px 0', color: '#0F2C59' }}>
-                  🐟 Manage Eligible Fish — {eligibilityPlan.title}
+                   Manage Eligible Fish — {eligibilityPlan.title}
                 </h2>
                 <p style={{ margin: 0, fontSize: '12px', color: '#64748B' }}>
                   Plan quota: {eligibilityPlan.weekly_qty_limit_kg} kg/week • Plan price: ₹{Number(eligibilityPlan.price).toLocaleString('en-IN')}
@@ -888,7 +893,7 @@ export default function AdminSubscriptionPlansPage() {
                 fontSize: '13px',
                 fontWeight: '600',
               }}>
-                ⚠️ {fishModalError}
+                 {fishModalError}
               </div>
             )}
 

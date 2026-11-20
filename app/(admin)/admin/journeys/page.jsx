@@ -371,7 +371,7 @@ export default function AdminJourneysPage() {
           marginBottom: '20px',
           fontWeight: '500',
         }}>
-          ✓ {successMsg}
+          {successMsg}
         </div>
       )}
 
@@ -384,18 +384,15 @@ export default function AdminJourneysPage() {
           borderRadius: '8px',
           marginBottom: '20px',
         }}>
-          ⚠ {error}
+           {error}
         </div>
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <div style={{ fontSize: '13px', color: '#1E56A0', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            AP-14 Management Console
-          </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#0F2C59', margin: '4px 0 0 0' }}>
-            Truck Journeys & GPS Publishing Manager
+          <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#0F2C59', margin: '0', letterSpacing: '-0.02em' }}>
+            Truck Deliveries &amp; Live GPS
           </h1>
         </div>
 
@@ -403,16 +400,18 @@ export default function AdminJourneysPage() {
           <button
             onClick={() => setShowCreateModal(true)}
             style={{
-              background: '#0284C7',
+              background: '#1E56A0',
               color: '#FFFFFF',
               border: 'none',
-              padding: '10px 20px',
-              borderRadius: '6px',
-              fontWeight: 'bold',
+              padding: '9px 18px',
+              borderRadius: '8px',
+              fontWeight: '700',
+              fontSize: '13px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '6px',
+              boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
             }}
           >
             <span>+</span> Create Journey
@@ -442,13 +441,13 @@ export default function AdminJourneysPage() {
 
         <div style={{ background: '#FFFFFF', padding: '18px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
           <div style={{ fontSize: '12px', color: '#64748B', textTransform: 'uppercase', marginBottom: '6px' }}>
-            OneLap Provider Adapter
+            GPS Tracker Status
           </div>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#F59E0B' }}>
-            {selectedJourney?.providerStatus?.status === 'READY' ? '🟢 READY' : '🟡 UNCONFIGURED (STANDBY)'}
+          <div style={{ fontSize: '14px', fontWeight: 'bold', color: selectedJourney?.providerStatus?.status === 'READY' ? '#10B981' : '#F59E0B' }}>
+            {selectedJourney?.providerStatus?.status === 'READY' ? 'GPS TRACKER CONNECTED' : 'STANDBY / SIMULATED'}
           </div>
           <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
-            Hardware Ingestion Ready
+            Live vehicle location stream
           </div>
         </div>
 
@@ -510,7 +509,7 @@ export default function AdminJourneysPage() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                       <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#0F2C59' }}>
-                        🚛 {j.truck_number}
+                         {j.truck_number}
                       </span>
                       <span
                         style={{
@@ -611,7 +610,7 @@ export default function AdminJourneysPage() {
                           cursor: 'pointer',
                         }}
                       >
-                        {currentJourney.published_to_customer ? 'Unpublish from Customer' : '📢 Publish to Customers'}
+                        {currentJourney.published_to_customer ? 'Unpublish from Customer' : ' Publish to Customers'}
                       </button>
 
                       <button
@@ -627,7 +626,7 @@ export default function AdminJourneysPage() {
                           cursor: 'pointer',
                         }}
                       >
-                        📡 Ingest GPS Ping
+                        Ingest GPS Ping
                       </button>
 
                       <button
@@ -674,7 +673,7 @@ export default function AdminJourneysPage() {
                 {selectedJourney.isStale && (
                   <div style={{ padding: '6px 14px', borderRadius: '6px', background: '#78350F', border: '1px solid #F59E0B' }}>
                     <span style={{ fontSize: '12px', color: '#FEF3C7', fontWeight: 'bold' }}>
-                      ⚠ STALE GPS (&gt; 5 min)
+                       STALE GPS (&gt; 5 min)
                     </span>
                   </div>
                 )}
@@ -726,7 +725,7 @@ export default function AdminJourneysPage() {
                   </div>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '20px', color: '#64748B' }}>
-                    No GPS coordinates received yet. Use <strong>📡 Ingest GPS Ping</strong> to send coordinates.
+                    No GPS coordinates received yet. Use <strong>Ingest GPS Ping</strong> to send coordinates.
                   </div>
                 )}
 
@@ -740,7 +739,7 @@ export default function AdminJourneysPage() {
                 {/* Post-Arrival Window Status */}
                 {currentJourney.ended_at && (
                   <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid #22C55E', borderRadius: '6px', fontSize: '13px', color: '#86EFAC' }}>
-                    ✓ Truck arrived at store at {new Date(currentJourney.ended_at).toLocaleTimeString()}.
+                    Truck arrived at store at {new Date(currentJourney.ended_at).toLocaleTimeString()}.
                     {currentJourney.customer_tracking_closed_at ? (
                       <span style={{ display: 'block', marginTop: '4px', color: '#F59E0B' }}>
                         Customer tracking has ended (Closed at {new Date(currentJourney.customer_tracking_closed_at).toLocaleTimeString()}).
@@ -974,7 +973,7 @@ export default function AdminJourneysPage() {
             padding: '28px',
           }}>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', color: '#0F2C59' }}>
-              📡 Ingest GPS Position Telemetry
+              Ingest GPS Position Telemetry
             </h2>
             <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '20px' }}>
               Send genuine coordinates for <strong>{currentJourney.truck_number}</strong>. Telemetry evaluates the store geofence (12.9716, 77.5946 within 500m).

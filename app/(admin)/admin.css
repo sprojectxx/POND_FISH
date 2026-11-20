@@ -2,11 +2,19 @@
    PondFish Admin Portal - Mobile & Responsive Stylesheet
    ========================================================================== */
 
-/* Prevent root horizontal blowout */
-html,
+/* Prevent root horizontal blowout & eliminate layout shift on route transitions */
+html {
+  max-width: 100vw;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 body {
   max-width: 100vw;
   overflow-x: hidden;
+  margin: 0;
+  padding: 0;
 }
 
 .pf-admin-shell {
@@ -21,7 +29,7 @@ body {
   box-sizing: border-box;
 }
 
-/* Desktop Sidebar - Fixed to Viewport */
+/* Desktop Sidebar - Disappearing / Hover-Reveal Overlay */
 .pf-admin-sidebar {
   width: 260px;
   background: #0F2C59;
@@ -35,37 +43,30 @@ body {
   top: 0;
   left: 0;
   bottom: 0;
-  z-index: 50;
+  z-index: 100;
   overflow-y: auto;
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: #1E6EBC #0E3260;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.pf-admin-sidebar.collapsed {
   transform: translateX(-100%);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  box-shadow: none;
 }
 
-.pf-admin-sidebar-collapse-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #CBD5E1;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
+.pf-admin-sidebar.visible {
+  transform: translateX(0);
+  box-shadow: 12px 0 36px rgba(15, 44, 89, 0.35);
 }
 
-.pf-admin-sidebar-collapse-btn:hover {
-  background: rgba(56, 189, 248, 0.2);
-  border-color: #38BDF8;
-  color: #FFFFFF;
+/* Hover-sensor strip on left edge of viewport */
+.pf-admin-sidebar-hover-trigger {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 100vh;
+  z-index: 90;
+  background: transparent;
 }
 
 /* Custom Scrollbar for Sidebar & Mobile Drawer matching Image 1 */
@@ -89,23 +90,16 @@ body {
   background: #2581DA;
 }
 
-/* Content Area Wrapper */
+/* Content Area Wrapper - 100% stable full-width layout without jumping */
 .pf-admin-content-wrapper {
-  margin-left: 260px;
-  width: calc(100% - 260px);
-  max-width: calc(100% - 260px);
+  margin-left: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
   min-width: 0;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  transition: margin-left 0.25s cubic-bezier(0.16, 1, 0.3, 1), width 0.25s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.pf-admin-content-wrapper.sidebar-collapsed {
-  margin-left: 0 !important;
-  width: 100% !important;
-  max-width: 100% !important;
 }
 
 /* Desktop Sidebar Toggle in Top Header */
@@ -285,9 +279,8 @@ body {
   border-collapse: collapse !important;
 }
 
-/* Automatically contain tables inside cards across all admin pages */
-.pf-admin-main div:has(> table),
-.pf-admin-main div:has(> div > table) {
+/* Automatically contain tables inside cards across all admin pages without nested scrollbars */
+.pf-admin-main div:has(> table) {
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -296,16 +289,22 @@ body {
   -webkit-overflow-scrolling: touch !important;
 }
 
+.pf-admin-main div:has(> div > table) {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+}
+
 /* Sleek horizontal scrollbar for tables on touch screens */
 .pf-admin-table-scroll::-webkit-scrollbar,
-.pf-admin-main div:has(> table)::-webkit-scrollbar,
-.pf-admin-main div:has(> div > table)::-webkit-scrollbar {
+.pf-admin-main div:has(> table)::-webkit-scrollbar {
   height: 6px;
 }
 
 .pf-admin-table-scroll::-webkit-scrollbar-thumb,
-.pf-admin-main div:has(> table)::-webkit-scrollbar-thumb,
-.pf-admin-main div:has(> div > table)::-webkit-scrollbar-thumb {
+.pf-admin-main div:has(> table)::-webkit-scrollbar-thumb {
   background: #CBD5E1;
   border-radius: 4px;
 }

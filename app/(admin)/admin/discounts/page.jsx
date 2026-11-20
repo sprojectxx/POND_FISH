@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminDiscountsPage() {
   const [discounts, setDiscounts] = useState([]);
@@ -210,62 +211,66 @@ export default function AdminDiscountsPage() {
   const activeCount = discounts.filter((d) => computedStatus(d).label === 'ACTIVE').length;
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#0F2C59' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Fish Varieties & Stock', href: '/admin/fish', exact: true },
+          { label: 'Categories', href: '/admin/categories' },
+          { label: 'Discounts & Coupons', href: '/admin/discounts' },
+        ]}
+      />
+
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', letterSpacing: '-0.02em', margin: 0 }}>
-              Discount &amp; Promotion Campaigns
+            <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#0F2C59' }}>
+              Discounts &amp; Promotions
             </h1>
-            <span style={{
-              background: '#0284C7',
-              color: '#FFFFFF',
-              fontSize: '11px',
-              fontWeight: '700',
-              padding: '3px 8px',
-              borderRadius: '4px',
-              letterSpacing: '0.05em'
-            }}>
-              ADMIN-07
-            </span>
           </div>
-          <p style={{ margin: '6px 0 0', color: '#64748B', fontSize: '14px' }}>
-            Authoritative promotional codes, percentage off, flat discounts, and validity schedules.
-          </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button
             onClick={fetchData}
             style={{
               background: '#FFFFFF',
-              border: '1px solid #E2E8F0',
-              color: '#425B73',
-              padding: '10px 16px',
+              border: '1px solid #CBD5E1',
+              color: '#1E56A0',
+              padding: '8px 16px',
               borderRadius: '8px',
               fontSize: '13px',
-              fontWeight: '600',
+              fontWeight: '700',
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 1px 3px rgba(15, 44, 89, 0.04)',
             }}
           >
-            ↻ Refresh
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            <span>Refresh</span>
           </button>
           <button
             id="btn-create-discount"
             onClick={openCreateModal}
             style={{
-              background: '#0284C7',
+              background: '#1E56A0',
               border: 'none',
               color: '#FFFFFF',
-              padding: '10px 18px',
+              padding: '8px 18px',
               borderRadius: '8px',
               fontSize: '13px',
-              fontWeight: '600',
+              fontWeight: '700',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
             }}
           >
             <span>+</span> Create Discount
@@ -287,7 +292,7 @@ export default function AdminDiscountsPage() {
           justifyContent: 'space-between',
         }}>
           <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
@@ -303,8 +308,8 @@ export default function AdminDiscountsPage() {
           display: 'flex',
           justifyContent: 'space-between',
         }}>
-          <span>✓ {successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>✕</button>
+          <span>{successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
@@ -380,10 +385,10 @@ export default function AdminDiscountsPage() {
           <thead>
             <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Promo Code</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Target Applicability</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Benefit Value</th>
+              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Applies To</th>
+              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Discount Amount</th>
               <th style={{ padding: '14px 18px', fontWeight: '600' }}>Validity Window</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Lifecycle State</th>
+              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Status</th>
               <th style={{ padding: '14px 18px', fontWeight: '600', textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
@@ -544,7 +549,7 @@ export default function AdminDiscountsPage() {
                 onClick={() => setIsModalOpen(false)}
                 style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
-                ✕
+                &times;
               </button>
             </div>
 

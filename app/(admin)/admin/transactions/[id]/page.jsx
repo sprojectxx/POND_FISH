@@ -217,7 +217,7 @@ export default function TransactionDetailPage({ params }) {
                 gap: '6px',
               }}
             >
-              <span>↩️</span> Issue Refund / Restitution
+              Issue Refund / Restitution
             </button>
           )}
 
@@ -286,7 +286,7 @@ export default function TransactionDetailPage({ params }) {
         {/* SECTION 2: ATTRIBUTION & CHANNEL (Section 115) */}
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid #E2E8F0', paddingBottom: '12px' }}>
-            <span style={{ fontSize: '20px' }}>👷</span>
+            
             <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1E56A0' }}>
               Attribution & Processing Staff
             </h3>
@@ -324,7 +324,7 @@ export default function TransactionDetailPage({ params }) {
         {/* SECTION 3: PHYSICAL BILL (Section 110) */}
         <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid #E2E8F0', paddingBottom: '12px' }}>
-            <span style={{ fontSize: '20px' }}>🧾</span>
+            <span style={{ fontSize: '20px' }}></span>
             <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1E56A0' }}>
               Physical Bill & Slip Details
             </h3>
@@ -406,7 +406,7 @@ export default function TransactionDetailPage({ params }) {
               <div style={{ color: '#64748B', fontSize: '11px', textTransform: 'uppercase', marginBottom: '2px' }}>Gateway Verification</div>
               <div>
                 <span style={{ color: '#10B981', fontWeight: '600', fontSize: '12px' }}>
-                  ✓ Server-Side Verified
+                  Server-Side Verified
                 </span>
               </div>
             </div>
@@ -432,7 +432,7 @@ export default function TransactionDetailPage({ params }) {
       <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', marginBottom: '32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #E2E8F0', paddingBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '20px' }}>🤖</span>
+            <span style={{ fontSize: '20px' }}></span>
             <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1E56A0' }}>
               AI Extracted vs. Confirmed Values Comparison (Section 111)
             </h3>
@@ -511,7 +511,7 @@ export default function TransactionDetailPage({ params }) {
       {/* SECTION 7: FINANCIAL CALCULATION BREAKDOWN (Section 113) */}
       <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '24px', marginBottom: '32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', borderBottom: '1px solid #E2E8F0', paddingBottom: '12px' }}>
-          <span style={{ fontSize: '20px' }}>🧮</span>
+          <span style={{ fontSize: '20px' }}></span>
           <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1E56A0' }}>
             Authoritative Financial Calculation Breakdown (Section 113)
           </h3>
@@ -643,7 +643,7 @@ export default function TransactionDetailPage({ params }) {
                 fontWeight: '700',
               }}
             >
-              ✕
+              &times;
             </button>
           </div>
         </div>

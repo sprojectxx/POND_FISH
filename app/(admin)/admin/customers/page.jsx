@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -130,44 +131,46 @@ export default function AdminCustomersPage() {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Customer Directory & Profiles', href: '/admin/customers', exact: true },
+          { label: 'Broadcasts & Notifications', href: '/admin/notifications' },
+        ]}
+      />
+
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', letterSpacing: '-0.02em', margin: 0 }}>
-              Customer Directory &amp; Account Management
+            <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#0F2C59' }}>
+              Customer Directory &amp; Accounts
             </h1>
-            <span style={{
-              background: '#0284C7',
-              color: '#FFFFFF',
-              fontSize: '11px',
-              fontWeight: '700',
-              padding: '3px 8px',
-              borderRadius: '4px',
-              letterSpacing: '0.05em'
-            }}>
-              ADMIN-10
-            </span>
           </div>
-          <p style={{ margin: '6px 0 0', color: '#64748B', fontSize: '14px' }}>
-            View customer profiles, active subscription quotas, order histories, and account status governance.
-          </p>
         </div>
 
         <button
           onClick={fetchCustomers}
           style={{
             background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            color: '#425B73',
-            padding: '10px 16px',
+            border: '1px solid #CBD5E1',
+            color: '#1E56A0',
+            padding: '8px 16px',
             borderRadius: '8px',
             fontSize: '13px',
-            fontWeight: '600',
+            fontWeight: '700',
             cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: '0 1px 3px rgba(15, 44, 89, 0.04)',
           }}
         >
-          ↻ Refresh
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          <span>Refresh</span>
         </button>
       </div>
 
@@ -185,7 +188,7 @@ export default function AdminCustomersPage() {
           justifyContent: 'space-between',
         }}>
           <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
@@ -201,8 +204,8 @@ export default function AdminCustomersPage() {
           display: 'flex',
           justifyContent: 'space-between',
         }}>
-          <span>✓ {successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>✕</button>
+          <span>{successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>&times;</button>
         </div>
       )}
 
@@ -346,7 +349,7 @@ export default function AdminCustomersPage() {
                         fontSize: '11px',
                         fontWeight: '700',
                       }}>
-                        🚫 BLOCKED
+                         BLOCKED
                       </span>
                     ) : (
                       <span style={{
@@ -367,10 +370,10 @@ export default function AdminCustomersPage() {
                     {c.subscription_status === 'ACTIVE' ? (
                       <div>
                         <div style={{ color: '#10B981', fontWeight: '600', fontSize: '12px' }}>
-                          ✓ {c.subscription_plan_name || 'Active Plan'}
+                          {c.subscription_plan_name || 'Active Plan'}
                         </div>
                         <div style={{ fontSize: '11px', color: '#1E56A0', fontWeight: '600' }}>
-                          Balance: {Number(c.credit_balance || 0).toFixed(1)} kg
+                          Balance: ₹{Number(c.credit_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                     ) : (
@@ -475,7 +478,7 @@ export default function AdminCustomersPage() {
                 onClick={() => setSelectedCustomerId(null)}
                 style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
               >
-                ✕
+                &times;
               </button>
             </div>
 
@@ -562,7 +565,7 @@ export default function AdminCustomersPage() {
                         <div>
                           <div style={{ fontSize: '11px', color: '#6EE7B7' }}>CREDIT BALANCE</div>
                           <div style={{ fontSize: '13px', fontWeight: '700', color: '#FFFFFF', marginTop: '2px' }}>
-                            {Number(customerDetails.activeSubscription.credit_balance).toFixed(1)} kg remaining
+                            ₹{Number(customerDetails.activeSubscription.credit_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} remaining
                           </div>
                         </div>
                         <div>

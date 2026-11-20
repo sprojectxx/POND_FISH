@@ -7,14 +7,15 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { AdminSubNav } from '@/components/ui';
 
 const REPORT_TABS = [
   { id: 'revenue', label: 'Revenue Report' },
-  { id: 'sales', label: '🛒 Sales & Transactions' },
+  { id: 'sales', label: 'Sales & Transactions' },
   { id: 'bookings', label: 'Customer Bookings' },
-  { id: 'subscriptions', label: '🎟️ Subscription Ledger' },
+  { id: 'subscriptions', label: ' Subscription Ledger' },
   { id: 'inventory', label: 'Inventory & Freshness' },
-  { id: 'workers', label: '👷 Worker Operations' },
+  { id: 'workers', label: 'Worker Operations' },
 ];
 
 export default function AdminReportsPage() {
@@ -125,15 +126,24 @@ export default function AdminReportsPage() {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Store Operations', href: '/admin/settings', exact: true },
+          { label: 'Reports & Exports', href: '/admin/reports' },
+          { label: 'Activity Log', href: '/admin/audit' },
+          { label: 'Order Alerts', href: '/admin/exceptions' },
+          { label: 'Security & Passwords', href: '/admin/security' },
+          { label: 'My Profile', href: '/admin/profile' },
+        ]}
+      />
+
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 6px 0', color: '#0F2C59' }}>
             Reports & Commercial Exports
           </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
-            Authoritative financial audit, inventory balances, booking reconciliation, and CSV export.
-          </p>
+          
         </div>
 
         {/* Action button: Export CSV */}
@@ -155,13 +165,13 @@ export default function AdminReportsPage() {
               gap: '6px',
             }}
           >
-            {exporting ? 'Preparing download...' : '📥 Export CSV'}
+            {exporting ? 'Preparing download...' : ' Export CSV'}
           </button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #E2E8F0', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #E2E8F0', marginBottom: '20px', flexWrap: 'wrap' }}>
         {REPORT_TABS.map((tab) => (
           <button
             key={tab.id}

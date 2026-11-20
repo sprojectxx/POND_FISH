@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useCallback, useTransition } from 'react';
 import Link from 'next/link';
+import { AdminSubNav } from '@/components/ui';
 
 const STATUS_CONFIG = {
   COMPLETED: { label: 'Successful', bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981', border: '#059669' },
@@ -20,9 +21,9 @@ const STATUS_CONFIG = {
 };
 
 const PAYMENT_METHOD_LABELS = {
-  CASH: { label: 'Cash Counter', icon: '💵', color: '#10B981' },
+  CASH: { label: 'Cash Counter', color: '#10B981' },
   RAZORPAY: { label: 'Razorpay UPI/Card', icon: '', color: '#1E56A0' },
-  SUBSCRIPTION_ONLY: { label: 'Subscription Only', icon: '👑', color: '#F59E0B' },
+  SUBSCRIPTION_ONLY: { label: 'Subscription Only', color: '#F59E0B' },
 };
 
 function formatCurrency(val) {
@@ -133,19 +134,22 @@ export default function AdminTransactionsPage() {
   };
 
   return (
-    <div style={{ padding: '32px', color: '#0F2C59', maxWidth: '1600px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+      <AdminSubNav
+        tabs={[
+          { label: 'Online Bookings', href: '/admin/bookings' },
+          { label: 'Counter POS Bills & Transactions', href: '/admin/transactions' },
+        ]}
+      />
+
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-            <span style={{ fontSize: '28px' }}></span>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0F2C59', margin: 0, letterSpacing: '-0.02em' }}>
-              Transaction Management (ADMIN-13)
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0F2C59', margin: 0, letterSpacing: '-0.02em' }}>
+              Transactions &amp; POS Bills
             </h1>
           </div>
-          <p style={{ color: '#64748B', fontSize: '14px', margin: 0 }}>
-            Authoritative financial records, customer attribution, physical bill verification, AI discrepancy inspection, and restitution governance.
-          </p>
         </div>
 
         <button
@@ -157,15 +161,34 @@ export default function AdminTransactionsPage() {
             gap: '8px',
             background: '#FFFFFF',
             color: '#1E56A0',
-            border: '1px solid #E2E8F0',
-            padding: '10px 16px',
+            border: '1px solid #CBD5E1',
+            padding: '8px 16px',
             borderRadius: '8px',
             fontSize: '13px',
-            fontWeight: '600',
+            fontWeight: '700',
             cursor: loading ? 'not-allowed' : 'pointer',
+            boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
           }}
         >
-          <span></span> {loading ? 'Refreshing...' : 'Refresh Records'}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              transition: 'transform 0.3s ease',
+              transform: loading ? 'rotate(180deg)' : 'none',
+            }}
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          <span>{loading ? 'Refreshing...' : 'Refresh Records'}</span>
         </button>
       </div>
 
@@ -233,26 +256,31 @@ export default function AdminTransactionsPage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
-        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '12px', padding: '16px 20px', marginBottom: '24px', boxShadow: '0 2px 6px rgba(15, 44, 89, 0.03)' }}>
+        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {/* Search Input */}
-            <div style={{ flex: '1 1 320px', position: 'relative' }}>
+            {/* Search Input with Search Icon */}
+            <div style={{ flex: '2 1 320px', position: 'relative' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
               <input
                 id="search-transactions"
                 type="text"
-                placeholder="Search by Transaction ID, Bill ID, Customer Name/Phone, Worker..."
+                placeholder="Search by Transaction ID, Bill ID, Customer Name, Phone, Worker..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{
                   width: '100%',
                   background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
+                  border: '1px solid #CBD5E1',
                   color: '#0F2C59',
-                  padding: '10px 14px',
+                  padding: '9px 14px 9px 36px',
                   borderRadius: '8px',
                   fontSize: '13px',
                   outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
@@ -260,17 +288,24 @@ export default function AdminTransactionsPage() {
             <button
               type="submit"
               style={{
-                background: '#0284C7',
+                background: '#1E56A0',
                 color: '#FFFFFF',
                 border: 'none',
-                padding: '10px 20px',
+                padding: '9px 18px',
                 borderRadius: '8px',
                 fontSize: '13px',
-                fontWeight: '600',
+                fontWeight: '700',
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}
             >
-              Search
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <span>Search</span>
             </button>
 
             {(search || statusFilter !== 'ALL' || paymentMethodFilter !== 'ALL' || dateFrom || dateTo) && (
@@ -278,25 +313,27 @@ export default function AdminTransactionsPage() {
                 type="button"
                 onClick={handleClearFilters}
                 style={{
-                  background: 'transparent',
+                  background: '#F1F5F9',
                   color: '#64748B',
                   border: '1px solid #CBD5E1',
-                  padding: '10px 16px',
+                  padding: '9px 14px',
                   borderRadius: '8px',
-                  fontSize: '13px',
+                  fontSize: '12px',
+                  fontWeight: '700',
                   cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
-                Clear Filters
+                Reset Filters
               </button>
             )}
           </div>
 
           {/* Secondary Filter Row */}
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #E2E8F0' }}>
+          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #E2E8F0' }}>
             {/* Status Tabs */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '12px', color: '#64748B', marginRight: '4px' }}>Status:</span>
+              <span style={{ fontSize: '12px', color: '#64748B', fontWeight: '700', marginRight: '2px' }}>Status:</span>
               {['ALL', 'COMPLETED', 'PENDING', 'CANCELLED', 'REFUNDED', 'FAILED'].map((st) => (
                 <button
                   key={st}
@@ -305,14 +342,14 @@ export default function AdminTransactionsPage() {
                   style={{
                     background: statusFilter === st
                       ? (st === 'CANCELLED' || st === 'FAILED' ? '#DC2626' : '#1E56A0')
-                      : (st === 'CANCELLED' || st === 'FAILED' ? '#FEF2F2' : '#F8FAFC'),
+                      : '#F8FAFC',
                     color: statusFilter === st
                       ? '#FFFFFF'
-                      : (st === 'CANCELLED' || st === 'FAILED' ? '#DC2626' : '#425B73'),
+                      : (st === 'CANCELLED' || st === 'FAILED' ? '#DC2626' : '#475569'),
                     border: statusFilter === st
                       ? (st === 'CANCELLED' || st === 'FAILED' ? '1px solid #DC2626' : '1px solid #1E56A0')
-                      : (st === 'CANCELLED' || st === 'FAILED' ? '1px solid #FECACA' : '1px solid #CBD5E1'),
-                    padding: '6px 12px',
+                      : '1px solid #CBD5E1',
+                    padding: '5px 12px',
                     borderRadius: '6px',
                     fontSize: '12px',
                     fontWeight: statusFilter === st ? '700' : '600',
@@ -326,19 +363,21 @@ export default function AdminTransactionsPage() {
             </div>
 
             {/* Payment Method Filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#64748B' }}>Payment:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12px', color: '#64748B', fontWeight: '700' }}>Payment:</span>
               <select
                 value={paymentMethodFilter}
                 onChange={(e) => setPaymentMethodFilter(e.target.value)}
                 style={{
                   background: '#F8FAFC',
                   color: '#0F2C59',
-                  border: '1px solid #E2E8F0',
+                  border: '1px solid #CBD5E1',
                   padding: '6px 12px',
                   borderRadius: '6px',
                   fontSize: '12px',
+                  fontWeight: '500',
                   outline: 'none',
+                  cursor: 'pointer',
                 }}
               >
                 <option value="ALL">All Methods</option>
@@ -349,33 +388,48 @@ export default function AdminTransactionsPage() {
             </div>
 
             {/* Date Range */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#64748B' }}>Date:</span>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#F8FAFC',
+                border: '1px solid #CBD5E1',
+                borderRadius: '6px',
+                padding: '4px 10px',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
+                title="From Date"
                 style={{
-                  background: '#F8FAFC',
+                  border: 'none',
+                  background: 'transparent',
                   color: '#0F2C59',
-                  border: '1px solid #E2E8F0',
-                  padding: '5px 8px',
-                  borderRadius: '6px',
                   fontSize: '12px',
+                  outline: 'none',
                 }}
               />
-              <span style={{ color: '#64748B', fontSize: '12px' }}>to</span>
+              <span style={{ color: '#94A3B8', fontSize: '11px', fontWeight: '700' }}>&rarr;</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
+                title="To Date"
                 style={{
-                  background: '#F8FAFC',
+                  border: 'none',
+                  background: 'transparent',
                   color: '#0F2C59',
-                  border: '1px solid #E2E8F0',
-                  padding: '5px 8px',
-                  borderRadius: '6px',
                   fontSize: '12px',
+                  outline: 'none',
                 }}
               />
             </div>
@@ -393,22 +447,22 @@ export default function AdminTransactionsPage() {
       {/* Transactions Data Table */}
       <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          <table style={{ width: '100%', minWidth: '1200px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Transaction ID</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Bill ID</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Customer</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Fish Cuts</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600', textAlign: 'right' }}>Qty (kg)</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600', textAlign: 'right' }}>Bill Amount</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600', textAlign: 'right' }}>Sub Credit Used</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600', textAlign: 'right' }}>Paid Amount</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Payment Method</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Worker / Channel</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Status</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Date / Time</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600', textAlign: 'center' }}>Action</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', whiteSpace: 'nowrap' }}>Transaction ID</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', whiteSpace: 'nowrap' }}>Bill ID</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', whiteSpace: 'nowrap' }}>Customer</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', whiteSpace: 'nowrap' }}>Fish Cuts</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', textAlign: 'right', whiteSpace: 'nowrap' }}>Qty (kg)</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', textAlign: 'right', whiteSpace: 'nowrap' }}>Bill Amount</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', textAlign: 'right', whiteSpace: 'nowrap' }}>Sub Credit Used</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '110px' }}>Paid Amount</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', whiteSpace: 'nowrap' }}>Payment Method</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', whiteSpace: 'nowrap' }}>Worker / Channel</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', whiteSpace: 'nowrap' }}>Status</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', whiteSpace: 'nowrap' }}>Date / Time</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', textAlign: 'center', whiteSpace: 'nowrap' }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -422,7 +476,7 @@ export default function AdminTransactionsPage() {
               ) : transactions.length === 0 ? (
                 <tr>
                   <td colSpan="13" style={{ padding: '64px', textAlign: 'center', color: '#64748B' }}>
-                    <div style={{ fontSize: '36px', marginBottom: '12px' }}>🧾</div>
+                    <div style={{ fontSize: '36px', marginBottom: '12px' }}></div>
                     <div style={{ fontSize: '16px', fontWeight: '600', color: '#0F2C59', marginBottom: '4px' }}>
                       No Transactions Found
                     </div>

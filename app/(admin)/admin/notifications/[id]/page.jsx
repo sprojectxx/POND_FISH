@@ -216,7 +216,7 @@ export default function AdminNotificationDetailPage() {
           }}
         >
           <h2 style={{ fontSize: '14px', fontWeight: '700', color: '#1E56A0', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>✉️</span> Message Content & Status
+            Message Content & Status
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -266,7 +266,7 @@ export default function AdminNotificationDetailPage() {
         }}
       >
         <h2 style={{ fontSize: '15px', fontWeight: '700', color: '#0F2C59', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>🚀</span> Multi-Channel Push Delivery Attempts ({notification.deliveries?.length || 0})
+          Multi-Channel Push Delivery Attempts ({notification.deliveries?.length || 0})
         </h2>
 
         {(!notification.deliveries || notification.deliveries.length === 0) ? (
