@@ -17,6 +17,7 @@ export default function AdminDiscountsPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [actionLoading, setActionLoading] = useState(false);
+  const [togglingId, setTogglingId] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
@@ -165,22 +166,37 @@ export default function AdminDiscountsPage() {
   };
 
   const handleToggleActive = async (d) => {
+    const prevActive = d.active !== false;
+    const nextActive = !prevActive;
+
+    // Instant Optimistic UI Update
+    setDiscounts((prev) =>
+      prev.map((item) => (item.id === d.id ? { ...item, active: nextActive } : item))
+    );
+    setTogglingId(d.id);
+
     try {
       const res = await fetch(`/api/v1/admin/discounts/${d.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: !d.active }),
+        body: JSON.stringify({ active: nextActive }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (!res.ok || !data.success) {
+        // Rollback
         setDiscounts((prev) =>
-          prev.map((item) => (item.id === d.id ? { ...item, active: !d.active } : item))
+          prev.map((item) => (item.id === d.id ? { ...item, active: prevActive } : item))
         );
-      } else {
         alert(data.error?.message || 'Toggle failed');
       }
     } catch (err) {
-      alert(err.message);
+      // Rollback
+      setDiscounts((prev) =>
+        prev.map((item) => (item.id === d.id ? { ...item, active: prevActive } : item))
+      );
+      alert(err.message || 'Network error updating discount status');
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -492,50 +508,97 @@ export default function AdminDiscountsPage() {
                       </span>
                     </td>
 
-                    <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                    <td style={{ padding: '14px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}>
                         <button
+                          type="button"
                           onClick={() => handleToggleActive(d)}
+                          disabled={togglingId === d.id}
                           style={{
-                            background: d.active !== false ? '#064E3B' : '#E2E8F0',
-                            border: `1px solid ${d.active !== false ? '#10B981' : '#CBD5E1'}`,
-                            color: d.active !== false ? '#6EE7B7' : '#94A3B8',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
+                            background: d.active !== false ? '#ECFDF5' : '#F1F5F9',
+                            border: `1px solid ${d.active !== false ? '#A7F3D0' : '#CBD5E1'}`,
+                            color: d.active !== false ? '#065F46' : '#334155',
+                            padding: '5px 12px',
+                            borderRadius: '20px',
+                            fontSize: '11.5px',
+                            fontWeight: '700',
+                            cursor: togglingId === d.id ? 'wait' : 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.15s ease',
+                            opacity: togglingId === d.id ? 0.75 : 1,
                           }}
+                          title="Click to toggle discount status"
                         >
-                          {d.active !== false ? 'Active' : 'Disabled'}
+                          {togglingId === d.id ? (
+                            <svg className="pf-animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                              <path d="M12 2a10 10 0 0 1 10 10" />
+                            </svg>
+                          ) : (
+                            <span
+                              style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                background: d.active !== false ? '#10B981' : '#64748B',
+                              }}
+                            />
+                          )}
+                          <span>{togglingId === d.id ? 'Updating...' : d.active !== false ? 'Active' : 'Disabled'}</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => openEditModal(d)}
                           style={{
-                            background: '#F1F5F9',
-                            border: 'none',
-                            color: '#0F2C59',
+                            background: '#EFF6FF',
+                            border: '1px solid #DBEAFE',
+                            color: '#1E56A0',
                             padding: '6px 12px',
-                            borderRadius: '6px',
+                            borderRadius: '7px',
                             fontSize: '12px',
                             cursor: 'pointer',
+                            fontWeight: '600',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            transition: 'all 0.15s ease',
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#DBEAFE'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = '#EFF6FF'; }}
                         >
-                          Edit
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                          <span>Edit</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeleteTarget(d)}
                           style={{
-                            background: 'rgba(239, 68, 68, 0.15)',
-                            border: '1px solid #EF4444',
-                            color: '#FCA5A5',
+                            background: '#FEF2F2',
+                            border: '1px solid #FEE2E2',
+                            color: '#DC2626',
                             padding: '6px 10px',
-                            borderRadius: '6px',
+                            borderRadius: '7px',
                             fontSize: '12px',
                             cursor: 'pointer',
+                            fontWeight: '600',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.15s ease',
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#FEE2E2'; e.currentTarget.style.borderColor = '#FECACA'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.borderColor = '#FEE2E2'; }}
                         >
-                          Delete
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -794,12 +857,12 @@ export default function AdminDiscountsPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Modern, Friendly Delete Confirmation Modal */}
       {deleteTarget && (
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 44, 89, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -809,28 +872,86 @@ export default function AdminDiscountsPage() {
         }}>
           <div style={{
             background: '#FFFFFF',
-            border: '1px solid #CBD5E1',
-            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            borderRadius: '14px',
             width: '100%',
-            maxWidth: '440px',
+            maxWidth: '460px',
             padding: '24px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
+            textAlign: 'center',
           }}>
-            <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: '#DC2626', fontWeight: '700' }}>
-              Confirm Deletion: {deleteTarget.discount_code}
+            {/* Warning Icon Badge */}
+            <div style={{
+              width: '54px',
+              height: '54px',
+              borderRadius: '50%',
+              background: '#FEE2E2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              color: '#DC2626',
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </div>
+
+            <h3 style={{ margin: '0 0 6px', fontSize: '18px', color: '#0F2C59', fontWeight: '800' }}>
+              Do you really want to delete this discount campaign?
             </h3>
-            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#64748B', lineHeight: '1.5' }}>
-              Are you sure you want to permanently delete this discount campaign? Customers will no longer be able to apply this code during checkout.
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#64748B', lineHeight: '1.5' }}>
+              Are you sure you want to delete promo code <strong style={{ color: '#0F2C59' }}>{deleteTarget.discount_code}</strong>? Customers will immediately lose eligibility for this promotional discount.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+
+            {/* Target Item Summary Card */}
+            <div style={{
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              borderRadius: '10px',
+              padding: '12px 16px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              textAlign: 'left',
+            }}>
+              <div style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                background: '#EFF6FF',
+                border: '1px solid #DBEAFE',
+                color: '#1E56A0',
+                fontFamily: 'monospace',
+                fontWeight: '800',
+                fontSize: '13px',
+                flexShrink: 0,
+              }}>
+                {deleteTarget.discount_code}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: '700', color: '#0F2C59', fontSize: '13px' }}>
+                  {deleteTarget.discount_percent ? `${deleteTarget.discount_percent}% OFF` : `₹${Number(deleteTarget.flat_discount_amount || 0).toFixed(2)} FLAT`}
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#64748B' }}>
+                  {deleteTarget.fish_name ? `Applies to: ${deleteTarget.fish_name}` : 'Entire Store / All Fish'}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
                 style={{
+                  flex: 1,
                   background: '#FFFFFF',
                   border: '1px solid #CBD5E1',
                   color: '#334155',
-                  padding: '9px 18px',
+                  padding: '10px 18px',
                   borderRadius: '8px',
                   fontSize: '13px',
                   fontWeight: '600',
@@ -838,17 +959,18 @@ export default function AdminDiscountsPage() {
                   transition: 'all 0.15s ease',
                 }}
               >
-                Cancel
+                No, Keep It
               </button>
               <button
                 type="button"
                 onClick={handleDelete}
                 disabled={actionLoading}
                 style={{
+                  flex: 1,
                   background: '#DC2626',
                   border: 'none',
                   color: '#FFFFFF',
-                  padding: '9px 18px',
+                  padding: '10px 18px',
                   borderRadius: '8px',
                   fontSize: '13px',
                   fontWeight: '700',
@@ -857,7 +979,7 @@ export default function AdminDiscountsPage() {
                   transition: 'all 0.15s ease',
                 }}
               >
-                {actionLoading ? 'Deleting...' : 'Confirm Delete'}
+                {actionLoading ? 'Deleting...' : 'Yes, Delete Campaign'}
               </button>
             </div>
           </div>

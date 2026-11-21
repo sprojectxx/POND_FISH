@@ -47,7 +47,7 @@ body {
   overflow-y: auto;
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: #1E6EBC #0E3260;
+  scrollbar-color: #1E3A66 #0E3260;
   transform: translateX(-100%);
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
   box-shadow: none;
@@ -69,25 +69,24 @@ body {
   background: transparent;
 }
 
-/* Custom Scrollbar for Sidebar & Mobile Drawer matching Image 1 */
+/* Custom Scrollbar for Sidebar & Mobile Drawer matching Theme */
 .pf-admin-sidebar::-webkit-scrollbar,
 .pf-admin-mobile-drawer::-webkit-scrollbar {
-  width: 8px;
+  width: 5px;
 }
 .pf-admin-sidebar::-webkit-scrollbar-track,
 .pf-admin-mobile-drawer::-webkit-scrollbar-track {
-  background: #0E3260;
+  background: transparent;
   border-radius: 9999px;
-  margin: 4px 0;
 }
 .pf-admin-sidebar::-webkit-scrollbar-thumb,
 .pf-admin-mobile-drawer::-webkit-scrollbar-thumb {
-  background: #1E6EBC;
+  background: #1E3A66;
   border-radius: 9999px;
 }
 .pf-admin-sidebar::-webkit-scrollbar-thumb:hover,
 .pf-admin-mobile-drawer::-webkit-scrollbar-thumb:hover {
-  background: #2581DA;
+  background: #254F8A;
 }
 
 /* Content Area Wrapper - 100% stable full-width layout without jumping */
@@ -173,26 +172,24 @@ body {
   width: 100%;
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: #1E6EBC #E2E8F0;
+  scrollbar-color: #CBD5E1 transparent;
 }
 
 .pf-admin-main::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .pf-admin-main::-webkit-scrollbar-track {
-  background: #F1F5F9;
-  border-radius: 9999px;
-  margin: 4px 0;
+  background: transparent;
 }
 
 .pf-admin-main::-webkit-scrollbar-thumb {
-  background: #1E6EBC;
+  background: #CBD5E1;
   border-radius: 9999px;
 }
 
 .pf-admin-main::-webkit-scrollbar-thumb:hover {
-  background: #2581DA;
+  background: #94A3B8;
 }
 
 /* Mobile Drawer Overlay & Drawer */

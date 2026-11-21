@@ -64,6 +64,9 @@ export default function AdminPagination({
         gap: '12px',
         fontSize: '12px',
         color: '#64748B',
+        overflow: 'visible',
+        position: 'relative',
+        zIndex: 25,
       }}
     >
       {/* Left: Record summary & Rows per page selector */}
@@ -85,6 +88,7 @@ export default function AdminPagination({
             <AdminSelect
               id="pf-pagination-limit"
               size="sm"
+              placement="top"
               value={limit}
               onChange={(newLim) => {
                 const parsed = parseInt(newLim, 10);

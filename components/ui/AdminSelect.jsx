@@ -18,6 +18,7 @@ export default function AdminSelect({
   buttonStyle = {},
   menuStyle = {},
   align = 'left',
+  placement = 'bottom',
   size = 'md',
   icon = null,
   id,
@@ -146,7 +147,15 @@ export default function AdminSelect({
         <div
           style={{
             position: 'absolute',
-            top: 'calc(100% + 5px)',
+            ...(placement === 'top'
+              ? {
+                  bottom: 'calc(100% + 5px)',
+                  boxShadow: '0 -10px 25px rgba(15, 44, 89, 0.14), 0 -4px 10px rgba(15, 44, 89, 0.05)',
+                }
+              : {
+                  top: 'calc(100% + 5px)',
+                  boxShadow: '0 10px 25px rgba(15, 44, 89, 0.14), 0 4px 10px rgba(15, 44, 89, 0.05)',
+                }),
             [align === 'right' ? 'right' : 'left']: 0,
             minWidth: '100%',
             width: 'max-content',
@@ -154,8 +163,7 @@ export default function AdminSelect({
             background: '#FFFFFF',
             borderRadius: '10px',
             border: '1px solid #CBD5E1',
-            boxShadow: '0 10px 25px rgba(15, 44, 89, 0.14), 0 4px 10px rgba(15, 44, 89, 0.05)',
-            zIndex: 75,
+            zIndex: 100,
             padding: '5px',
             display: 'flex',
             flexDirection: 'column',
