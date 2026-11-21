@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AdminSubNav, AdminPagination } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
 
 export default function AdminExceptionsPage() {
   const [exceptions, setExceptions] = useState([]);
