@@ -21,7 +21,7 @@ export async function GET(request) {
     const dateFrom = searchParams.get('dateFrom') || null;
     const dateTo = searchParams.get('dateTo') || null;
     const page = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit'), 10) || 20));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit'), 10) || 25));
     const offset = (page - 1) * limit;
 
     const result = await notificationsEngine.listAdminNotifications({

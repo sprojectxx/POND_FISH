@@ -19,7 +19,7 @@ export async function GET(request) {
     const status = searchParams.get('status') || 'ALL';
     const search = searchParams.get('search') || null;
     const page = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit'), 10) || 20));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit'), 10) || 25));
     const offset = (page - 1) * limit;
 
     const result = await notificationsEngine.listBroadcasts({

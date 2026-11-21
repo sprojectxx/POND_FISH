@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { AdminSubNav } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
 
 export default function AdminAuditPage() {
   const [logs, setLogs] = useState([]);
@@ -25,14 +25,14 @@ export default function AdminAuditPage() {
   // Selected Log for Inspection Modal
   const [selectedLog, setSelectedLog] = useState(null);
 
-  const fetchLogs = useCallback(async (page = 1) => {
+  const fetchLogs = useCallback(async (page = 1, limit = pagination.limit || 25) => {
     try {
       setLoading(true);
       setError(null);
 
       const params = new URLSearchParams();
       params.append('page', page.toString());
-      params.append('limit', '25');
+      params.append('limit', limit.toString());
       if (actorType) params.append('actorType', actorType);
       if (entityType) params.append('entityType', entityType);
       if (search) params.append('search', search);
@@ -59,7 +59,7 @@ export default function AdminAuditPage() {
     } finally {
       setLoading(false);
     }
-  }, [actorType, entityType, search, from, to]);
+  }, [pagination.limit, actorType, entityType, search, from, to]);
 
   useEffect(() => {
     fetchLogs(1);
@@ -121,36 +121,38 @@ export default function AdminAuditPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', alignItems: 'flex-end' }}>
           <div>
             <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Actor Type</label>
-            <select
+            <AdminSelect
               value={actorType}
-              onChange={(e) => setActorType(e.target.value)}
-              style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px', color: '#0F2C59', fontSize: '13px' }}
-            >
-              <option value="">All Actors</option>
-              <option value="ADMIN">ADMIN</option>
-              <option value="WORKER">WORKER</option>
-              <option value="CUSTOMER">CUSTOMER</option>
-              <option value="SYSTEM">SYSTEM</option>
-            </select>
+              onChange={(val) => setActorType(val)}
+              options={[
+                { value: '', label: 'All Actors' },
+                { value: 'ADMIN', label: 'ADMIN' },
+                { value: 'WORKER', label: 'WORKER' },
+                { value: 'CUSTOMER', label: 'CUSTOMER' },
+                { value: 'SYSTEM', label: 'SYSTEM' },
+              ]}
+              style={{ width: '100%' }}
+            />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Entity Type</label>
-            <select
+            <AdminSelect
               value={entityType}
-              onChange={(e) => setEntityType(e.target.value)}
-              style={{ width: '100%', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '8px', color: '#0F2C59', fontSize: '13px' }}
-            >
-              <option value="">All Entities</option>
-              <option value="SETTINGS">SETTINGS</option>
-              <option value="INVENTORY">INVENTORY</option>
-              <option value="FISH">FISH</option>
-              <option value="BOOKING">BOOKING</option>
-              <option value="TRANSACTION">TRANSACTION</option>
-              <option value="SUBSCRIPTION">SUBSCRIPTION</option>
-              <option value="GPS_JOURNEY">GPS_JOURNEY</option>
-              <option value="EXCEPTIONS">EXCEPTIONS</option>
-            </select>
+              onChange={(val) => setEntityType(val)}
+              options={[
+                { value: '', label: 'All Entities' },
+                { value: 'SETTINGS', label: 'SETTINGS' },
+                { value: 'INVENTORY', label: 'INVENTORY' },
+                { value: 'FISH', label: 'FISH' },
+                { value: 'BOOKING', label: 'BOOKING' },
+                { value: 'TRANSACTION', label: 'TRANSACTION' },
+                { value: 'SUBSCRIPTION', label: 'SUBSCRIPTION' },
+                { value: 'GPS_JOURNEY', label: 'GPS_JOURNEY' },
+                { value: 'EXCEPTIONS', label: 'EXCEPTIONS' },
+              ]}
+              style={{ width: '100%' }}
+            />
           </div>
 
           <div>
@@ -286,30 +288,20 @@ export default function AdminAuditPage() {
           </div>
         )}
 
-        {/* Pagination Controls */}
-        {!loading && pagination.total > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', fontSize: '12px', color: '#64748B' }}>
-            <div>
-              Showing {Math.min(pagination.total, (pagination.page - 1) * pagination.limit + 1)} - {Math.min(pagination.total, pagination.page * pagination.limit)} of {pagination.total} records
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                disabled={pagination.page <= 1}
-                onClick={() => fetchLogs(pagination.page - 1)}
-                style={{ background: '#FFFFFF', color: '#0F2C59', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '4px 10px', cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer' }}
-              >
-                Previous
-              </button>
-              <button
-                disabled={pagination.page >= pagination.totalPages}
-                onClick={() => fetchLogs(pagination.page + 1)}
-                style={{ background: '#FFFFFF', color: '#0F2C59', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '4px 10px', cursor: pagination.page >= pagination.totalPages ? 'not-allowed' : 'pointer' }}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Standardized Pagination Controls */}
+        <AdminPagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          limit={pagination.limit}
+          onPageChange={(newPage) => fetchLogs(newPage, pagination.limit)}
+          onLimitChange={(newLimit) => {
+            setPagination((prev) => ({ ...prev, limit: newLimit, page: 1 }));
+            fetchLogs(1, newLimit);
+          }}
+          itemName="records"
+          loading={loading}
+        />
       </div>
 
       {/* Audit Detail Modal (Section 167) */}

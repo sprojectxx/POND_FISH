@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useTransition } from 'react';
-import { AdminSubNav } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
 
 const STATUS_CONFIG = {
   CREATED: { label: 'Created', bg: '#F1F5F9', text: '#64748B', border: '#E2E8F0' },
@@ -33,7 +33,7 @@ export default function AdminBookingsPage() {
   });
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 20,
+    limit: 25,
     total: 0,
     totalPages: 1,
   });
@@ -63,18 +63,28 @@ export default function AdminBookingsPage() {
 
   const [, startTransition] = useTransition();
 
+  // Debounced search query to prevent typing lag
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // Fetch Bookings with Query Parameters
   const fetchBookings = useCallback(
-    async (pageToLoad = pagination.page) => {
+    async (pageToLoad = pagination.page, limitToLoad = pagination.limit) => {
       try {
         setLoading(true);
         setErrorMsg(null);
 
+        const currentLimit = limitToLoad || pagination.limit || 25;
         const params = new URLSearchParams();
         params.set('page', pageToLoad.toString());
-        params.set('limit', '20');
+        params.set('limit', currentLimit.toString());
 
-        if (search.trim()) params.set('search', search.trim());
+        if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
         if (statusFilter && statusFilter !== 'ALL') params.set('status', statusFilter);
         if (sourceFilter && sourceFilter !== 'ALL') params.set('source', sourceFilter);
         if (dateFrom) params.set('dateFrom', dateFrom);
@@ -96,19 +106,15 @@ export default function AdminBookingsPage() {
         setLoading(false);
       }
     },
-    [pagination.page, search, statusFilter, sourceFilter, dateFrom, dateTo]
+    [pagination.page, pagination.limit, debouncedSearch, statusFilter, sourceFilter, dateFrom, dateTo]
   );
 
-  // Initial load and filter change trigger
+  // Immediate fetch on filter clicks or debounced search update
   useEffect(() => {
-    const timer = setTimeout(() => {
-      startTransition(() => {
-        fetchBookings(1);
-      });
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [search, statusFilter, sourceFilter, dateFrom, dateTo]);
+    startTransition(() => {
+      fetchBookings(1);
+    });
+  }, [debouncedSearch, statusFilter, sourceFilter, dateFrom, dateTo]);
 
   // Fetch Booking Detail
   const openDetail = async (id) => {
@@ -318,135 +324,175 @@ export default function AdminBookingsPage() {
         </div>
       )}
 
-      {/* Status Counters Dashboard */}
+      {/* Status Pipeline Ribbon */}
       <div
-        className="pf-admin-metrics-grid"
         style={{
+          background: '#F8FAFC',
+          border: '1px solid #E2E8F0',
+          borderRadius: '16px',
+          padding: '8px',
+          marginBottom: '20px',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-          gap: '12px',
-          marginBottom: '24px',
-          width: '100%',
-          boxSizing: 'border-box',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: '8px',
+          boxShadow: '0 2px 8px rgba(15, 44, 89, 0.04)',
         }}
       >
-        <div
-          onClick={() => setStatusFilter('ALL')}
-          style={{
-            background: statusFilter === 'ALL' ? '#EFF6FF' : '#FFFFFF',
-            border: `1px solid ${statusFilter === 'ALL' ? '#38BDF8' : '#E2E8F0'}`,
-            borderRadius: '12px', padding: '16px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
-          }}
-        >
-          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: '600', textTransform: 'uppercase' }}>
-            All Bookings
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#0F2C59', marginTop: '4px' }}>
-            {counts.all || 0}
-          </div>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('CONFIRMED')}
-          style={{
-            background: statusFilter === 'CONFIRMED' ? '#EFF6FF' : '#FFFFFF',
-            border: `1px solid ${statusFilter === 'CONFIRMED' ? '#38BDF8' : '#E2E8F0'}`,
-            borderRadius: '12px', padding: '16px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
-          }}
-        >
-          <div style={{ fontSize: '11px', color: '#38BDF8', fontWeight: '600', textTransform: 'uppercase' }}>
-            Confirmed
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#38BDF8', marginTop: '4px' }}>
-            {counts.confirmed || 0}
-          </div>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('PENDING_COLLECTION')}
-          style={{
-            background: statusFilter === 'PENDING_COLLECTION' ? '#EFF6FF' : '#FFFFFF',
-            border: `1px solid ${statusFilter === 'PENDING_COLLECTION' ? '#F59E0B' : '#E2E8F0'}`,
-            borderRadius: '12px', padding: '16px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
-          }}
-        >
-          <div style={{ fontSize: '11px', color: '#F59E0B', fontWeight: '600', textTransform: 'uppercase' }}>
-            Preparing / Collection
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#F59E0B', marginTop: '4px' }}>
-            {counts.pendingCollection || 0}
-          </div>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('COMPLETED')}
-          style={{
-            background: statusFilter === 'COMPLETED' ? '#EFF6FF' : '#FFFFFF',
-            border: `1px solid ${statusFilter === 'COMPLETED' ? '#10B981' : '#E2E8F0'}`,
-            borderRadius: '12px', padding: '16px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
-          }}
-        >
-          <div style={{ fontSize: '11px', color: '#10B981', fontWeight: '600', textTransform: 'uppercase' }}>
-            Completed
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#10B981', marginTop: '4px' }}>
-            {counts.completed || 0}
-          </div>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('CANCELLED')}
-          style={{
-            background: statusFilter === 'CANCELLED' ? '#EFF6FF' : '#FFFFFF',
-            border: `1px solid ${statusFilter === 'CANCELLED' ? '#EF4444' : '#E2E8F0'}`,
-            borderRadius: '12px', padding: '16px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
-          }}
-        >
-          <div style={{ fontSize: '11px', color: '#EF4444', fontWeight: '600', textTransform: 'uppercase' }}>
-            Cancelled
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#EF4444', marginTop: '4px' }}>
-            {counts.cancelled || 0}
-          </div>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('EXPIRED')}
-          style={{
-            background: statusFilter === 'EXPIRED' ? '#EFF6FF' : '#FFFFFF',
-            border: `1px solid ${statusFilter === 'EXPIRED' ? '#94A3B8' : '#E2E8F0'}`,
-            borderRadius: '12px', padding: '16px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
-          }}
-        >
-          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: '600', textTransform: 'uppercase' }}>
-            Expired (48h)
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#64748B', marginTop: '4px' }}>
-            {counts.expired || 0}
-          </div>
-        </div>
+        {[
+          {
+            key: 'ALL',
+            label: 'All Bookings',
+            count: counts.all || 0,
+            dotColor: '#38BDF8',
+            activeBg: '#0F2C59',
+            activeBorder: '#0F2C59',
+            activeText: '#FFFFFF',
+            activeLabel: '#93C5FD',
+            shadow: '0 4px 14px rgba(15, 44, 89, 0.22)',
+          },
+          {
+            key: 'CONFIRMED',
+            label: 'Confirmed',
+            count: counts.confirmed || 0,
+            dotColor: '#2563EB',
+            activeBg: '#EFF6FF',
+            activeBorder: '#1E56A0',
+            activeText: '#1E56A0',
+            activeLabel: '#1E40AF',
+            shadow: '0 4px 14px rgba(30, 86, 160, 0.16)',
+          },
+          {
+            key: 'PENDING_COLLECTION',
+            label: 'Awaiting Pickup',
+            count: counts.pendingCollection || 0,
+            dotColor: '#D97706',
+            activeBg: '#FEF3C7',
+            activeBorder: '#D97706',
+            activeText: '#92400E',
+            activeLabel: '#78350F',
+            shadow: '0 4px 14px rgba(217, 119, 6, 0.18)',
+          },
+          {
+            key: 'COMPLETED',
+            label: 'Fulfilled',
+            count: counts.completed || 0,
+            dotColor: '#16A34A',
+            activeBg: '#DCFCE7',
+            activeBorder: '#16A34A',
+            activeText: '#14532D',
+            activeLabel: '#166534',
+            shadow: '0 4px 14px rgba(22, 163, 74, 0.16)',
+          },
+          {
+            key: 'CANCELLED',
+            label: 'Cancelled',
+            count: counts.cancelled || 0,
+            dotColor: '#DC2626',
+            activeBg: '#FEE2E2',
+            activeBorder: '#DC2626',
+            activeText: '#991B1B',
+            activeLabel: '#7F1D1D',
+            shadow: '0 4px 14px rgba(220, 38, 38, 0.18)',
+          },
+          {
+            key: 'EXPIRED',
+            label: 'Expired (48h)',
+            count: counts.expired || 0,
+            dotColor: '#64748B',
+            activeBg: '#F1F5F9',
+            activeBorder: '#475569',
+            activeText: '#1E293B',
+            activeLabel: '#334155',
+            shadow: '0 4px 14px rgba(71, 85, 105, 0.16)',
+          },
+        ].map((tab) => {
+          const isActive = statusFilter === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setStatusFilter(tab.key)}
+              style={{
+                background: isActive ? tab.activeBg : '#FFFFFF',
+                color: isActive ? tab.activeText : '#0F2C59',
+                border: isActive ? `2px solid ${tab.activeBorder}` : '1px solid #E2E8F0',
+                borderRadius: '12px',
+                padding: isActive ? '11px 13px' : '12px 14px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                transition: 'all 0.15s ease',
+                boxShadow: isActive ? tab.shadow : '0 1px 3px rgba(15, 44, 89, 0.03)',
+                textAlign: 'left',
+                minHeight: '74px',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.borderColor = '#CBD5E1';
+                  e.currentTarget.style.background = '#F8FAFC';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.borderColor = '#E2E8F0';
+                  e.currentTarget.style.background = '#FFFFFF';
+                }
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: isActive ? tab.activeLabel : '#64748B',
+                }}>
+                  {tab.label}
+                </span>
+                <span style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: tab.dotColor,
+                  boxShadow: isActive ? `0 0 6px ${tab.dotColor}` : 'none',
+                  flexShrink: 0,
+                }} />
+              </div>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: '900',
+                marginTop: '4px',
+                color: isActive ? tab.activeText : '#0F2C59',
+                lineHeight: 1.1,
+              }}>
+                {tab.count}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Filter and Search Bar */}
+      {/* Modern Command Search and Filter Bar */}
       <div
         style={{
           background: '#FFFFFF',
-          borderRadius: '12px',
-          border: '1px solid #CBD5E1',
+          borderRadius: '14px',
+          border: '1px solid #E2E8F0',
           padding: '14px 18px',
           marginBottom: '20px',
           display: 'flex',
           flexWrap: 'wrap',
           gap: '12px',
           alignItems: 'center',
-          boxShadow: '0 2px 6px rgba(15, 44, 89, 0.03)',
+          boxShadow: '0 2px 8px rgba(15, 44, 89, 0.03)',
           width: '100%',
           boxSizing: 'border-box',
         }}
       >
         {/* Search Input with Search Icon */}
-        <div style={{ flex: '2 1 260px', position: 'relative' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+        <div style={{ flex: '2 1 280px', position: 'relative' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
@@ -455,7 +501,7 @@ export default function AdminBookingsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by Booking ID, Customer, Phone, Fish..."
+            placeholder="Search by Booking ID, customer name, phone, or fish..."
             style={{
               width: '100%',
               background: '#F8FAFC',
@@ -466,64 +512,62 @@ export default function AdminBookingsPage() {
               fontSize: '13px',
               boxSizing: 'border-box',
               outline: 'none',
+              transition: 'border-color 0.15s ease',
             }}
           />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: '#94A3B8',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: '2px',
+              }}
+            >
+              &times;
+            </button>
+          )}
         </div>
 
         {/* Status Dropdown */}
-        <div style={{ flex: '1 1 130px', minWidth: '120px' }}>
-          <select
+        <div style={{ flex: '1 1 150px', minWidth: '140px' }}>
+          <AdminSelect
             id="select-status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              width: '100%',
-              background: '#F8FAFC',
-              border: '1px solid #CBD5E1',
-              borderRadius: '8px',
-              padding: '9px 12px',
-              color: '#0F2C59',
-              fontSize: '13px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              boxSizing: 'border-box',
-              outline: 'none',
-            }}
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="CREATED">Created</option>
-            <option value="CONFIRMED">Confirmed</option>
-            <option value="PENDING_COLLECTION">Pending Collection</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-            <option value="EXPIRED">Expired</option>
-          </select>
+            onChange={(val) => setStatusFilter(val)}
+            options={[
+              { value: 'ALL', label: 'All Statuses' },
+              { value: 'CREATED', label: 'Created' },
+              { value: 'CONFIRMED', label: 'Confirmed' },
+              { value: 'PENDING_COLLECTION', label: 'Pending Collection' },
+              { value: 'COMPLETED', label: 'Completed' },
+              { value: 'CANCELLED', label: 'Cancelled' },
+              { value: 'EXPIRED', label: 'Expired' },
+            ]}
+            style={{ width: '100%' }}
+          />
         </div>
 
         {/* Source Dropdown */}
-        <div style={{ flex: '1 1 120px', minWidth: '110px' }}>
-          <select
+        <div style={{ flex: '1 1 140px', minWidth: '130px' }}>
+          <AdminSelect
             id="select-source-filter"
             value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            style={{
-              width: '100%',
-              background: '#F8FAFC',
-              border: '1px solid #CBD5E1',
-              borderRadius: '8px',
-              padding: '9px 12px',
-              color: '#0F2C59',
-              fontSize: '13px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              boxSizing: 'border-box',
-              outline: 'none',
-            }}
-          >
-            <option value="ALL">All Sources</option>
-            <option value="Online">Online</option>
-            <option value="Physical-store">Physical-store</option>
-          </select>
+            onChange={(val) => setSourceFilter(val)}
+            options={[
+              { value: 'ALL', label: 'All Sources' },
+              { value: 'Online', label: 'Online' },
+              { value: 'Physical-store', label: 'Physical Store' },
+            ]}
+            style={{ width: '100%' }}
+          />
         </div>
 
         {/* Modern Date Range Box */}
@@ -535,11 +579,11 @@ export default function AdminBookingsPage() {
             background: '#F8FAFC',
             border: '1px solid #CBD5E1',
             borderRadius: '8px',
-            padding: '5px 10px',
+            padding: '6px 12px',
             boxSizing: 'border-box',
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
             <line x1="16" y1="2" x2="16" y2="6"/>
             <line x1="8" y1="2" x2="8" y2="6"/>
@@ -556,11 +600,12 @@ export default function AdminBookingsPage() {
               background: 'transparent',
               color: '#0F2C59',
               fontSize: '12px',
-              padding: '3px 0',
+              fontWeight: '500',
+              padding: '2px 0',
               outline: 'none',
             }}
           />
-          <span style={{ color: '#94A3B8', fontSize: '11px', fontWeight: '700' }}>&rarr;</span>
+          <span style={{ color: '#94A3B8', fontSize: '12px', fontWeight: '700' }}>→</span>
           <input
             id="input-date-to"
             type="date"
@@ -572,7 +617,8 @@ export default function AdminBookingsPage() {
               background: 'transparent',
               color: '#0F2C59',
               fontSize: '12px',
-              padding: '3px 0',
+              fontWeight: '500',
+              padding: '2px 0',
               outline: 'none',
             }}
           />
@@ -585,17 +631,24 @@ export default function AdminBookingsPage() {
             style={{
               background: '#F1F5F9',
               border: '1px solid #CBD5E1',
-              color: '#64748B',
+              color: '#1E56A0',
               padding: '8px 14px',
               borderRadius: '8px',
               fontSize: '12px',
               fontWeight: '700',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
               transition: 'all 0.15s ease',
             }}
           >
-            Reset Filters
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+            <span>Reset Filters</span>
           </button>
         )}
       </div>
@@ -605,7 +658,7 @@ export default function AdminBookingsPage() {
         className="pf-admin-table-card"
         style={{
           background: '#FFFFFF',
-          borderRadius: '12px',
+          borderRadius: '14px',
           border: '1px solid #E2E8F0',
           overflow: 'hidden',
           boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)',
@@ -613,8 +666,25 @@ export default function AdminBookingsPage() {
           maxWidth: '100%',
           minWidth: 0,
           boxSizing: 'border-box',
+          minHeight: '460px',
+          position: 'relative',
         }}
       >
+        {/* Subtle Top Loading Line */}
+        {loading && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
+              backgroundSize: '200% 100%',
+              zIndex: 10,
+            }}
+          />
+        )}
         <div
           className="pf-admin-scroll-hint"
           style={{
@@ -644,36 +714,78 @@ export default function AdminBookingsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px', minWidth: '980px' }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Booking ID</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Customer</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Source</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Fish &amp; Quantity</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Total Payment</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Sub / Add. Payment</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Status</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Created</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600' }}>Expiry / Collection Time</th>
-                <th style={{ padding: '14px 16px', fontWeight: '600', textAlign: 'right' }}>Actions</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Booking ID</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Customer</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Source</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fish &amp; Quantity</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Payment</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Sub / Add. Payment</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Created</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Expiry / Collection</th>
+                <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {loading ? (
+            <tbody style={{ opacity: loading && bookings.length > 0 ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
+              {loading && bookings.length === 0 ? (
                 <tr>
-                  <td colSpan="10" style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
-
-                    <div>Loading bookings queue...</div>
+                  <td colSpan="10" style={{ padding: '120px 20px', textAlign: 'center', color: '#64748B' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', fontSize: '14px', fontWeight: '600' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                      </svg>
+                      <span>Loading bookings queue...</span>
+                    </div>
                   </td>
                 </tr>
               ) : bookings.length === 0 ? (
                 <tr>
-                  <td colSpan="10" style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
-
-                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#425B73' }}>No bookings found</div>
-                    <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
-                      {hasActiveFilters
-                        ? 'Try modifying search keywords or clearing active filters.'
-                        : 'No customer bookings currently recorded.'}
+                  <td colSpan="10" style={{ padding: '80px 20px', textAlign: 'center' }}>
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      background: '#EFF6FF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 16px',
+                      color: '#1E56A0',
+                    }}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                      </svg>
                     </div>
+                    <div style={{ fontSize: '16px', fontWeight: '800', color: '#0F2C59', marginBottom: '6px' }}>
+                      {hasActiveFilters ? 'No Matching Bookings' : 'No Customer Bookings Recorded'}
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#64748B', maxWidth: '440px', margin: '0 auto', lineHeight: '1.5' }}>
+                      {hasActiveFilters
+                        ? 'No orders match your active filter criteria. Try clearing search keywords or resetting filters.'
+                        : 'Live customer orders reserved online or at store counter will appear here with pickup deadlines and fulfillment tracking.'}
+                    </div>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={clearFilters}
+                        style={{
+                          marginTop: '16px',
+                          background: '#1E56A0',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          padding: '8px 18px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Reset All Filters
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -689,24 +801,35 @@ export default function AdminBookingsPage() {
                       style={{
                         borderBottom: '1px solid #E2E8F0',
                         background: selectedBookingId === b.id ? 'rgba(56, 189, 248, 0.05)' : 'transparent',
+                        transition: 'background 0.15s ease',
                       }}
                     >
                       {/* Booking ID */}
                       <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontWeight: '700', color: '#38BDF8', fontFamily: 'monospace' }}>
+                        <div style={{
+                          display: 'inline-block',
+                          fontWeight: '700',
+                          color: '#1E56A0',
+                          fontFamily: 'monospace',
+                          background: '#EFF6FF',
+                          border: '1px solid #DBEAFE',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                        }}>
                           {b.booking_code}
                         </div>
-                        <div style={{ fontSize: '10px', color: '#64748B', fontFamily: 'monospace' }}>
+                        <div style={{ fontSize: '11px', color: '#94A3B8', fontFamily: 'monospace', marginTop: '4px' }}>
                           {b.id.substring(0, 8)}...
                         </div>
                       </td>
 
                       {/* Customer */}
                       <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontWeight: '600', color: '#0F2C59' }}>
+                        <div style={{ fontWeight: '700', color: '#0F2C59' }}>
                           {b.customer_name || 'Retail Customer'}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#64748B', fontFamily: 'monospace' }}>
+                        <div style={{ fontSize: '12px', color: '#64748B', fontFamily: 'monospace', marginTop: '2px' }}>
                           +91 {b.customer_phone || '—'}
                         </div>
                       </td>
@@ -715,16 +838,16 @@ export default function AdminBookingsPage() {
                       <td style={{ padding: '14px 16px' }}>
                         <span
                           style={{
-                            background: 'rgba(2, 132, 199, 0.15)',
-                            color: '#38BDF8',
-                            border: '1px solid #0284C7',
+                            background: '#F1F5F9',
+                            color: '#0F2C59',
+                            border: '1px solid #E2E8F0',
                             padding: '3px 8px',
-                            borderRadius: '4px',
+                            borderRadius: '6px',
                             fontSize: '11px',
                             fontWeight: '600',
                           }}
                         >
-                          Online
+                          {b.source || 'Online'}
                         </span>
                       </td>
 
@@ -733,9 +856,9 @@ export default function AdminBookingsPage() {
                         <div style={{ fontWeight: '600', color: '#0F2C59' }}>
                           {b.fish_names || 'Fish item'}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#38BDF8', fontWeight: '600' }}>
+                        <div style={{ fontSize: '12px', color: '#1E56A0', fontWeight: '700', marginTop: '2px' }}>
                           {Number(b.total_quantity_kg || 0).toFixed(2)} kg
-                          <span style={{ color: '#64748B', fontWeight: '400', marginLeft: '6px' }}>
+                          <span style={{ color: '#64748B', fontWeight: '500', marginLeft: '6px', fontSize: '11px' }}>
                             ({b.item_count || 1} {b.item_count === 1 ? 'item' : 'items'})
                           </span>
                         </div>
@@ -743,18 +866,18 @@ export default function AdminBookingsPage() {
 
                       {/* Total Payment */}
                       <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontWeight: '700', color: '#0F2C59' }}>
+                        <div style={{ fontWeight: '800', color: '#0F2C59', fontSize: '14px' }}>
                           ₹{Number(b.total_amount || 0).toFixed(2)}
                         </div>
                       </td>
 
                       {/* Subscription & Additional Payment */}
                       <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontSize: '12px', color: b.sub_credit_used > 0 ? '#10B981' : '#64748B' }}>
-                          Sub: ₹{Number(b.sub_credit_used || 0).toFixed(2)}
+                        <div style={{ fontSize: '12px', color: b.sub_credit_used > 0 ? '#10B981' : '#64748B', fontWeight: b.sub_credit_used > 0 ? '600' : '400' }}>
+                          Wallet: ₹{Number(b.sub_credit_used || 0).toFixed(2)}
                         </div>
-                        <div style={{ fontSize: '12px', color: b.razorpay_paid > 0 ? '#38BDF8' : '#64748B' }}>
-                          Add: ₹{Number(b.razorpay_paid || 0).toFixed(2)}
+                        <div style={{ fontSize: '12px', color: b.razorpay_paid > 0 ? '#1E56A0' : '#64748B', fontWeight: b.razorpay_paid > 0 ? '600' : '400' }}>
+                          Paid: ₹{Number(b.razorpay_paid || 0).toFixed(2)}
                         </div>
                       </td>
 
@@ -765,22 +888,26 @@ export default function AdminBookingsPage() {
                             background: cfg.bg,
                             color: cfg.text,
                             border: `1px solid ${cfg.border}`,
-                            padding: '3px 8px',
-                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            borderRadius: '20px',
                             fontSize: '11px',
                             fontWeight: '700',
                             textTransform: 'uppercase',
-                            letterSpacing: '0.02em',
+                            letterSpacing: '0.03em',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
                           }}
                         >
-                          {cfg.label}
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: cfg.text }} />
+                          <span>{cfg.label}</span>
                         </span>
                       </td>
 
                       {/* Created */}
-                      <td style={{ padding: '14px 16px', color: '#425B73', fontSize: '12px' }}>
-                        <div>{new Date(b.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
-                        <div style={{ fontSize: '11px', color: '#64748B' }}>
+                      <td style={{ padding: '14px 16px', color: '#475569', fontSize: '12px' }}>
+                        <div style={{ fontWeight: '600', color: '#0F2C59' }}>{new Date(b.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
                           {new Date(b.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </td>
@@ -789,8 +916,8 @@ export default function AdminBookingsPage() {
                       <td style={{ padding: '14px 16px', fontSize: '12px' }}>
                         {isCompleted ? (
                           <div>
-                            <span style={{ color: '#10B981', fontWeight: '600' }}>Fulfilled</span>
-                            <div style={{ fontSize: '11px', color: '#64748B' }}>
+                            <span style={{ color: '#10B981', fontWeight: '700' }}>Fulfilled</span>
+                            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
                               {b.collection_time
                                 ? new Date(b.collection_time).toLocaleString('en-IN', {
                                     day: '2-digit',
@@ -805,13 +932,13 @@ export default function AdminBookingsPage() {
                             )}
                           </div>
                         ) : b.status === 'CANCELLED' ? (
-                          <div style={{ color: '#EF4444', fontSize: '11px' }}>Cancelled</div>
+                          <div style={{ color: '#EF4444', fontSize: '11px', fontWeight: '600' }}>Cancelled</div>
                         ) : (
                           <div>
-                            <div style={{ color: isExpired ? '#EF4444' : '#F59E0B', fontWeight: '500' }}>
+                            <div style={{ color: isExpired ? '#EF4444' : '#F59E0B', fontWeight: '600' }}>
                               {isExpired ? 'Expired window' : '48h Expiry'}
                             </div>
-                            <div style={{ fontSize: '11px', color: '#64748B' }}>
+                            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
                               {b.expires_at
                                 ? new Date(b.expires_at).toLocaleString('en-IN', {
                                     day: '2-digit',
@@ -832,14 +959,15 @@ export default function AdminBookingsPage() {
                             id={`btn-view-${b.id}`}
                             onClick={() => openDetail(b.id)}
                             style={{
-                              background: '#E2E8F0',
-                              border: 'none',
-                              color: '#0F2C59',
-                              padding: '6px 10px',
-                              borderRadius: '4px',
+                              background: '#FFFFFF',
+                              border: '1px solid #CBD5E1',
+                              color: '#1E56A0',
+                              padding: '6px 12px',
+                              borderRadius: '6px',
                               fontSize: '12px',
-                              fontWeight: '600',
+                              fontWeight: '700',
                               cursor: 'pointer',
+                              boxShadow: '0 1px 2px rgba(15, 44, 89, 0.04)',
                             }}
                           >
                             Details
@@ -850,13 +978,13 @@ export default function AdminBookingsPage() {
                               id={`btn-cancel-${b.id}`}
                               onClick={() => openCancelModal(b)}
                               style={{
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                border: '1px solid #EF4444',
-                                color: '#EF4444',
-                                padding: '5px 10px',
-                                borderRadius: '4px',
+                                background: '#FEF2F2',
+                                border: '1px solid #FECACA',
+                                color: '#DC2626',
+                                padding: '6px 12px',
+                                borderRadius: '6px',
                                 fontSize: '12px',
-                                fontWeight: '600',
+                                fontWeight: '700',
                                 cursor: 'pointer',
                               }}
                             >
@@ -873,74 +1001,20 @@ export default function AdminBookingsPage() {
           </table>
         </div>
 
-        {/* Pagination Toolbar */}
-        <div
-          className="pf-admin-pagination-bar"
-          style={{
-            padding: '14px 20px',
-            background: '#F8FAFC',
-            borderTop: '1px solid #E2E8F0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '12px',
-            color: '#64748B',
+        {/* Standardized Pagination Bar */}
+        <AdminPagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          limit={pagination.limit}
+          onPageChange={(newPage) => fetchBookings(newPage, pagination.limit)}
+          onLimitChange={(newLimit) => {
+            setPagination((prev) => ({ ...prev, limit: newLimit, page: 1 }));
+            fetchBookings(1, newLimit);
           }}
-        >
-          <div>
-            Showing{' '}
-            <strong style={{ color: '#0F2C59' }}>
-              {pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0}
-            </strong>{' '}
-            to{' '}
-            <strong style={{ color: '#0F2C59' }}>
-              {Math.min(pagination.page * pagination.limit, pagination.total)}
-            </strong>{' '}
-            of <strong style={{ color: '#0F2C59' }}>{pagination.total}</strong> bookings
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              id="btn-prev-page"
-              onClick={() => fetchBookings(pagination.page - 1)}
-              disabled={pagination.page <= 1 || loading}
-              style={{
-                background: '#FFFFFF',
-                border: '1px solid #CBD5E1',
-                color: pagination.page <= 1 ? '#94A3B8' : '#0F2C59',
-                padding: '6px 14px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              Previous
-            </button>
-            <span style={{ padding: '0 8px', color: '#0F2C59', fontWeight: '600', fontSize: '13px' }}>
-              Page {pagination.page} of {pagination.totalPages || 1}
-            </span>
-            <button
-              id="btn-next-page"
-              onClick={() => fetchBookings(pagination.page + 1)}
-              disabled={pagination.page >= pagination.totalPages || loading}
-              style={{
-                background: '#FFFFFF',
-                border: '1px solid #CBD5E1',
-                color: pagination.page >= pagination.totalPages ? '#94A3B8' : '#0F2C59',
-                padding: '6px 14px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: pagination.page >= pagination.totalPages ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              Next
-            </button>
-          </div>
-        </div>
+          itemName="bookings"
+          loading={loading}
+        />
       </div>
 
       {/* Booking Detail Drawer / Modal */}
@@ -1395,26 +1469,18 @@ export default function AdminBookingsPage() {
               <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#425B73', marginBottom: '6px' }}>
                 Cancellation Reason <span style={{ color: '#EF4444' }}>*</span>
               </label>
-              <select
+              <AdminSelect
                 id="select-cancel-reason"
                 value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '6px',
-                  padding: '10px 12px',
-                  color: '#0F2C59',
-                  fontSize: '13px',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <option value="Fish unavailable">Fish unavailable</option>
-                <option value="Technical issue">Technical issue</option>
-                <option value="Operational issue">Operational issue</option>
-                <option value="Other">Other</option>
-              </select>
+                onChange={(val) => setCancelReason(val)}
+                options={[
+                  { value: 'Fish unavailable', label: 'Fish unavailable' },
+                  { value: 'Technical issue', label: 'Technical issue' },
+                  { value: 'Operational issue', label: 'Operational issue' },
+                  { value: 'Other', label: 'Other' },
+                ]}
+                style={{ width: '100%' }}
+              />
             </div>
 
             {/* Explanatory Notes (Mandatory if Other) */}

@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import { AdminSelect } from '@/components/ui';
 
 const STATUS_CONFIG = {
   COMPLETED: { label: 'Successful', bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981', border: '#059669' },
@@ -683,28 +684,20 @@ export default function TransactionDetailPage({ params }) {
                 <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
                   Operational Reason:
                 </label>
-                <select
+                <AdminSelect
                   id="select-refund-reason"
                   value={refundReason}
-                  onChange={(e) => setRefundReason(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: '#F8FAFC',
-                    color: '#0F2C59',
-                    border: '1px solid #E2E8F0',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    fontSize: '13px',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="Quality discrepancy">Quality discrepancy</option>
-                  <option value="Customer return">Customer return</option>
-                  <option value="Billed incorrect fish">Billed incorrect fish</option>
-                  <option value="Billing error">Billing error</option>
-                  <option value="Operational issue">Operational issue</option>
-                  <option value="Other">Other</option>
-                </select>
+                  onChange={(val) => setRefundReason(val)}
+                  options={[
+                    { value: 'Quality discrepancy', label: 'Quality discrepancy' },
+                    { value: 'Customer return', label: 'Customer return' },
+                    { value: 'Billed incorrect fish', label: 'Billed incorrect fish' },
+                    { value: 'Billing error', label: 'Billing error' },
+                    { value: 'Operational issue', label: 'Operational issue' },
+                    { value: 'Other', label: 'Other' },
+                  ]}
+                  style={{ width: '100%' }}
+                />
               </div>
 
               {refundReason === 'Other' && (

@@ -15,7 +15,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={jakarta.variable}>
-      <body className={jakarta.className}>{children}</body>
+      <body className={jakarta.className} suppressHydrationWarning>{children}</body>
     </html>
   );
 }

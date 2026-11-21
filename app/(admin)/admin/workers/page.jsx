@@ -6,12 +6,15 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { AdminPagination, AdminSelect } from '@/components/ui';
 
 export default function AdminWorkersPage() {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -212,6 +215,17 @@ export default function AdminWorkersPage() {
     });
   }, [workers, search, statusFilter]);
 
+  // Reset to page 1 on filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const totalPages = Math.ceil(filteredWorkers.length / limit) || 1;
+  const paginatedWorkers = useMemo(() => {
+    const start = (page - 1) * limit;
+    return filteredWorkers.slice(start, start + limit);
+  }, [filteredWorkers, page, limit]);
+
   const metrics = useMemo(() => {
     const total = workers.length;
     const active = workers.filter((w) => w.active !== false).length;
@@ -364,22 +378,16 @@ export default function AdminWorkersPage() {
           />
         </div>
 
-        <select
+        <AdminSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
-          }}
-        >
-          <option value="ALL">All Account Statuses</option>
-          <option value="ACTIVE">Active Staff Only</option>
-          <option value="DISABLED">Disabled Accounts Only</option>
-        </select>
+          onChange={(val) => setStatusFilter(val)}
+          options={[
+            { value: 'ALL', label: 'All Account Statuses' },
+            { value: 'ACTIVE', label: 'Active Staff Only' },
+            { value: 'DISABLED', label: 'Disabled Accounts Only' },
+          ]}
+          style={{ minWidth: '190px' }}
+        />
       </div>
 
       {/* Workers Table */}
@@ -410,7 +418,7 @@ export default function AdminWorkersPage() {
                 </td>
               </tr>
             ) : (
-              filteredWorkers.map((w) => (
+              paginatedWorkers.map((w) => (
                 <tr key={w.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                   <td style={{ padding: '14px 18px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -527,6 +535,19 @@ export default function AdminWorkersPage() {
             )}
           </tbody>
         </table>
+        <AdminPagination
+          page={page}
+          totalPages={totalPages}
+          total={filteredWorkers.length}
+          limit={limit}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          itemName="staff members"
+          loading={loading}
+        />
       </div>
 
       {/* Create Worker Modal */}

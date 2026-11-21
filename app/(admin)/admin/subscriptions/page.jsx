@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { AdminSubNav } from '@/components/ui';
+import { AdminSubNav, AdminSelect } from '@/components/ui';
 
 export default function AdminCustomerSubscriptionsPage() {
   // Search & Selection State
@@ -948,27 +948,17 @@ export default function AdminCustomerSubscriptionsPage() {
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748B', marginBottom: '8px', textTransform: 'uppercase' }}>
                     Select Subscription Plan *
                   </label>
-                  <select
+                  <AdminSelect
                     id="select-purchase-plan"
                     value={selectedPlanId}
-                    onChange={(e) => setSelectedPlanId(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '11px 14px',
-                      background: '#F8FAFC',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '8px',
-                      color: '#0F2C59',
-                      fontSize: '14px',
-                      outline: 'none',
-                    }}
-                  >
-                    {availablePlans.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title} — ₹{p.price} (Adds ₹{p.credit_amount} Credit, {p.weekly_qty_limit_kg}kg/wk)
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSelectedPlanId(val)}
+                    options={availablePlans.map((p) => ({
+                      value: p.id,
+                      label: `${p.title} — ₹${p.price} (Adds ₹${p.credit_amount} Credit, ${p.weekly_qty_limit_kg}kg/wk)`,
+                    }))}
+                    placeholder="Choose a subscription plan..."
+                    style={{ width: '100%' }}
+                  />
                 </div>
 
                 {/* 3. Review Authoritative Amount + Credit Summary (Section 73 & 74) */}

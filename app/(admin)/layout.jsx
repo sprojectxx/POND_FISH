@@ -25,7 +25,7 @@ export default function AdminLayout({ children }) {
 
   const [mounted, setMounted] = useState(false);
   const [adminUser, setAdminUser] = useState(null);
-  const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);
+  const [checkingAuth, setCheckingAuth] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [serviceError, setServiceError] = useState(null);
   const [permissionError, setPermissionError] = useState(null);
@@ -228,8 +228,8 @@ export default function AdminLayout({ children }) {
     }
   }
 
-  // If checking authentication, show loading shell
-  if (checkingAuth) {
+  // If checking authentication after mount, show loading shell
+  if (mounted && checkingAuth && !adminUser) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -572,7 +572,7 @@ export default function AdminLayout({ children }) {
   );
 
   return (
-    <div className="pf-admin-shell">
+    <div className="pf-admin-shell" suppressHydrationWarning>
       {/* Invisible hover-sensor on the left screen edge to smoothly reveal sidebar on mouse hover */}
       <div
         className="pf-admin-sidebar-hover-trigger"

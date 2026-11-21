@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { AdminSubNav } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
 
 const STATUS_CONFIG = {
   DRAFT: { label: 'Draft', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#CBD5E1' },
@@ -57,7 +57,7 @@ export default function AdminNotificationsPage() {
   });
   const [broadcastPagination, setBroadcastPagination] = useState({
     page: 1,
-    limit: 20,
+    limit: 25,
     total: 0,
     totalPages: 1,
   });
@@ -67,7 +67,7 @@ export default function AdminNotificationsPage() {
   // Customer In-App Notification state
   const [inboxNotifications, setInboxNotifications] = useState([]);
   const [inboxCounts, setInboxCounts] = useState({ all: 0, unread: 0, booking: 0, subscription: 0, promo: 0, pushSent: 0, deliveryFailed: 0 });
-  const [inboxPagination, setInboxPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
+  const [inboxPagination, setInboxPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [inboxSearch, setInboxSearch] = useState('');
   const [inboxTypeFilter, setInboxTypeFilter] = useState('ALL');
 
@@ -100,14 +100,15 @@ export default function AdminNotificationsPage() {
 
   // Fetch broadcasts
   const fetchBroadcasts = useCallback(
-    async (pageToLoad = broadcastPagination.page) => {
+    async (pageToLoad = broadcastPagination.page, limitToLoad = broadcastPagination.limit) => {
       try {
         setLoading(true);
         setErrorMsg(null);
 
+        const currentLimit = limitToLoad || broadcastPagination.limit || 25;
         const params = new URLSearchParams();
         params.set('page', pageToLoad.toString());
-        params.set('limit', '20');
+        params.set('limit', currentLimit.toString());
         if (broadcastStatusFilter && broadcastStatusFilter !== 'ALL') {
           params.set('status', broadcastStatusFilter);
         }
@@ -131,19 +132,20 @@ export default function AdminNotificationsPage() {
         setLoading(false);
       }
     },
-    [broadcastPagination.page, broadcastStatusFilter, broadcastSearch]
+    [broadcastPagination.page, broadcastPagination.limit, broadcastStatusFilter, broadcastSearch]
   );
 
   // Fetch customer in-app notifications
   const fetchInboxNotifications = useCallback(
-    async (pageToLoad = inboxPagination.page) => {
+    async (pageToLoad = inboxPagination.page, limitToLoad = inboxPagination.limit) => {
       try {
         setLoading(true);
         setErrorMsg(null);
 
+        const currentLimit = limitToLoad || inboxPagination.limit || 25;
         const params = new URLSearchParams();
         params.set('page', pageToLoad.toString());
-        params.set('limit', '20');
+        params.set('limit', currentLimit.toString());
         if (inboxTypeFilter && inboxTypeFilter !== 'ALL') {
           params.set('type', inboxTypeFilter);
         }
@@ -167,7 +169,7 @@ export default function AdminNotificationsPage() {
         setLoading(false);
       }
     },
-    [inboxPagination.page, inboxTypeFilter, inboxSearch]
+    [inboxPagination.page, inboxPagination.limit, inboxTypeFilter, inboxSearch]
   );
 
   useEffect(() => {
@@ -712,32 +714,23 @@ export default function AdminNotificationsPage() {
             </div>
 
             {/* Status Filter */}
-            <div style={{ flex: '0 1 180px' }}>
-              <select
+            <div style={{ flex: '0 1 200px' }}>
+              <AdminSelect
                 id="select-broadcast-status"
                 value={broadcastStatusFilter}
-                onChange={(e) => setBroadcastStatusFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  background: '#F8FAFC',
-                  color: '#0F2C59',
-                  border: '1px solid #E2E8F0',
-                  fontSize: '13px',
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="ALL">All States ({broadcastCounts.total_count})</option>
-                <option value="DRAFT">Drafts ({broadcastCounts.draft_count})</option>
-                <option value="SCHEDULED">Scheduled ({broadcastCounts.scheduled_count})</option>
-                <option value="SENDING">Sending ({broadcastCounts.sending_count})</option>
-                <option value="SENT">Sent ({broadcastCounts.sent_count})</option>
-                <option value="PARTIALLY_FAILED">Partially Failed ({broadcastCounts.partially_failed_count})</option>
-                <option value="FAILED">Failed ({broadcastCounts.failed_count})</option>
-                <option value="CANCELLED">Cancelled ({broadcastCounts.cancelled_count})</option>
-              </select>
+                onChange={(val) => setBroadcastStatusFilter(val)}
+                options={[
+                  { value: 'ALL', label: `All States (${broadcastCounts.total_count})` },
+                  { value: 'DRAFT', label: `Drafts (${broadcastCounts.draft_count})` },
+                  { value: 'SCHEDULED', label: `Scheduled (${broadcastCounts.scheduled_count})` },
+                  { value: 'SENDING', label: `Sending (${broadcastCounts.sending_count})` },
+                  { value: 'SENT', label: `Sent (${broadcastCounts.sent_count})` },
+                  { value: 'PARTIALLY_FAILED', label: `Partially Failed (${broadcastCounts.partially_failed_count})` },
+                  { value: 'FAILED', label: `Failed (${broadcastCounts.failed_count})` },
+                  { value: 'CANCELLED', label: `Cancelled (${broadcastCounts.cancelled_count})` },
+                ]}
+                style={{ width: '100%' }}
+              />
             </div>
 
             <button
@@ -948,53 +941,20 @@ export default function AdminNotificationsPage() {
               </table>
             </div>
 
-            {/* Broadcast Pagination */}
-            <div
-              style={{
-                padding: '12px 18px',
-                background: '#F8FAFC',
-                borderTop: '1px solid #E2E8F0',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '12px',
-                color: '#64748B',
+            {/* Standardized Broadcast Pagination */}
+            <AdminPagination
+              page={broadcastPagination.page}
+              totalPages={broadcastPagination.totalPages}
+              total={broadcastPagination.total}
+              limit={broadcastPagination.limit}
+              onPageChange={(newPage) => fetchBroadcasts(newPage, broadcastPagination.limit)}
+              onLimitChange={(newLimit) => {
+                setBroadcastPagination((prev) => ({ ...prev, limit: newLimit, page: 1 }));
+                fetchBroadcasts(1, newLimit);
               }}
-            >
-              <div>
-                Showing Page {broadcastPagination.page} of {broadcastPagination.totalPages} ({broadcastPagination.total} total)
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => fetchBroadcasts(broadcastPagination.page - 1)}
-                  disabled={broadcastPagination.page <= 1 || loading}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '4px',
-                    background: '#FFFFFF',
-                    color: '#0F2C59',
-                    border: '1px solid #E2E8F0',
-                    cursor: broadcastPagination.page <= 1 ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() => fetchBroadcasts(broadcastPagination.page + 1)}
-                  disabled={broadcastPagination.page >= broadcastPagination.totalPages || loading}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '4px',
-                    background: '#FFFFFF',
-                    color: '#0F2C59',
-                    border: '1px solid #E2E8F0',
-                    cursor: broadcastPagination.page >= broadcastPagination.totalPages ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+              itemName="broadcasts"
+              loading={loading}
+            />
           </div>
         </>
       )}
@@ -1049,6 +1009,21 @@ export default function AdminNotificationsPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Standardized Inbox Pagination */}
+          <AdminPagination
+            page={inboxPagination.page}
+            totalPages={inboxPagination.totalPages}
+            total={inboxPagination.total}
+            limit={inboxPagination.limit}
+            onPageChange={(newPage) => fetchInboxNotifications(newPage, inboxPagination.limit)}
+            onLimitChange={(newLimit) => {
+              setInboxPagination((prev) => ({ ...prev, limit: newLimit, page: 1 }));
+              fetchInboxNotifications(1, newLimit);
+            }}
+            itemName="notifications"
+            loading={loading}
+          />
         </div>
       )}
 
@@ -1184,26 +1159,18 @@ export default function AdminNotificationsPage() {
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#425B73', marginBottom: '6px' }}>
                     Category
                   </label>
-                  <select
+                  <AdminSelect
                     id="select-notif-type"
                     value={composerForm.category}
-                    onChange={(e) => setComposerForm({ ...composerForm, category: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '9px 12px',
-                      borderRadius: '8px',
-                      background: '#F8FAFC',
-                      color: '#0F2C59',
-                      border: '1px solid #E2E8F0',
-                      fontSize: '13px',
-                      outline: 'none',
-                    }}
-                  >
-                    <option value="SYSTEM">System Notice</option>
-                    <option value="PROMO">Promotion</option>
-                    <option value="ANNOUNCEMENT">Announcement</option>
-                    <option value="DELIVERY">Delivery Update</option>
-                  </select>
+                    onChange={(val) => setComposerForm({ ...composerForm, category: val })}
+                    options={[
+                      { value: 'SYSTEM', label: 'System Notice' },
+                      { value: 'PROMO', label: 'Promotion' },
+                      { value: 'ANNOUNCEMENT', label: 'Announcement' },
+                      { value: 'DELIVERY', label: 'Delivery Update' },
+                    ]}
+                    style={{ width: '100%' }}
+                  />
                 </div>
 
                 <div>
@@ -1265,25 +1232,16 @@ export default function AdminNotificationsPage() {
 
                 {composerForm.audienceType === 'SPECIFIC_PLAN' && (
                   <div style={{ marginTop: '8px' }}>
-                    <select
+                    <AdminSelect
                       id="select-notif-plan"
                       value={composerForm.planId}
-                      onChange={(e) => setComposerForm({ ...composerForm, planId: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '8px 10px',
-                        borderRadius: '6px',
-                        background: '#FFFFFF',
-                        color: '#0F2C59',
-                        border: '1px solid #E2E8F0',
-                        fontSize: '12px',
-                      }}
-                    >
-                      <option value="">-- Choose Plan --</option>
-                      {plans.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setComposerForm({ ...composerForm, planId: val })}
+                      options={[
+                        { value: '', label: '-- Choose Plan --' },
+                        ...plans.map((p) => ({ value: p.id, label: p.name })),
+                      ]}
+                      style={{ width: '100%' }}
+                    />
                   </div>
                 )}
 

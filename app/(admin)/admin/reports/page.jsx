@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { AdminSubNav } from '@/components/ui';
+import { AdminSubNav, AdminPagination } from '@/components/ui';
 
 const REPORT_TABS = [
   { id: 'revenue', label: 'Revenue Report' },
@@ -24,17 +24,18 @@ export default function AdminReportsPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchReport = useCallback(async (tab, selectedPeriod, fromVal, toVal, pageNum) => {
+  const fetchReport = useCallback(async (tab, selectedPeriod, fromVal, toVal, pageNum, limitVal = 25) => {
     try {
       setLoading(true);
       setError(null);
 
-      let url = `/api/v1/admin/reports?type=${tab}&period=${selectedPeriod}&page=${pageNum}&limit=25`;
+      let url = `/api/v1/admin/reports?type=${tab}&period=${selectedPeriod}&page=${pageNum}&limit=${limitVal || 25}`;
       if (selectedPeriod === 'custom') {
         if (fromVal) url += `&from=${encodeURIComponent(fromVal)}`;
         if (toVal) url += `&to=${encodeURIComponent(toVal)}`;
@@ -545,29 +546,25 @@ export default function AdminReportsPage() {
               </div>
             )}
 
-            {/* Pagination Controls */}
-            {reportData.pagination && reportData.pagination.total > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', fontSize: '12px', color: '#64748B' }}>
-                <div>
-                  Showing {Math.min(reportData.pagination.total, (reportData.pagination.page - 1) * reportData.pagination.limit + 1)} - {Math.min(reportData.pagination.total, reportData.pagination.page * reportData.pagination.limit)} of {reportData.pagination.total} records
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    disabled={reportData.pagination.page <= 1}
-                    onClick={() => setPage(page - 1)}
-                    style={{ background: '#FFFFFF', color: '#0F2C59', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '4px 10px', cursor: reportData.pagination.page <= 1 ? 'not-allowed' : 'pointer' }}
-                  >
-                    Previous
-                  </button>
-                  <button
-                    disabled={reportData.pagination.page * reportData.pagination.limit >= reportData.pagination.total}
-                    onClick={() => setPage(page + 1)}
-                    style={{ background: '#FFFFFF', color: '#0F2C59', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '4px 10px', cursor: reportData.pagination.page * reportData.pagination.limit >= reportData.pagination.total ? 'not-allowed' : 'pointer' }}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+            {/* Standardized Pagination Controls */}
+            {reportData.pagination && (
+              <AdminPagination
+                page={reportData.pagination.page || page}
+                totalPages={Math.ceil((reportData.pagination.total || 0) / (reportData.pagination.limit || limit || 25)) || 1}
+                total={reportData.pagination.total || 0}
+                limit={reportData.pagination.limit || limit || 25}
+                onPageChange={(newPage) => {
+                  setPage(newPage);
+                  fetchReport(activeTab, period, customFrom, customTo, newPage, limit);
+                }}
+                onLimitChange={(newLimit) => {
+                  setLimit(newLimit);
+                  setPage(1);
+                  fetchReport(activeTab, period, customFrom, customTo, 1, newLimit);
+                }}
+                itemName="records"
+                loading={loading}
+              />
             )}
           </div>
         </div>

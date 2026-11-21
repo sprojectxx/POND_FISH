@@ -6,8 +6,8 @@
  * Centralized operational anomaly monitoring, severity grading, and authorized resolution workflows.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { AdminSubNav } from '@/components/ui';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { AdminSubNav, AdminPagination } from '@/components/ui';
 
 export default function AdminExceptionsPage() {
   const [exceptions, setExceptions] = useState([]);
@@ -18,6 +18,8 @@ export default function AdminExceptionsPage() {
   // Filters
   const [category, setCategory] = useState('');
   const [severity, setSeverity] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   // Selected Exception for Detail Modal
   const [selectedException, setSelectedException] = useState(null);
@@ -60,6 +62,17 @@ export default function AdminExceptionsPage() {
   useEffect(() => {
     fetchExceptions();
   }, [fetchExceptions]);
+
+  // Reset to page 1 on filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [category, severity]);
+
+  const totalPages = Math.ceil(exceptions.length / limit) || 1;
+  const paginatedExceptions = useMemo(() => {
+    const start = (page - 1) * limit;
+    return exceptions.slice(start, start + limit);
+  }, [exceptions, page, limit]);
 
   const handleExecuteResolution = async (ex, reasonText) => {
     try {
@@ -163,34 +176,36 @@ export default function AdminExceptionsPage() {
       {/* Filters */}
       <div style={{ background: '#FFFFFF', padding: '16px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '12px', color: '#64748B' }}>Severity:</label>
-          <select
+          <label style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>Severity:</label>
+          <AdminSelect
             value={severity}
-            onChange={(e) => setSeverity(e.target.value)}
-            style={{ background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 10px', color: '#0F2C59', fontSize: '13px' }}
-          >
-            <option value="">All Severities</option>
-            <option value="CRITICAL">CRITICAL</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="LOW">LOW</option>
-          </select>
+            onChange={(val) => setSeverity(val)}
+            options={[
+              { value: '', label: 'All Severities' },
+              { value: 'CRITICAL', label: 'CRITICAL' },
+              { value: 'HIGH', label: 'HIGH' },
+              { value: 'MEDIUM', label: 'MEDIUM' },
+              { value: 'LOW', label: 'LOW' },
+            ]}
+            style={{ minWidth: '150px' }}
+          />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '12px', color: '#64748B' }}>Category:</label>
-          <select
+          <label style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>Category:</label>
+          <AdminSelect
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            style={{ background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '6px 10px', color: '#0F2C59', fontSize: '13px' }}
-          >
-            <option value="">All Categories</option>
-            <option value="FAILED_PAYMENTS">Failed Payments</option>
-            <option value="EXPIRED_BOOKINGS">Expired Bookings</option>
-            <option value="INVENTORY_ANOMALIES">Inventory Anomalies</option>
-            <option value="NOTIFICATION_FAILURES">Notification Failures</option>
-            <option value="STALE_GPS">Stale GPS Telemetry</option>
-          </select>
+            onChange={(val) => setCategory(val)}
+            options={[
+              { value: '', label: 'All Categories' },
+              { value: 'FAILED_PAYMENTS', label: 'Failed Payments' },
+              { value: 'EXPIRED_BOOKINGS', label: 'Expired Bookings' },
+              { value: 'INVENTORY_ANOMALIES', label: 'Inventory Anomalies' },
+              { value: 'NOTIFICATION_FAILURES', label: 'Notification Failures' },
+              { value: 'STALE_GPS', label: 'Stale GPS Telemetry' },
+            ]}
+            style={{ minWidth: '190px' }}
+          />
         </div>
 
         <button
@@ -228,7 +243,7 @@ export default function AdminExceptionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {exceptions.map((ex) => {
+                {paginatedExceptions.map((ex) => {
                   const badge = getSeverityBadge(ex.severity);
                   return (
                     <tr key={ex.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
@@ -291,6 +306,19 @@ export default function AdminExceptionsPage() {
             </table>
           </div>
         )}
+        <AdminPagination
+          page={page}
+          totalPages={totalPages}
+          total={exceptions.length}
+          limit={limit}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          itemName="exceptions"
+          loading={loading}
+        />
       </div>
 
       {/* Exception Detail Modal */}

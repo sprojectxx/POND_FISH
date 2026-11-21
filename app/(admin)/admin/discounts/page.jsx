@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdminSubNav } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
 
 export default function AdminDiscountsPage() {
   const [discounts, setDiscounts] = useState([]);
@@ -14,6 +14,8 @@ export default function AdminDiscountsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -208,6 +210,17 @@ export default function AdminDiscountsPage() {
     });
   }, [discounts, search, statusFilter]);
 
+  // Reset to page 1 on filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const totalPages = Math.ceil(filteredDiscounts.length / limit) || 1;
+  const paginatedDiscounts = useMemo(() => {
+    const start = (page - 1) * limit;
+    return filteredDiscounts.slice(start, start + limit);
+  }, [filteredDiscounts, page, limit]);
+
   const activeCount = discounts.filter((d) => computedStatus(d).label === 'ACTIVE').length;
 
   return (
@@ -359,24 +372,18 @@ export default function AdminDiscountsPage() {
           />
         </div>
 
-        <select
+        <AdminSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
-          }}
-        >
-          <option value="ALL">All Statuses</option>
-          <option value="ACTIVE">Active Now</option>
-          <option value="SCHEDULED">Scheduled</option>
-          <option value="EXPIRED">Expired</option>
-          <option value="DISABLED">Disabled</option>
-        </select>
+          onChange={(val) => setStatusFilter(val)}
+          options={[
+            { value: 'ALL', label: 'All Statuses' },
+            { value: 'ACTIVE', label: 'Active Now' },
+            { value: 'SCHEDULED', label: 'Scheduled' },
+            { value: 'EXPIRED', label: 'Expired' },
+            { value: 'DISABLED', label: 'Disabled' },
+          ]}
+          style={{ minWidth: '170px' }}
+        />
       </div>
 
       {/* Discounts Table */}
@@ -406,7 +413,7 @@ export default function AdminDiscountsPage() {
                 </td>
               </tr>
             ) : (
-              filteredDiscounts.map((d) => {
+              paginatedDiscounts.map((d) => {
                 const status = computedStatus(d);
                 const isPercentage = Boolean(d.discount_percent);
                 const displayValue = isPercentage
@@ -517,6 +524,19 @@ export default function AdminDiscountsPage() {
             )}
           </tbody>
         </table>
+        <AdminPagination
+          page={page}
+          totalPages={totalPages}
+          total={filteredDiscounts.length}
+          limit={limit}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          itemName="discounts"
+          loading={loading}
+        />
       </div>
 
       {/* Create / Edit Modal */}
@@ -602,23 +622,15 @@ export default function AdminDiscountsPage() {
                 <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                   Target Product
                 </label>
-                <select
+                <AdminSelect
                   value={formData.fish_id}
-                  onChange={(e) => setFormData({ ...formData, fish_id: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
-                  }}
-                >
-                  <option value="">Storewide (Applies to all varieties)</option>
-                  {fishList.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setFormData({ ...formData, fish_id: val })}
+                  options={[
+                    { value: '', label: 'Storewide (Applies to all varieties)' },
+                    ...fishList.map((f) => ({ value: f.id, label: f.name })),
+                  ]}
+                  style={{ width: '100%' }}
+                />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
@@ -626,21 +638,15 @@ export default function AdminDiscountsPage() {
                   <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Discount Type *
                   </label>
-                  <select
+                  <AdminSelect
                     value={formData.discount_type}
-                    onChange={(e) => setFormData({ ...formData, discount_type: e.target.value })}
-                    style={{
-                      width: '100%',
-                      background: '#F8FAFC',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
-                    }}
-                  >
-                    <option value="PERCENTAGE">Percentage (%)</option>
-                    <option value="FLAT">Flat Amount (₹)</option>
-                  </select>
+                    onChange={(val) => setFormData({ ...formData, discount_type: val })}
+                    options={[
+                      { value: 'PERCENTAGE', label: 'Percentage (%)' },
+                      { value: 'FLAT', label: 'Flat Amount (₹)' },
+                    ]}
+                    style={{ width: '100%' }}
+                  />
                 </div>
 
                 <div>

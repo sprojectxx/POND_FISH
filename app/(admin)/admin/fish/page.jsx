@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdminSubNav } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
 
 export default function AdminFishPage() {
   const [fishList, setFishList] = useState([]);
@@ -16,6 +16,8 @@ export default function AdminFishPage() {
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [freshnessFilter, setFreshnessFilter] = useState('ALL');
   const [eligibilityFilter, setEligibilityFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -205,6 +207,17 @@ export default function AdminFishPage() {
     });
   }, [fishList, search, categoryFilter, freshnessFilter, eligibilityFilter]);
 
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, categoryFilter, freshnessFilter, eligibilityFilter]);
+
+  const totalPages = Math.ceil(filteredList.length / limit) || 1;
+  const paginatedList = useMemo(() => {
+    const start = (page - 1) * limit;
+    return filteredList.slice(start, start + limit);
+  }, [filteredList, page, limit]);
+
   // Metrics
   const metrics = useMemo(() => {
     const total = fishList.length;
@@ -367,60 +380,40 @@ export default function AdminFishPage() {
           />
         </div>
 
-        <select
+        <AdminSelect
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
-          }}
-        >
-          <option value="ALL">All Categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+          onChange={(val) => setCategoryFilter(val)}
+          options={[
+            { value: 'ALL', label: 'All Categories' },
+            ...categories.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+          style={{ minWidth: '180px' }}
+        />
 
-        <select
+        <AdminSelect
           value={freshnessFilter}
-          onChange={(e) => setFreshnessFilter(e.target.value)}
-          style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
-          }}
-        >
-          <option value="ALL">All Freshness States</option>
-          <option value="GREEN">Green (Fresh Catch)</option>
-          <option value="GREY">Grey (Aging Catch)</option>
-          <option value="YELLOW">Yellow (Special/Watch)</option>
-          <option value="RED">Red (Expired / Halt)</option>
-        </select>
+          onChange={(val) => setFreshnessFilter(val)}
+          options={[
+            { value: 'ALL', label: 'All Freshness States' },
+            { value: 'GREEN', label: 'Green (Fresh Catch)' },
+            { value: 'GREY', label: 'Grey (Aging Catch)' },
+            { value: 'YELLOW', label: 'Yellow (Special/Watch)' },
+            { value: 'RED', label: 'Red (Expired / Halt)' },
+          ]}
+          style={{ minWidth: '190px' }}
+        />
 
-        <select
+        <AdminSelect
           value={eligibilityFilter}
-          onChange={(e) => setEligibilityFilter(e.target.value)}
-          style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
-          }}
-        >
-          <option value="ALL">All Channels</option>
-          <option value="ONLINE">Online Bookable Only</option>
-          <option value="PHYSICAL">Physical Store Only</option>
-          <option value="OFFLINE">Unlisted / Inactive</option>
-        </select>
+          onChange={(val) => setEligibilityFilter(val)}
+          options={[
+            { value: 'ALL', label: 'All Channels' },
+            { value: 'ONLINE', label: 'Online Bookable Only' },
+            { value: 'PHYSICAL', label: 'Physical Store Only' },
+            { value: 'OFFLINE', label: 'Unlisted / Inactive' },
+          ]}
+          style={{ minWidth: '175px' }}
+        />
       </div>
 
       {/* Main Fish Table */}
@@ -453,7 +446,7 @@ export default function AdminFishPage() {
                 </td>
               </tr>
             ) : (
-              filteredList.map((f) => {
+              paginatedList.map((f) => {
                 const freshColor =
                   f.freshness_state === 'GREEN'
                     ? '#10B981'
@@ -619,6 +612,19 @@ export default function AdminFishPage() {
           </tbody>
         </table>
         </div>
+        <AdminPagination
+          page={page}
+          totalPages={totalPages}
+          total={filteredList.length}
+          limit={limit}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          itemName="fish varieties"
+          loading={loading}
+        />
       </div>
 
       {/* Create / Edit Modal */}
@@ -701,24 +707,15 @@ export default function AdminFishPage() {
                   <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Category *
                   </label>
-                  <select
-                    required
+                  <AdminSelect
                     value={formData.category_id}
-                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                    style={{
-                      width: '100%',
-                      background: '#F8FAFC',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
-                    }}
-                  >
-                    <option value="">Select Category</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setFormData({ ...formData, category_id: val })}
+                    options={[
+                      { value: '', label: 'Select Category' },
+                      ...categories.map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                    style={{ width: '100%' }}
+                  />
                 </div>
               </div>
 
@@ -750,23 +747,17 @@ export default function AdminFishPage() {
                   <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
                     Freshness State
                   </label>
-                  <select
+                  <AdminSelect
                     value={formData.freshness_state}
-                    onChange={(e) => setFormData({ ...formData, freshness_state: e.target.value })}
-                    style={{
-                      width: '100%',
-                      background: '#F8FAFC',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
-                    }}
-                  >
-                    <option value="GREEN">GREEN (0-24h Fresh Catch)</option>
-                    <option value="GREY">GREY (24-48h Aging)</option>
-                    <option value="YELLOW">YELLOW (Special / Monitored)</option>
-                    <option value="RED">RED (&gt;48h Expired / Halt)</option>
-                  </select>
+                    onChange={(val) => setFormData({ ...formData, freshness_state: val })}
+                    options={[
+                      { value: 'GREEN', label: 'GREEN (0-24h Fresh Catch)' },
+                      { value: 'GREY', label: 'GREY (24-48h Aging)' },
+                      { value: 'YELLOW', label: 'YELLOW (Special / Monitored)' },
+                      { value: 'RED', label: 'RED (>48h Expired / Halt)' },
+                    ]}
+                    style={{ width: '100%' }}
+                  />
                 </div>
               </div>
 

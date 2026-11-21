@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdminSubNav } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
 
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -14,6 +14,8 @@ export default function AdminCustomersPage() {
   const [search, setSearch] = useState('');
   const [subFilter, setSubFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -120,6 +122,17 @@ export default function AdminCustomersPage() {
       return matchSearch && matchSub && matchStatus;
     });
   }, [customers, search, subFilter, statusFilter]);
+
+  // Reset to page 1 on filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, subFilter, statusFilter]);
+
+  const totalPages = Math.ceil(filteredCustomers.length / limit) || 1;
+  const paginatedCustomers = useMemo(() => {
+    const start = (page - 1) * limit;
+    return filteredCustomers.slice(start, start + limit);
+  }, [filteredCustomers, page, limit]);
 
   const metrics = useMemo(() => {
     const total = customers.length;
@@ -260,39 +273,27 @@ export default function AdminCustomersPage() {
           />
         </div>
 
-        <select
+        <AdminSelect
           value={subFilter}
-          onChange={(e) => setSubFilter(e.target.value)}
-          style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
-          }}
-        >
-          <option value="ALL">All Subscriptions</option>
-          <option value="ACTIVE">Active Plan Subscribers</option>
-          <option value="INACTIVE">Non-Subscribers (Retail)</option>
-        </select>
+          onChange={(val) => setSubFilter(val)}
+          options={[
+            { value: 'ALL', label: 'All Subscriptions' },
+            { value: 'ACTIVE', label: 'Active Plan Subscribers' },
+            { value: 'INACTIVE', label: 'Non-Subscribers (Retail)' },
+          ]}
+          style={{ minWidth: '190px' }}
+        />
 
-        <select
+        <AdminSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 14px',
-            color: '#0F2C59',
-            fontSize: '13px',
-          }}
-        >
-          <option value="ALL">All Account States</option>
-          <option value="ACTIVE">Active Only</option>
-          <option value="BLOCKED">Blocked Only</option>
-        </select>
+          onChange={(val) => setStatusFilter(val)}
+          options={[
+            { value: 'ALL', label: 'All Account States' },
+            { value: 'ACTIVE', label: 'Active Only' },
+            { value: 'BLOCKED', label: 'Blocked Only' },
+          ]}
+          style={{ minWidth: '170px' }}
+        />
       </div>
 
       {/* Customers Table */}
@@ -323,7 +324,7 @@ export default function AdminCustomersPage() {
                 </td>
               </tr>
             ) : (
-              filteredCustomers.map((c) => (
+              paginatedCustomers.map((c) => (
                 <tr key={c.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                   <td style={{ padding: '14px 18px' }}>
                     <div style={{ fontWeight: '600', color: '#0F2C59' }}>
@@ -431,6 +432,19 @@ export default function AdminCustomersPage() {
             )}
           </tbody>
         </table>
+        <AdminPagination
+          page={page}
+          totalPages={totalPages}
+          total={filteredCustomers.length}
+          limit={limit}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          itemName="customers"
+          loading={loading}
+        />
       </div>
 
       {/* Customer Details Drawer / Modal */}

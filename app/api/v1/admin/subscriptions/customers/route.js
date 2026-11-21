@@ -16,7 +16,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
 
     const search = searchParams.get('search') || '';
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const limit = parseInt(searchParams.get('limit') || '25', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
     const customers = await customerSubscriptionEngine.searchCustomersForSubscription({
