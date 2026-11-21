@@ -239,37 +239,49 @@ export default function AdminWorkersPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#0F2C59' }}>
-              Store Workers &amp; Staff
-            </h1>
-          </div>
+          <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#0F2C59' }}>
+            Staff &amp; Shifts Management
+          </h1>
         </div>
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button
+            id="btn-refresh-workers"
             onClick={fetchWorkers}
+            disabled={loading}
             style={{
               background: '#FFFFFF',
               border: '1px solid #CBD5E1',
-              color: '#1E56A0',
-              padding: '8px 16px',
+              color: '#0F2C59',
+              height: '38px',
+              padding: '0 16px',
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: '700',
-              cursor: 'pointer',
-              display: 'flex',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              boxShadow: '0 1px 3px rgba(15, 44, 89, 0.04)',
+              boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+              transition: 'all 0.15s ease',
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className={loading ? 'pf-animate-spin' : ''}
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="23 4 23 10 17 10" />
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            <span>Refresh</span>
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
           <button
             id="btn-create-worker"
@@ -278,18 +290,24 @@ export default function AdminWorkersPage() {
               background: '#1E56A0',
               border: 'none',
               color: '#FFFFFF',
-              padding: '8px 18px',
+              height: '38px',
+              padding: '0 18px',
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: '700',
               cursor: 'pointer',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
               boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+              transition: 'all 0.15s ease',
             }}
           >
-            <span>+</span> Create Worker Account
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>Create Worker Account</span>
           </button>
         </div>
       </div>
@@ -297,70 +315,93 @@ export default function AdminWorkersPage() {
       {/* Alerts */}
       {errorMsg && (
         <div style={{
-          background: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid #EF4444',
-          color: '#FCA5A5',
-          padding: '12px 16px',
-          borderRadius: '8px',
+          background: '#FEF2F2',
+          border: '1px solid #FECACA',
+          color: '#991B1B',
+          padding: '14px 18px',
+          borderRadius: '12px',
           marginBottom: '20px',
-          fontSize: '14px',
+          fontSize: '13px',
+          fontWeight: '600',
           display: 'flex',
           justifyContent: 'space-between',
+          alignItems: 'center',
         }}>
           <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>&times;</button>
+          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#991B1B', cursor: 'pointer', fontSize: '16px' }}>&times;</button>
         </div>
       )}
 
       {successMsg && (
         <div style={{
-          background: 'rgba(16, 185, 129, 0.1)',
-          border: '1px solid #10B981',
-          color: '#6EE7B7',
-          padding: '12px 16px',
-          borderRadius: '8px',
+          background: '#ECFDF5',
+          border: '1px solid #A7F3D0',
+          color: '#065F46',
+          padding: '14px 18px',
+          borderRadius: '12px',
           marginBottom: '20px',
-          fontSize: '14px',
+          fontSize: '13px',
+          fontWeight: '600',
           display: 'flex',
           justifyContent: 'space-between',
+          alignItems: 'center',
         }}>
           <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>&times;</button>
+          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#065F46', cursor: 'pointer', fontSize: '16px' }}>&times;</button>
         </div>
       )}
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TOTAL WORKERS</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#0F2C59', marginTop: '4px' }}>{metrics.total}</div>
+      <div
+        className="pf-admin-metrics-grid"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}
+      >
+        <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL WORKERS</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#0F2C59', marginTop: '6px' }}>{metrics.total}</div>
         </div>
-        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>ACTIVE FULFILLMENT STAFF</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#10B981', marginTop: '4px' }}>{metrics.active}</div>
+        <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTIVE FULFILLMENT STAFF</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#059669', marginTop: '6px' }}>{metrics.active}</div>
         </div>
-        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>TODAY ORDERS FULFILLED</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#1E56A0', marginTop: '4px' }}>{metrics.todayOrders}</div>
+        <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TODAY ORDERS FULFILLED</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#1E56A0', marginTop: '6px' }}>{metrics.todayOrders}</div>
         </div>
-        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>MONTHLY FULFILLMENTS</div>
-          <div style={{ fontSize: '26px', fontWeight: '700', color: '#F59E0B', marginTop: '4px' }}>{metrics.monthOrders}</div>
+        <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MONTHLY FULFILLMENTS</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#D97706', marginTop: '6px' }}>{metrics.monthOrders}</div>
         </div>
       </div>
 
-      {/* Search & Filters */}
+      {/* Search & Status Filters */}
       <div style={{
         background: '#FFFFFF',
         padding: '16px 20px',
-        borderRadius: '10px',
+        borderRadius: '16px',
         border: '1px solid #E2E8F0',
         marginBottom: '24px',
         display: 'flex',
         gap: '16px',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
       }}>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: '1 1 280px', position: 'relative' }}>
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#64748B"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
           <input
             id="worker-search-input"
             type="text"
@@ -370,28 +411,65 @@ export default function AdminWorkersPage() {
             style={{
               width: '100%',
               background: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: '6px',
-              padding: '10px 14px',
-              color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
+              border: '1px solid #CBD5E1',
+              borderRadius: '8px',
+              padding: '9px 12px 9px 36px',
+              color: '#0F2C59',
+              fontSize: '13px',
+              boxSizing: 'border-box',
+              outline: 'none',
             }}
           />
         </div>
 
-        <AdminSelect
-          value={statusFilter}
-          onChange={(val) => setStatusFilter(val)}
-          options={[
-            { value: 'ALL', label: 'All Account Statuses' },
-            { value: 'ACTIVE', label: 'Active Staff Only' },
-            { value: 'DISABLED', label: 'Disabled Accounts Only' },
-          ]}
-          style={{ minWidth: '190px' }}
-        />
+        {/* Filter Pills */}
+        <div style={{ display: 'inline-flex', padding: '4px', background: '#F1F5F9', borderRadius: '10px', border: '1px solid #E2E8F0', gap: '4px' }}>
+          {[
+            { id: 'ALL', label: `All Staff (${metrics.total})` },
+            { id: 'ACTIVE', label: `Active (${metrics.active})` },
+            { id: 'DISABLED', label: `Disabled (${metrics.total - metrics.active})` },
+          ].map((pill) => {
+            const active = statusFilter === pill.id;
+            return (
+              <button
+                key={pill.id}
+                type="button"
+                onClick={() => setStatusFilter(pill.id)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: active ? '#1E56A0' : 'transparent',
+                  color: active ? '#FFFFFF' : '#64748B',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {pill.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Workers Table */}
-      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden', position: 'relative', minHeight: '400px' }}>
+      <div
+        className="pf-admin-table-card"
+        style={{
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #E2E8F0',
+          overflow: 'hidden',
+          position: 'relative',
+          minHeight: '400px',
+          boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+        }}
+      >
         {/* Subtle Top Loading Line */}
         {loading && (
           <div
@@ -404,6 +482,8 @@ export default function AdminWorkersPage() {
               background: '#E2E8F0',
               overflow: 'hidden',
               zIndex: 10,
+              borderTopLeftRadius: '16px',
+              borderTopRightRadius: '16px',
             }}
           >
             <div
@@ -417,145 +497,168 @@ export default function AdminWorkersPage() {
             />
           </div>
         )}
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-          <thead>
-            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Worker Name</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Mobile (Login ID)</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Access Status</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Today's Orders</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Monthly Orders</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600' }}>Account Created</th>
-              <th style={{ padding: '14px 18px', fontWeight: '600', textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <AdminTableSkeleton columns={7} rows={5} />
-            ) : filteredWorkers.length === 0 ? (
-              <tr>
-                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
-                  No worker accounts found.
-                </td>
+        <div className="pf-admin-table-scroll" style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', boxSizing: 'border-box', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+          <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
+                <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Worker Name</th>
+                <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Mobile (Login ID)</th>
+                <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Access Status</th>
+                <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Today's Orders</th>
+                <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Monthly Orders</th>
+                <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Account Created</th>
+                <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Actions</th>
               </tr>
-            ) : (
-              paginatedWorkers.map((w) => (
-                <tr key={w.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                  <td style={{ padding: '14px 18px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        background: '#F1F5F9',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '14px',
-                        color: '#0F2C59',
-                        fontWeight: '600',
-                      }}>
-                        {w.name ? w.name.charAt(0).toUpperCase() : 'W'}
-                      </div>
-                      <span style={{ fontWeight: '600', color: '#0F2C59' }}>{w.name}</span>
-                    </div>
-                  </td>
-
-                  <td style={{ padding: '14px 18px', fontFamily: 'monospace', color: '#1E56A0' }}>
-                    +91 {w.mobile_number}
-                  </td>
-
-                  <td style={{ padding: '14px 18px' }}>
-                    {w.active !== false ? (
-                      <span style={{
-                        background: 'rgba(16, 185, 129, 0.15)',
-                        color: '#10B981',
-                        border: '1px solid #10B981',
-                        padding: '3px 8px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                      }}>
-                        ● ACTIVE
-                      </span>
-                    ) : (
-                      <span style={{
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        color: '#EF4444',
-                        border: '1px solid #EF4444',
-                        padding: '3px 8px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                      }}>
-                        ○ DISABLED
-                      </span>
-                    )}
-                  </td>
-
-                  <td style={{ padding: '14px 18px', fontWeight: '600', color: '#0F2C59' }}>
-                    {w.today_orders || 0}
-                  </td>
-
-                  <td style={{ padding: '14px 18px', color: '#425B73' }}>
-                    {w.month_orders || 0}
-                  </td>
-
-                  <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '12px' }}>
-                    {new Date(w.created_at).toLocaleDateString()}
-                  </td>
-
-                  <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '8px' }}>
-                      <button
-                        onClick={() => openEditModal(w)}
-                        style={{
-                          background: '#F1F5F9',
-                          border: 'none',
-                          color: '#0F2C59',
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => openResetModal(w)}
-                        style={{
-                          background: '#F8FAFC',
-                          border: '1px solid #E2E8F0',
-                          color: '#1E56A0',
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Reset PIN
-                      </button>
-                      <button
-                        onClick={() => setToggleWorkerTarget(w)}
-                        style={{
-                          background: w.active !== false ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                          border: `1px solid ${w.active !== false ? '#EF4444' : '#10B981'}`,
-                          color: w.active !== false ? '#FCA5A5' : '#6EE7B7',
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {w.active !== false ? 'Disable' : 'Enable'}
-                      </button>
-                    </div>
+            </thead>
+            <tbody>
+              {loading ? (
+                <AdminTableSkeleton columns={7} rows={5} />
+              ) : filteredWorkers.length === 0 ? (
+                <tr>
+                  <td colSpan="7" style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
+                    No worker accounts found.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                paginatedWorkers.map((w) => (
+                  <tr
+                    key={w.id}
+                    style={{ borderBottom: '1px solid #E2E8F0', transition: 'background 0.15s ease' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '34px',
+                          height: '34px',
+                          borderRadius: '50%',
+                          background: '#E2E8F0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '13px',
+                          color: '#0F2C59',
+                          fontWeight: '700',
+                        }}>
+                          {w.name ? w.name.charAt(0).toUpperCase() : 'W'}
+                        </div>
+                        <span style={{ fontWeight: '700', color: '#0F2C59' }}>{w.name}</span>
+                      </div>
+                    </td>
+
+                    <td style={{ padding: '14px 18px', fontFamily: 'monospace', color: '#1E56A0', fontWeight: '600' }}>
+                      +91 {w.mobile_number}
+                    </td>
+
+                    <td style={{ padding: '14px 18px' }}>
+                      {w.active !== false ? (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '9999px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          letterSpacing: '0.04em',
+                          background: '#ECFDF5',
+                          color: '#065F46',
+                          border: '1px solid #A7F3D0',
+                        }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }} />
+                          ACTIVE
+                        </span>
+                      ) : (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '9999px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          letterSpacing: '0.04em',
+                          background: '#FEF2F2',
+                          color: '#991B1B',
+                          border: '1px solid #FECACA',
+                        }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444' }} />
+                          DISABLED
+                        </span>
+                      )}
+                    </td>
+
+                    <td style={{ padding: '14px 18px', fontWeight: '700', color: '#0F2C59' }}>
+                      {w.today_orders || 0}
+                    </td>
+
+                    <td style={{ padding: '14px 18px', color: '#425B73' }}>
+                      {w.month_orders || 0}
+                    </td>
+
+                    <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '12px' }}>
+                      {new Date(w.created_at).toLocaleDateString()}
+                    </td>
+
+                    <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                        <button
+                          onClick={() => openEditModal(w)}
+                          style={{
+                            background: '#F8FAFC',
+                            border: '1px solid #CBD5E1',
+                            color: '#0F2C59',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => openResetModal(w)}
+                          style={{
+                            background: '#FFFFFF',
+                            border: '1px solid #CBD5E1',
+                            color: '#1E56A0',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Reset PIN
+                        </button>
+                        <button
+                          onClick={() => setToggleWorkerTarget(w)}
+                          style={{
+                            background: w.active !== false ? '#FEF2F2' : '#ECFDF5',
+                            border: `1px solid ${w.active !== false ? '#FECACA' : '#A7F3D0'}`,
+                            color: w.active !== false ? '#991B1B' : '#065F46',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          {w.active !== false ? 'Disable' : 'Enable'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
         <AdminPagination
           page={page}
           totalPages={totalPages}
@@ -576,7 +679,7 @@ export default function AdminWorkersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 44, 89, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -584,17 +687,21 @@ export default function AdminWorkersPage() {
           zIndex: 100,
           padding: '20px',
         }}>
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            borderRadius: '12px',
-            width: '100%',
-            maxWidth: '480px',
-            padding: '24px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-          }}>
+          <div
+            className="pf-admin-modal-card"
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '480px',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(15, 44, 89, 0.15)',
+              boxSizing: 'border-box',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#0F2C59', margin: 0 }}>
                 Create Fulfillment Worker Account
               </h2>
               <button
@@ -625,8 +732,8 @@ export default function AdminWorkersPage() {
             </div>
 
             <form onSubmit={handleCreate}>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                   Full Worker Name *
                 </label>
                 <input
@@ -638,16 +745,19 @@ export default function AdminWorkersPage() {
                   style={{
                     width: '100%',
                     background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '8px',
+                    padding: '9px 12px',
+                    color: '#0F2C59',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    outline: 'none',
                   }}
                 />
               </div>
 
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                   10-Digit Mobile Number (Login ID) *
                 </label>
                 <input
@@ -661,16 +771,19 @@ export default function AdminWorkersPage() {
                   style={{
                     width: '100%',
                     background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '8px',
+                    padding: '9px 12px',
+                    color: '#0F2C59',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    outline: 'none',
                   }}
                 />
               </div>
 
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                   Temporary Password (min 6 chars) *
                 </label>
                 <input
@@ -683,10 +796,13 @@ export default function AdminWorkersPage() {
                   style={{
                     width: '100%',
                     background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '8px',
+                    padding: '9px 12px',
+                    color: '#0F2C59',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    outline: 'none',
                   }}
                 />
               </div>
@@ -698,7 +814,7 @@ export default function AdminWorkersPage() {
                 padding: '12px 14px',
                 marginBottom: '20px',
               }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#0F2C59', fontWeight: '500' }}>
                   <input
                     type="checkbox"
                     checked={createForm.active}
@@ -715,7 +831,7 @@ export default function AdminWorkersPage() {
                   style={{
                     background: '#FFFFFF',
                     border: '1px solid #CBD5E1',
-                    color: '#334155',
+                    color: '#475569',
                     padding: '9px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
@@ -755,7 +871,7 @@ export default function AdminWorkersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 44, 89, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -763,17 +879,21 @@ export default function AdminWorkersPage() {
           zIndex: 100,
           padding: '20px',
         }}>
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            borderRadius: '12px',
-            width: '100%',
-            maxWidth: '480px',
-            padding: '24px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-          }}>
+          <div
+            className="pf-admin-modal-card"
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '480px',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(15, 44, 89, 0.15)',
+              boxSizing: 'border-box',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#0F2C59', margin: 0 }}>
                 Edit Worker: {editingWorker.name}
               </h2>
               <button
@@ -804,8 +924,8 @@ export default function AdminWorkersPage() {
             </div>
 
             <form onSubmit={handleEdit}>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                   Full Worker Name *
                 </label>
                 <input
@@ -816,16 +936,19 @@ export default function AdminWorkersPage() {
                   style={{
                     width: '100%',
                     background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '8px',
+                    padding: '9px 12px',
+                    color: '#0F2C59',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    outline: 'none',
                   }}
                 />
               </div>
 
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                   10-Digit Mobile Number *
                 </label>
                 <input
@@ -838,10 +961,13 @@ export default function AdminWorkersPage() {
                   style={{
                     width: '100%',
                     background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '8px',
+                    padding: '9px 12px',
+                    color: '#0F2C59',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    outline: 'none',
                   }}
                 />
               </div>
@@ -853,7 +979,7 @@ export default function AdminWorkersPage() {
                 padding: '12px 14px',
                 marginBottom: '20px',
               }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#0F2C59', fontWeight: '500' }}>
                   <input
                     type="checkbox"
                     checked={editForm.active}
@@ -870,7 +996,7 @@ export default function AdminWorkersPage() {
                   style={{
                     background: '#FFFFFF',
                     border: '1px solid #CBD5E1',
-                    color: '#334155',
+                    color: '#475569',
                     padding: '9px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
@@ -910,7 +1036,7 @@ export default function AdminWorkersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 44, 89, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -918,16 +1044,20 @@ export default function AdminWorkersPage() {
           zIndex: 100,
           padding: '20px',
         }}>
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #38BDF8',
-            borderRadius: '12px',
-            width: '100%',
-            maxWidth: '440px',
-            padding: '24px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-          }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px', color: '#0F2C59' }}>
+          <div
+            className="pf-admin-modal-card"
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '440px',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(15, 44, 89, 0.15)',
+              boxSizing: 'border-box',
+            }}
+          >
+            <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 6px', color: '#0F2C59' }}>
               Reset Password: {resetWorker.name}
             </h2>
             <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#64748B' }}>
@@ -935,8 +1065,8 @@ export default function AdminWorkersPage() {
             </p>
 
             <form onSubmit={handleResetPassword}>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                   New Password (min 6 characters) *
                 </label>
                 <input
@@ -949,16 +1079,19 @@ export default function AdminWorkersPage() {
                   style={{
                     width: '100%',
                     background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '8px',
+                    padding: '9px 12px',
+                    color: '#0F2C59',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    outline: 'none',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                   Confirm New Password *
                 </label>
                 <input
@@ -971,10 +1104,13 @@ export default function AdminWorkersPage() {
                   style={{
                     width: '100%',
                     background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#0F2C59', fontSize: '13px', boxSizing: 'border-box', background: '#F8FAFC', border: '1px solid #CBD5E1',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '8px',
+                    padding: '9px 12px',
+                    color: '#0F2C59',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    outline: 'none',
                   }}
                 />
               </div>
@@ -986,7 +1122,7 @@ export default function AdminWorkersPage() {
                   style={{
                     background: '#FFFFFF',
                     border: '1px solid #CBD5E1',
-                    color: '#334155',
+                    color: '#475569',
                     padding: '9px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
@@ -1026,7 +1162,7 @@ export default function AdminWorkersPage() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 44, 89, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -1034,16 +1170,20 @@ export default function AdminWorkersPage() {
           zIndex: 100,
           padding: '20px',
         }}>
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #CBD5E1',
-            borderRadius: '12px',
-            width: '100%',
-            maxWidth: '440px',
-            padding: '24px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-          }}>
-            <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: toggleWorkerTarget.active !== false ? '#DC2626' : '#16A34A', fontWeight: '700' }}>
+          <div
+            className="pf-admin-modal-card"
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '440px',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(15, 44, 89, 0.15)',
+              boxSizing: 'border-box',
+            }}
+          >
+            <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: toggleWorkerTarget.active !== false ? '#991B1B' : '#065F46', fontWeight: '800' }}>
               {toggleWorkerTarget.active !== false ? `Disable Account: ${toggleWorkerTarget.name}` : `Enable Account: ${toggleWorkerTarget.name}`}
             </h3>
             <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#64748B', lineHeight: '1.5' }}>
@@ -1058,7 +1198,7 @@ export default function AdminWorkersPage() {
                 style={{
                   background: '#FFFFFF',
                   border: '1px solid #CBD5E1',
-                  color: '#334155',
+                  color: '#475569',
                   padding: '9px 18px',
                   borderRadius: '8px',
                   fontSize: '13px',
@@ -1074,15 +1214,15 @@ export default function AdminWorkersPage() {
                 onClick={handleToggleStatus}
                 disabled={actionLoading}
                 style={{
-                  background: toggleWorkerTarget.active !== false ? '#DC2626' : '#16A34A',
+                  background: toggleWorkerTarget.active !== false ? '#DC2626' : '#059669',
                   border: 'none',
                   color: '#FFFFFF',
-                  padding: '9px 18px',
+                  padding: '9px 20px',
                   borderRadius: '8px',
                   fontSize: '13px',
                   fontWeight: '700',
                   cursor: actionLoading ? 'not-allowed' : 'pointer',
-                  boxShadow: toggleWorkerTarget.active !== false ? '0 2px 6px rgba(220, 38, 38, 0.25)' : '0 2px 6px rgba(22, 163, 74, 0.25)',
+                  boxShadow: toggleWorkerTarget.active !== false ? '0 2px 6px rgba(220, 38, 38, 0.25)' : '0 2px 6px rgba(5, 150, 105, 0.25)',
                   transition: 'all 0.15s ease',
                 }}
               >

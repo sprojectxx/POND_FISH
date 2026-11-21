@@ -162,7 +162,7 @@ export default function AdminSecurityPage() {
 
   if (loading) {
     return (
-      <div style={{ color: '#64748B', fontSize: '14px', padding: '24px' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#64748B', fontSize: '14px', padding: '36px', textAlign: 'center' }}>
         Loading administrative security posture...
       </div>
     );
@@ -182,26 +182,63 @@ export default function AdminSecurityPage() {
       />
 
       {/* Page Header */}
-      <div style={{ marginBottom: '28px' }}>
-        <div style={{ fontSize: '12px', color: '#1E56A0', fontWeight: '600', textTransform: 'uppercase', marginBottom: '4px' }}>
-          Governance / Security
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#0F2C59' }}>
+            Security &amp; Passwords
+          </h1>
         </div>
-        <h1 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px 0' }}>
-          Security &amp; Passwords
-        </h1>
-        
+
+        <button
+          onClick={fetchSecurityData}
+          disabled={loading}
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #CBD5E1',
+            color: '#0F2C59',
+            height: '36px',
+            padding: '0 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: '700',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <svg
+            className={loading ? 'pf-animate-spin' : ''}
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          <span>Refresh</span>
+        </button>
       </div>
 
       {/* Global Alerts */}
       {error && (
         <div style={{
-          background: '#450A0A',
-          border: '1px solid #991B1B',
-          color: '#FECACA',
-          padding: '12px 16px',
-          borderRadius: '8px',
+          background: '#FEF2F2',
+          border: '1px solid #FECACA',
+          color: '#991B1B',
+          padding: '14px 18px',
+          borderRadius: '12px',
           marginBottom: '24px',
-          fontSize: '14px',
+          fontSize: '13px',
+          fontWeight: '600',
         }}>
           {error}
         </div>
@@ -209,78 +246,90 @@ export default function AdminSecurityPage() {
 
       {successMessage && (
         <div style={{
-          background: '#064E3B',
-          border: '1px solid #059669',
-          color: '#A7F3D0',
-          padding: '12px 16px',
-          borderRadius: '8px',
+          background: '#ECFDF5',
+          border: '1px solid #A7F3D0',
+          color: '#065F46',
+          padding: '14px 18px',
+          borderRadius: '12px',
           marginBottom: '24px',
-          fontSize: '14px',
+          fontSize: '13px',
+          fontWeight: '600',
         }}>
           {successMessage}
         </div>
       )}
 
       {/* Security Posture Summary Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px',
-        marginBottom: '28px',
-      }}>
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Account Status</div>
-          <div style={{ fontSize: '16px', fontWeight: '600', color: '#10B981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div
+        className="pf-admin-metrics-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '16px',
+          marginBottom: '28px',
+        }}
+      >
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', marginBottom: '6px' }}>Account Status</div>
+          <div style={{ fontSize: '18px', fontWeight: '800', color: '#065F46', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#10B981' }}></span>
             {profile?.status || 'ACTIVE'}
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Privilege Level</div>
-          <div style={{ fontSize: '16px', fontWeight: '600', color: '#1E56A0' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', marginBottom: '6px' }}>Privilege Level</div>
+          <div style={{ fontSize: '18px', fontWeight: '800', color: '#1E56A0' }}>
             {profile?.is_super_admin ? 'SUPER ADMIN' : 'STORE ADMIN'}
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Current Session</div>
-          <div style={{ fontSize: '16px', fontWeight: '600', color: '#0F2C59' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', marginBottom: '6px' }}>Current Session</div>
+          <div style={{ fontSize: '18px', fontWeight: '800', color: '#0F2C59' }}>
             Active Session
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>Last Login</div>
-          <div style={{ fontSize: '14px', fontWeight: '500', color: '#425B73' }}>
-            {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'N/A'}
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', marginBottom: '6px' }}>Last Updated / Login</div>
+          <div style={{ fontSize: '14px', fontWeight: '700', color: '#475569', marginTop: '4px' }}>
+            {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Current Session'}
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px' }}>
+      <div
+        className="pf-admin-twin-grid"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+      >
         {/* Change Password Card */}
         <div style={{
           background: '#FFFFFF',
           border: '1px solid #E2E8F0',
-          borderRadius: '12px',
+          borderRadius: '16px',
           padding: '24px',
+          boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+          width: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
         }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', margin: '0 0 4px 0' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 6px 0', color: '#0F2C59' }}>
             Change Password
           </h2>
-          <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 20px 0' }}>
-            Updating credentials terminates all existing active sessions immediately.
+          <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 20px 0', lineHeight: '1.4' }}>
+            Updating credentials immediately secures your account and terminates all other active sessions.
           </p>
 
           {passwordError && (
             <div style={{
-              background: '#450A0A',
-              border: '1px solid #991B1B',
-              color: '#FECACA',
-              padding: '10px 14px',
-              borderRadius: '6px',
+              background: '#FEF2F2',
+              border: '1px solid #FECACA',
+              color: '#991B1B',
+              padding: '12px 14px',
+              borderRadius: '8px',
               fontSize: '13px',
+              fontWeight: '600',
               marginBottom: '16px',
             }}>
               {passwordError}
@@ -289,12 +338,13 @@ export default function AdminSecurityPage() {
 
           {passwordSuccess && (
             <div style={{
-              background: '#064E3B',
-              border: '1px solid #059669',
-              color: '#A7F3D0',
-              padding: '10px 14px',
-              borderRadius: '6px',
+              background: '#ECFDF5',
+              border: '1px solid #A7F3D0',
+              color: '#065F46',
+              padding: '12px 14px',
+              borderRadius: '8px',
               fontSize: '13px',
+              fontWeight: '600',
               marginBottom: '16px',
             }}>
               {passwordSuccess}
@@ -303,7 +353,7 @@ export default function AdminSecurityPage() {
 
           <form onSubmit={handleChangePassword}>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: '#425B73', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                 Current Password
               </label>
               <input
@@ -317,19 +367,19 @@ export default function AdminSecurityPage() {
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '10px 12px',
+                  padding: '9px 12px',
                   background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '8px',
                   color: '#0F2C59',
-                  fontSize: '14px',
+                  fontSize: '13px',
                   outline: 'none',
                 }}
               />
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: '#425B73', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                 New Password (minimum 8 characters)
               </label>
               <input
@@ -343,19 +393,19 @@ export default function AdminSecurityPage() {
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '10px 12px',
+                  padding: '9px 12px',
                   background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '8px',
                   color: '#0F2C59',
-                  fontSize: '14px',
+                  fontSize: '13px',
                   outline: 'none',
                 }}
               />
             </div>
 
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: '#425B73', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                 Confirm New Password
               </label>
               <input
@@ -369,12 +419,12 @@ export default function AdminSecurityPage() {
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '10px 12px',
+                  padding: '9px 12px',
                   background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '8px',
                   color: '#0F2C59',
-                  fontSize: '14px',
+                  fontSize: '13px',
                   outline: 'none',
                 }}
               />
@@ -386,15 +436,15 @@ export default function AdminSecurityPage() {
               disabled={submittingPassword}
               style={{
                 width: '100%',
-                padding: '11px 18px',
+                padding: '10px 18px',
                 borderRadius: '8px',
-                background: submittingPassword ? '#94A3B8' : '#1E56A0',
+                background: submittingPassword ? '#CBD5E1' : '#1E56A0',
                 border: 'none',
                 color: '#FFFFFF',
                 fontSize: '13px',
                 fontWeight: '700',
                 cursor: submittingPassword ? 'not-allowed' : 'pointer',
-                boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                boxShadow: submittingPassword ? 'none' : '0 2px 6px rgba(30, 86, 160, 0.25)',
                 transition: 'all 0.15s ease',
               }}
             >
@@ -407,21 +457,25 @@ export default function AdminSecurityPage() {
         <div style={{
           background: '#FFFFFF',
           border: '1px solid #E2E8F0',
-          borderRadius: '12px',
+          borderRadius: '16px',
           padding: '24px',
           display: 'flex',
           flexDirection: 'column',
+          boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+          width: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: '#0F2C59' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#0F2C59' }}>
               Active Sessions
             </h2>
-            <span style={{ fontSize: '12px', background: '#F1F5F9', color: '#425B73', padding: '2px 8px', borderRadius: '12px', fontWeight: '600' }}>
+            <span style={{ fontSize: '11px', background: '#EFF6FF', color: '#1E56A0', border: '1px solid #BFDBFE', padding: '3px 8px', borderRadius: '9999px', fontWeight: '700' }}>
               {sessions.length} Active
             </span>
           </div>
-          <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 20px 0' }}>
-            Review sessions authorized to perform administrative operations.
+          <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 20px 0', lineHeight: '1.4' }}>
+            Review sessions authorized to perform administrative operations across browsers and devices.
           </p>
 
           <div style={{ flex: 1, overflowY: 'auto', maxHeight: '280px', marginBottom: '20px' }}>
@@ -434,25 +488,25 @@ export default function AdminSecurityPage() {
                 <div
                   key={sess.sessionId}
                   style={{
-                    background: sess.isCurrent ? '#EFF6FF' : '#FFFFFF',
-                    border: sess.isCurrent ? '1px solid #1E56A0' : '1px solid #E2E8F0',
-                    borderRadius: '8px',
-                    padding: '12px',
+                    background: sess.isCurrent ? '#EFF6FF' : '#F8FAFC',
+                    border: sess.isCurrent ? '1px solid #BFDBFE' : '1px solid #CBD5E1',
+                    borderRadius: '12px',
+                    padding: '14px',
                     marginBottom: '10px',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: sess.isCurrent ? '#1E56A0' : '#0F2C59' }}>
-                      {sess.isCurrent ? 'This Browser (Current Session)' : 'External Administrator Device'}
+                      {sess.isCurrent ? 'This Browser (Current Session)' : 'External Device'}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#64748B' }}>
+                    <span style={{ fontSize: '11px', color: '#64748B', fontFamily: 'monospace' }}>
                       IP: {sess.ip}
                     </span>
                   </div>
                   <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                     Client: {sess.userAgent}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#64748B' }}>
+                  <div style={{ fontSize: '11px', color: '#94A3B8' }}>
                     Signed in: {new Date(sess.createdAt).toLocaleString()}
                   </div>
                 </div>

@@ -373,11 +373,17 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Content Hub: Left Coverage Hero + Right Status Matrix */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(280px, 340px) 1fr',
-              gap: '20px',
-            }}>
+            <div
+              className="pf-admin-split-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(280px, 340px) 1fr',
+                gap: '20px',
+                width: '100%',
+                minWidth: 0,
+                boxSizing: 'border-box',
+              }}
+            >
               {/* Left Hero Card */}
               <div style={{
                 background: 'linear-gradient(135deg, #0F2C59 0%, #1E56A0 100%)',
@@ -388,6 +394,9 @@ export default function AdminDashboardPage() {
                 flexDirection: 'column',
                 justifyContent: 'space-between',
                 boxShadow: '0 8px 24px rgba(15, 44, 89, 0.16)',
+                width: '100%',
+                minWidth: 0,
+                boxSizing: 'border-box',
               }}>
                 <div>
                   <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '700' }}>
@@ -419,7 +428,10 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Right Status Matrix: 4 Sleek Status Quadrants */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+              <div
+                className="pf-admin-quad-grid"
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+              >
                 {/* Tile 1: Unavailable */}
                 <div style={{
                   background: '#F8FAFC',
@@ -576,12 +588,15 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Connected Funnel Stages */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr auto 1fr auto 1fr',
-              alignItems: 'center',
-              gap: '12px',
-            }}>
+            <div
+              className="pf-admin-funnel-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr auto 1fr',
+                alignItems: 'center',
+                gap: '12px',
+              }}
+            >
               {/* Stage 1: Received */}
               <div style={{
                 background: '#F8FAFC',
@@ -699,7 +714,10 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Split Commercial Layout: Left Revenue Summary + Right Transaction Performance */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: '20px' }}>
+            <div
+              className="pf-admin-split-grid"
+              style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: '20px', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+            >
               {/* Left Revenue Card */}
               <div style={{
                 background: '#F8FAFC',
@@ -735,7 +753,10 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Right Performance Stats: 3 Broad Metric Tiles */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+              <div
+                className="pf-admin-trio-grid"
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}
+              >
                 <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px' }}>
                   <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '700', textTransform: 'uppercase' }}>Volume</div>
                   <div style={{ fontSize: '32px', fontWeight: '900', color: '#0F2C59', margin: '8px 0 4px' }}>
@@ -766,7 +787,10 @@ export default function AdminDashboardPage() {
           </section>
 
           {/* SECTION 4: SUBSCRIPTIONS & TRUCK LOGISTICS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
+          <div
+            className="pf-admin-twin-grid"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+          >
             {/* Subscriptions Integrated Console */}
             <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
@@ -893,7 +917,10 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* SECTION 5: FRESHNESS ALERTS & WORKER SUMMARY */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
+          <div
+            className="pf-admin-twin-grid"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+          >
             {/* Freshness Alerts Card */}
             <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)' }}>
               <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#0F2C59', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>

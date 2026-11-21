@@ -96,6 +96,25 @@ export default function AdminFishPage() {
     fetchData();
   }, []);
 
+  // Lock body scroll and handle Escape key when modals are open
+  useEffect(() => {
+    const isAnyOpen = Boolean(isModalOpen || deleteTarget);
+    if (!isAnyOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsModalOpen(false);
+        setDeleteTarget(null);
+      }
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isModalOpen, deleteTarget]);
+
   const openCreateModal = () => {
     setEditingFish(null);
     setFormData({
@@ -386,7 +405,7 @@ export default function AdminFishPage() {
           </h1>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="pf-admin-fish-actions-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           {/* View Toggle: Cards vs Table */}
           <div
             style={{
@@ -548,7 +567,10 @@ export default function AdminFishPage() {
       )}
 
       {/* KPI Highlight Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+      <div
+        className="pf-admin-metrics-grid"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}
+      >
         <div style={{ background: '#FFFFFF', padding: '18px 22px', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.03)' }}>
           <div style={{ fontSize: '11px', color: '#64748B', fontWeight: '800', letterSpacing: '0.08em', textTransform: 'uppercase' }}>TOTAL VARIETIES</div>
           <div style={{ fontSize: '28px', fontWeight: '900', color: '#0F2C59', marginTop: '4px' }}>{metrics.total}</div>
@@ -579,15 +601,20 @@ export default function AdminFishPage() {
         boxShadow: '0 4px 16px rgba(15, 44, 89, 0.03)',
       }}>
         {/* Row 1: Category Filter Pills */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          overflowX: 'auto',
-          paddingBottom: '14px',
-          borderBottom: '1px solid #F1F5F9',
-          marginBottom: '14px',
-        }}>
+        <div
+          className="pf-admin-pill-scroll"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            overflowX: 'auto',
+            paddingBottom: '14px',
+            borderBottom: '1px solid #F1F5F9',
+            marginBottom: '14px',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+          }}
+        >
           <button
             type="button"
             onClick={() => setCategoryFilter('ALL')}
@@ -603,6 +630,7 @@ export default function AdminFishPage() {
               boxShadow: categoryFilter === 'ALL' ? '0 2px 6px rgba(30, 86, 160, 0.25)' : 'none',
               transition: 'all 0.15s ease',
               whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
             All Varieties ({fishList.length})
@@ -628,6 +656,7 @@ export default function AdminFishPage() {
                   boxShadow: isSelected ? '0 2px 6px rgba(30, 86, 160, 0.25)' : 'none',
                   transition: 'all 0.15s ease',
                   whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {c.name} ({count})
@@ -637,7 +666,7 @@ export default function AdminFishPage() {
         </div>
 
         {/* Row 2: Search & Channel / Freshness Dropdowns */}
-        <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="pf-admin-fish-filter-row" style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ flex: '1', minWidth: '240px', position: 'relative' }}>
             <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -726,11 +755,14 @@ export default function AdminFishPage() {
           /* SHOWCASE CARDS VIEW */
           <div>
             {loading ? (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
-                gap: '22px',
-              }}>
+              <div
+                className="pf-admin-fish-grid"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
+                  gap: '22px',
+                }}
+              >
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div key={i} style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', height: '320px', overflow: 'hidden' }}>
                     <div className="pf-animate-shimmer" style={{ width: '100%', height: '180px', background: 'linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%)', backgroundSize: '200% 100%' }} />
@@ -783,12 +815,15 @@ export default function AdminFishPage() {
                 </button>
               </div>
             ) : (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
-                gap: '22px',
-                marginBottom: '24px',
-              }}>
+              <div
+                className="pf-admin-fish-grid"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
+                  gap: '22px',
+                  marginBottom: '24px',
+                }}
+              >
                 {paginatedList.map((f) => {
                   const freshMeta = getFreshnessMeta(f.freshness_state);
                   const displayImg = getCdnImageUrl(f.image_url);
@@ -951,13 +986,12 @@ export default function AdminFishPage() {
                           <button
                             type="button"
                             onClick={() => handleQuickToggle(f, 'online_bookable')}
-                            disabled={isOnlineToggling}
                             style={{
                               padding: '7px 8px',
                               borderRadius: '8px',
                               fontSize: '11.5px',
                               fontWeight: '700',
-                              cursor: isOnlineToggling ? 'wait' : 'pointer',
+                              cursor: 'pointer',
                               border: `1px solid ${f.online_bookable ? '#A7F3D0' : '#CBD5E1'}`,
                               background: f.online_bookable ? '#ECFDF5' : '#F1F5F9',
                               color: f.online_bookable ? '#065F46' : '#334155',
@@ -966,31 +1000,30 @@ export default function AdminFishPage() {
                               justifyContent: 'center',
                               gap: '6px',
                               transition: 'all 0.15s ease',
-                              opacity: isOnlineToggling ? 0.75 : 1,
                             }}
                             title="Toggle Online Pre-booking Eligibility"
                           >
-                            {isOnlineToggling ? (
-                              <svg className="pf-animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                                <path d="M12 2a10 10 0 0 1 10 10" />
-                              </svg>
-                            ) : (
-                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: f.online_bookable ? '#10B981' : '#64748B' }} />
-                            )}
-                            <span>{isOnlineToggling ? 'Updating...' : f.online_bookable ? 'Online: Active' : 'Online: Off'}</span>
+                            <span
+                              style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                background: f.online_bookable ? '#10B981' : '#64748B',
+                                opacity: isOnlineToggling ? 0.5 : 1,
+                              }}
+                            />
+                            <span>{f.online_bookable ? 'Online: Active' : 'Online: Off'}</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => handleQuickToggle(f, 'physical_available')}
-                            disabled={isStoreToggling}
                             style={{
                               padding: '7px 8px',
                               borderRadius: '8px',
                               fontSize: '11.5px',
                               fontWeight: '700',
-                              cursor: isStoreToggling ? 'wait' : 'pointer',
+                              cursor: 'pointer',
                               border: `1px solid ${f.physical_available ? '#BFDBFE' : '#CBD5E1'}`,
                               background: f.physical_available ? '#EFF6FF' : '#F1F5F9',
                               color: f.physical_available ? '#1E56A0' : '#334155',
@@ -999,19 +1032,19 @@ export default function AdminFishPage() {
                               justifyContent: 'center',
                               gap: '6px',
                               transition: 'all 0.15s ease',
-                              opacity: isStoreToggling ? 0.75 : 1,
                             }}
                             title="Toggle Store Counter Availability"
                           >
-                            {isStoreToggling ? (
-                              <svg className="pf-animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                                <path d="M12 2a10 10 0 0 1 10 10" />
-                              </svg>
-                            ) : (
-                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: f.physical_available ? '#1E56A0' : '#64748B' }} />
-                            )}
-                            <span>{isStoreToggling ? 'Updating...' : f.physical_available ? 'Store: Active' : 'Store: Off'}</span>
+                            <span
+                              style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                background: f.physical_available ? '#1E56A0' : '#64748B',
+                                opacity: isStoreToggling ? 0.5 : 1,
+                              }}
+                            />
+                            <span>{f.physical_available ? 'Store: Active' : 'Store: Off'}</span>
                           </button>
                         </div>
 
@@ -1088,9 +1121,9 @@ export default function AdminFishPage() {
           </div>
         ) : (
           /* DENSE TABLE VIEW */
-          <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)', marginBottom: '24px' }}>
-            <div style={{ overflowX: 'auto', width: '100%' }}>
-              <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          <div className="pf-admin-table-card" style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 4px 16px rgba(15, 44, 89, 0.04)', marginBottom: '24px', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+            <div className="pf-admin-table-scroll" style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+              <table style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
                     <th style={{ padding: '14px 18px', fontWeight: '600', whiteSpace: 'nowrap' }}>Fish Variety</th>
@@ -1212,7 +1245,6 @@ export default function AdminFishPage() {
                             <button
                               type="button"
                               onClick={() => handleQuickToggle(f, 'online_bookable')}
-                              disabled={isOnlineToggling}
                               style={{
                                 background: f.online_bookable ? '#ECFDF5' : '#F1F5F9',
                                 border: `1px solid ${f.online_bookable ? '#A7F3D0' : '#CBD5E1'}`,
@@ -1221,23 +1253,23 @@ export default function AdminFishPage() {
                                 borderRadius: '20px',
                                 fontSize: '11.5px',
                                 fontWeight: '700',
-                                cursor: isOnlineToggling ? 'wait' : 'pointer',
+                                cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '6px',
                                 transition: 'all 0.15s ease',
-                                opacity: isOnlineToggling ? 0.75 : 1,
                               }}
                             >
-                              {isOnlineToggling ? (
-                                <svg className="pf-animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                                  <path d="M12 2a10 10 0 0 1 10 10" />
-                                </svg>
-                              ) : (
-                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: f.online_bookable ? '#10B981' : '#64748B' }} />
-                              )}
-                              <span>{isOnlineToggling ? 'Updating...' : f.online_bookable ? 'Bookable' : 'Disabled'}</span>
+                              <span
+                                style={{
+                                  width: '6px',
+                                  height: '6px',
+                                  borderRadius: '50%',
+                                  background: f.online_bookable ? '#10B981' : '#64748B',
+                                  opacity: isOnlineToggling ? 0.5 : 1,
+                                }}
+                              />
+                              <span>{f.online_bookable ? 'Bookable' : 'Disabled'}</span>
                             </button>
                           </td>
 
@@ -1246,7 +1278,6 @@ export default function AdminFishPage() {
                             <button
                               type="button"
                               onClick={() => handleQuickToggle(f, 'physical_available')}
-                              disabled={isStoreToggling}
                               style={{
                                 background: f.physical_available ? '#EFF6FF' : '#F1F5F9',
                                 border: `1px solid ${f.physical_available ? '#BFDBFE' : '#CBD5E1'}`,
@@ -1255,23 +1286,23 @@ export default function AdminFishPage() {
                                 borderRadius: '20px',
                                 fontSize: '11.5px',
                                 fontWeight: '700',
-                                cursor: isStoreToggling ? 'wait' : 'pointer',
+                                cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '6px',
                                 transition: 'all 0.15s ease',
-                                opacity: isStoreToggling ? 0.75 : 1,
                               }}
                             >
-                              {isStoreToggling ? (
-                                <svg className="pf-animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                                  <path d="M12 2a10 10 0 0 1 10 10" />
-                                </svg>
-                              ) : (
-                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: f.physical_available ? '#1E56A0' : '#64748B' }} />
-                              )}
-                              <span>{isStoreToggling ? 'Updating...' : f.physical_available ? 'In Store' : 'Unavailable'}</span>
+                              <span
+                                style={{
+                                  width: '6px',
+                                  height: '6px',
+                                  borderRadius: '50%',
+                                  background: f.physical_available ? '#1E56A0' : '#64748B',
+                                  opacity: isStoreToggling ? 0.5 : 1,
+                                }}
+                              />
+                              <span>{f.physical_available ? 'In Store' : 'Unavailable'}</span>
                             </button>
                           </td>
 
@@ -1358,29 +1389,38 @@ export default function AdminFishPage() {
 
       {/* Clean, Elegantly Proportioned Create / Edit Modal */}
       {isModalOpen && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 44, 89, 0.5)',
-          backdropFilter: 'blur(5px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: '20px',
-        }}>
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '560px',
-            maxHeight: '88vh',
-            overflowY: 'auto',
-            padding: '26px 28px',
-            boxShadow: '0 25px 35px -5px rgba(15, 44, 89, 0.25)',
-            boxSizing: 'border-box',
-          }}>
+        <div
+          onClick={() => setIsModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 44, 89, 0.5)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            padding: '20px',
+            overscrollBehavior: 'contain',
+          }}
+        >
+          <div
+            className="pf-admin-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '560px',
+              maxHeight: '88vh',
+              overflowY: 'auto',
+              overscrollBehavior: 'contain',
+              padding: '24px',
+              boxShadow: '0 25px 35px -5px rgba(15, 44, 89, 0.25)',
+              boxSizing: 'border-box',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <h2 style={{ fontSize: '18px', fontWeight: '900', margin: 0, color: '#0F2C59' }}>
                 {editingFish ? `Edit: ${editingFish.name}` : 'Add New Fish Variety'}
@@ -1666,7 +1706,8 @@ export default function AdminFishPage() {
                 padding: '12px 16px',
                 marginBottom: '20px',
                 display: 'flex',
-                gap: '24px',
+                gap: '16px',
+                flexWrap: 'wrap',
               }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: '#0F2C59' }}>
                   <input
@@ -1733,27 +1774,36 @@ export default function AdminFishPage() {
 
       {/* Modern, Friendly Delete Confirmation Modal */}
       {deleteTarget && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 44, 89, 0.45)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: '20px',
-        }}>
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '460px',
-            padding: '26px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
-            textAlign: 'center',
-          }}>
+        <div
+          onClick={() => setDeleteTarget(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 44, 89, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            padding: '20px',
+            overscrollBehavior: 'contain',
+          }}
+        >
+          <div
+            className="pf-admin-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '460px',
+              padding: '26px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
+              textAlign: 'center',
+              overscrollBehavior: 'contain',
+            }}
+          >
             {/* Warning Icon Badge */}
             <div style={{
               width: '56px',

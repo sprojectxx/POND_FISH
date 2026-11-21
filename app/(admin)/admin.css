@@ -306,20 +306,77 @@ body {
   border-radius: 4px;
 }
 
+/* Sleek Coastal Scrollbars for Modals & Dialogs - Eliminates electric blue scrollbars */
+div[style*="position: fixed"] div::-webkit-scrollbar,
+div[style*="position:fixed"] div::-webkit-scrollbar,
+.pf-admin-modal-card::-webkit-scrollbar {
+  width: 5px;
+}
+div[style*="position: fixed"] div::-webkit-scrollbar-track,
+div[style*="position:fixed"] div::-webkit-scrollbar-track,
+.pf-admin-modal-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+div[style*="position: fixed"] div::-webkit-scrollbar-thumb,
+div[style*="position:fixed"] div::-webkit-scrollbar-thumb,
+.pf-admin-modal-card::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+div[style*="position: fixed"] div::-webkit-scrollbar-thumb:hover,
+div[style*="position:fixed"] div::-webkit-scrollbar-thumb:hover,
+.pf-admin-modal-card::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Horizontal pill scroll for category/filter tabs on touch devices */
+.pf-admin-pill-scroll {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+  flex-wrap: nowrap !important;
+}
+.pf-admin-pill-scroll::-webkit-scrollbar {
+  display: none !important;
+}
+
 /* ==========================================================================
-   Mobile Responsive Breakpoint (<= 900px)
+   Mobile & Tablet Responsive Breakpoint (<= 1024px)
+   Web / Desktop view (> 1024px) remains 100% UNCHANGED
    ========================================================================== */
-@media (max-width: 900px) {
-  /* Hide Desktop Sidebar */
+@media (max-width: 1024px) {
+  /* Prevent horizontal page blowout across viewport */
+  html, body {
+    max-width: 100vw !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .pf-admin-shell {
+    max-width: 100vw !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Hide Desktop Hover Sidebar & Touch Trigger on Mobile/Tablet */
   .pf-admin-sidebar {
     display: none !important;
   }
 
-  /* Reset content wrapper margin on mobile */
+  .pf-admin-sidebar-hover-trigger {
+    display: none !important;
+  }
+
+  /* Reset content wrapper margin on mobile/tablet */
   .pf-admin-content-wrapper {
     margin-left: 0 !important;
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
   }
 
   /* Show Hamburger Button */
@@ -329,8 +386,11 @@ body {
 
   /* Compact Top Header */
   .pf-admin-header {
-    padding: 10px 12px !important;
+    padding: 10px 14px !important;
     gap: 8px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
   }
 
   .pf-admin-header-subtitle {
@@ -348,7 +408,42 @@ body {
 
   /* Compact Main Content Area */
   .pf-admin-main {
-    padding: 16px 12px !important;
+    padding: 14px 12px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .pf-admin-main > div {
+    max-width: 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Universal SubNav Horizontal Pill Bar on Tablets/Phones */
+  .pf-admin-subnav-container {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    flex-wrap: nowrap !important;
+    box-sizing: border-box !important;
+    padding: 4px 6px !important;
+    margin-bottom: 16px !important;
+  }
+  .pf-admin-subnav-container::-webkit-scrollbar {
+    display: none !important;
+  }
+  .pf-admin-subnav-container > a,
+  .pf-admin-subnav-container > button {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    padding: 6px 12px !important;
+    font-size: 12px !important;
   }
 
   /* Responsive Metric Cards Grid */
@@ -369,7 +464,7 @@ body {
     font-size: 18px !important;
   }
 
-  /* Prevent 4-column & 3-column inline grids from overflowing on phones */
+  /* Prevent 4-column & 3-column inline grids from overflowing on phones & tablets */
   .pf-admin-main [style*="repeat(4, 1fr)"],
   .pf-admin-main [style*="repeat(4,1fr)"],
   .pf-admin-main [style*="repeat(3, 1fr)"],
@@ -378,16 +473,25 @@ body {
     gap: 10px !important;
   }
 
-  /* Two-column sidebars (420px 1fr, 360px 1fr) stack vertically */
+  /* Two-column sidebars and split hero-matrix grids stack vertically */
+  .pf-admin-split-grid,
   .pf-admin-journeys-grid,
+  .pf-admin-main [style*="minmax(280px"],
+  .pf-admin-main [style*="minmax(0, 380px)"],
   .pf-admin-main [style*="420px 1fr"],
-  .pf-admin-main [style*="360px 1fr"] {
+  .pf-admin-main [style*="380px 1fr"],
+  .pf-admin-main [style*="360px 1fr"],
+  .pf-admin-main [style*="350px 1fr"],
+  .pf-admin-main [style*="340px 1fr"],
+  .pf-admin-main [style*="320px 1fr"],
+  .pf-admin-main [style*="300px 1fr"] {
     grid-template-columns: 1fr !important;
     gap: 16px !important;
   }
 
   /* Large minmax auto-fit grids adapt to full width */
   .pf-admin-main [style*="minmax(500px"],
+  .pf-admin-main [style*="minmax(460px"],
   .pf-admin-main [style*="minmax(420px"],
   .pf-admin-main [style*="minmax(360px"] {
     grid-template-columns: 1fr !important;
@@ -405,6 +509,12 @@ body {
     box-sizing: border-box !important;
   }
 
+  /* Fish showcase cards on tablets: 2 per row */
+  .pf-admin-fish-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+  }
+
   /* Show mobile scroll hint */
   .pf-admin-scroll-hint {
     display: block !important;
@@ -415,12 +525,140 @@ body {
   .pf-admin-main table td {
     white-space: nowrap !important;
   }
+
+  /* Table horizontal isolation */
+  .pf-admin-main table {
+    display: table !important;
+  }
+  .pf-admin-table-scroll,
+  .pf-admin-main div:has(> table) {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    -webkit-overflow-scrolling: touch !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* ==========================================================================
+   Small Tablet & Large Mobile Breakpoint (<= 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* All two-column sidebars, split sections, and twin cards stack to 1 full-width column */
+  .pf-admin-split-grid,
+  .pf-admin-twin-grid,
+  .pf-admin-main [style*="repeat(2, 1fr)"],
+  .pf-admin-main [style*="repeat(2,1fr)"],
+  .pf-admin-main [style*="grid-template-columns: repeat(2, 1fr)"],
+  .pf-admin-main [style*="repeat(auto-fit, minmax(360px"],
+  .pf-admin-main [style*="repeat(auto-fit, minmax(420px"],
+  .pf-admin-main [style*="repeat(auto-fit, minmax(460px"],
+  .pf-admin-main [style*="repeat(auto-fill, minmax(310px"],
+  .pf-admin-main [style*="repeat(auto-fill, minmax(320px"],
+  .pf-admin-main [style*="repeat(auto-fill, minmax(300px"] {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  /* Trio stats stack or adapt */
+  .pf-admin-trio-grid,
+  .pf-admin-main [style*="repeat(3, 1fr)"],
+  .pf-admin-main [style*="repeat(3,1fr)"] {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Connected Funnel Stages stack vertically with downward arrows */
+  .pf-admin-funnel-grid,
+  .pf-admin-main [style*="1fr auto 1fr auto 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .pf-admin-funnel-grid > div:nth-child(even),
+  .pf-admin-main [style*="1fr auto 1fr auto 1fr"] > div:nth-child(even) {
+    transform: rotate(90deg) !important;
+    padding: 2px 0 !important;
+  }
+
+  /* Header action buttons wrap cleanly */
+  .pf-admin-fish-actions-row,
+  .pf-admin-actions-bar,
+  .pf-admin-header-actions,
+  .pf-admin-main div[style*="justifyContent: 'space-between'"],
+  .pf-admin-main div[style*="justify-content: space-between"] {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+
+  /* SubNav full width scroll */
+  .pf-admin-subnav-container {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Ensure cards never exceed 100% width */
+  .pf-admin-main section,
+  .pf-admin-main article,
+  .pf-admin-twin-grid > div,
+  .pf-admin-split-grid > div {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
 }
 
 /* ==========================================================================
    Small Mobile Breakpoint (<= 640px)
    ========================================================================== */
 @media (max-width: 640px) {
+  /* Prevent any section or card from overflowing screen */
+  .pf-admin-main section,
+  .pf-admin-main article,
+  .pf-admin-main > div > div {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .pf-admin-main section {
+    padding: 16px 12px !important;
+  }
+
+  /* Status matrix 4 quadrants become 2x2 grid */
+  .pf-admin-quad-grid,
+  .pf-admin-main [style*="repeat(auto-fit, minmax(200px"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  /* Fish showcase cards on phones: 1 full-width card per row */
+  .pf-admin-fish-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* Fish filter row: search input and dropdowns stack cleanly */
+  .pf-admin-fish-filter-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .pf-admin-fish-filter-row > div,
+  .pf-admin-fish-filter-row select,
+  .pf-admin-fish-filter-row button {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Category pills on mobile have comfortable touch sizing */
+  .pf-admin-pill-scroll button {
+    padding: 6px 14px !important;
+    font-size: 12px !important;
+  }
+
   /* Pagination Toolbar Stacking */
   .pf-admin-pagination-bar {
     flex-direction: column !important;
@@ -433,7 +671,7 @@ body {
 
   /* Two-column modal / card form grids collapse cleanly */
   .pf-admin-main [style*="grid-template-columns: 1fr 1fr"],
-  .pf-admin-main [style*="gridTemplateColumns: '1fr 1fr'"] {
+  .pf-admin-main [style*="1fr 1fr"] {
     grid-template-columns: 1fr !important;
     gap: 10px !important;
   }
@@ -441,6 +679,68 @@ body {
   /* Page title sizing */
   .pf-admin-main h1 {
     font-size: 20px !important;
+  }
+
+  /* Action buttons row full width & wrapping on phones */
+  .pf-admin-fish-actions-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .pf-admin-fish-actions-row > div,
+  .pf-admin-fish-actions-row > button {
+    flex: 1 1 auto !important;
+  }
+
+  /* Universal Modal Dialog Responsive Rules on Phones */
+  div[style*="position: fixed"],
+  div[style*="position:fixed"] {
+    padding: 10px !important;
+    box-sizing: border-box !important;
+  }
+
+  .pf-admin-modal-card,
+  div[style*="position: fixed"] > div:not(.pf-admin-sidebar):not(.pf-admin-mobile-drawer),
+  div[style*="position:fixed"] > div:not(.pf-admin-sidebar):not(.pf-admin-mobile-drawer) {
+    max-width: calc(100vw - 20px) !important;
+    width: 100% !important;
+    max-height: calc(100dvh - 20px) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box !important;
+    border-radius: 14px !important;
+  }
+
+  .pf-admin-modal-card form,
+  div[style*="position: fixed"] form,
+  div[style*="position:fixed"] form {
+    padding: 16px 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Stack modal footer action buttons on small mobile screens */
+  .pf-admin-modal-footer,
+  .pf-admin-modal-card [style*="justifyContent: 'flex-end'"],
+  .pf-admin-modal-card [style*="justify-content: flex-end"],
+  div[style*="position: fixed"] form [style*="justifyContent: 'flex-end'"],
+  div[style*="position: fixed"] form [style*="justify-content: flex-end"],
+  div[style*="position:fixed"] form [style*="justifyContent: 'flex-end'"],
+  div[style*="position:fixed"] form [style*="justify-content: flex-end"] {
+    flex-direction: column-reverse !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .pf-admin-modal-card [style*="justifyContent: 'flex-end'"] button,
+  .pf-admin-modal-card [style*="justify-content: flex-end"] button,
+  div[style*="position: fixed"] form [style*="justifyContent: 'flex-end'"] button,
+  div[style*="position: fixed"] form [style*="justify-content: flex-end"] button,
+  div[style*="position:fixed"] form [style*="justifyContent: 'flex-end'"] button,
+  div[style*="position:fixed"] form [style*="justify-content: flex-end"] button {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 11px 16px !important;
   }
 }
 
@@ -463,5 +763,12 @@ body {
 
   .pf-admin-metrics-grid > div > div:last-child {
     font-size: 16px !important;
+  }
+
+  /* On very small phones, quad tiles stack to 1 column */
+  .pf-admin-quad-grid,
+  .pf-admin-main [style*="repeat(auto-fit, minmax(200px"] {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
   }
 }

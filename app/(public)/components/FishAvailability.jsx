@@ -142,23 +142,58 @@ export default function FishAvailability() {
           </div>
         ) : (
           <div ref={scrollContainerRef} className="pf-fish-grid">
-            {filteredFish.map((fish) => {
+            {filteredFish.map((fish, index) => {
               const price = fish.unitPrice || fish.unit_price || (fish.pricing && (fish.pricing.effectivePrice || fish.pricing.basePrice)) || null;
               const telugu = TELUGU_NAMES[fish.name.toUpperCase()] || TELUGU_NAMES[fish.name] || '';
               const category = fish.categoryName || fish.category_name || 'Fresh catch';
+              const isBookable = fish.onlineBookable !== false && fish.online_bookable !== false && fish.physicalAvailable !== false && fish.physical_available !== false;
 
               return (
                 <article key={fish.id} className="pf-fish-card">
                   {/* Image Container */}
-                  <div className="pf-fish-card-imgwrap">
+                  <div className="pf-fish-card-imgwrap" style={{ position: 'relative' }}>
                     <span className="pf-fish-card-tag">
                       {fish.freshness_state === 'PEAK_FRESH' || fish.freshness_state === 'GREEN' || (fish.freshness && fish.freshness.state === 'GREEN') ? '0–24H FRESH' : 'COUNTER FRESH'}
                     </span>
+
+                    {!isBookable && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          background: 'rgba(255, 255, 255, 0.72)',
+                          backdropFilter: 'blur(1px)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          zIndex: 5,
+                        }}
+                      >
+                        <span
+                          style={{
+                            background: '#EF4444',
+                            color: '#FFFFFF',
+                            fontSize: '11px',
+                            fontWeight: '800',
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            boxShadow: '0 2px 6px rgba(239, 68, 68, 0.25)',
+                          }}
+                        >
+                          Out of Stock
+                        </span>
+                      </div>
+                    )}
 
                     {(fish.imageUrl || fish.image_url) ? (
                       <img
                         src={fish.imageUrl || fish.image_url}
                         alt={fish.name}
+                        loading={index < 4 ? 'eager' : 'lazy'}
+                        decoding="async"
+                        fetchPriority={index < 4 ? 'high' : 'auto'}
                         style={{
                           width: '100%',
                           height: '100%',
@@ -219,9 +254,29 @@ export default function FishAvailability() {
                         )}
                       </div>
 
-                      <Link href={`/booking?fishId=${fish.id}`} className="pf-btn-book">
-                        Reserve Info
-                      </Link>
+                      {isBookable ? (
+                        <Link href={`/booking?fishId=${fish.id}`} className="pf-btn-book">
+                          Reserve Info
+                        </Link>
+                      ) : (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '7px 14px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            background: '#FEF2F2',
+                            color: '#DC2626',
+                            border: '1px solid #FECACA',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Out of Stock
+                        </span>
+                      )}
                     </div>
                   </div>
                 </article>

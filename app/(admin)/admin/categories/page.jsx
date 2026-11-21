@@ -51,6 +51,25 @@ export default function AdminCategoriesPage() {
     fetchCategories();
   }, []);
 
+  // Lock body scroll and handle Escape key when modals are open
+  useEffect(() => {
+    const isAnyOpen = Boolean(isModalOpen || deleteTarget);
+    if (!isAnyOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsModalOpen(false);
+        setDeleteTarget(null);
+      }
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isModalOpen, deleteTarget]);
+
   const openCreateModal = () => {
     setEditingCategory(null);
     setFormData({
@@ -284,7 +303,10 @@ export default function AdminCategoriesPage() {
       )}
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+      <div
+        className="pf-admin-metrics-grid"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}
+      >
         <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.03)' }}>
           <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '600', letterSpacing: '0.04em' }}>TOTAL CATEGORIES</div>
           <div style={{ fontSize: '26px', fontWeight: '800', color: '#0F2C59', marginTop: '4px' }}>{categories.length}</div>
@@ -523,26 +545,35 @@ export default function AdminCategoriesPage() {
 
       {/* Create / Edit Modal */}
       {isModalOpen && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 44, 89, 0.45)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: '20px',
-        }}>
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            borderRadius: '14px',
-            width: '100%',
-            maxWidth: '500px',
-            padding: '26px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-          }}>
+        <div
+          onClick={() => setIsModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 44, 89, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            padding: '20px',
+            overscrollBehavior: 'contain',
+          }}
+        >
+          <div
+            className="pf-admin-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '14px',
+              width: '100%',
+              maxWidth: '500px',
+              padding: '26px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+              overscrollBehavior: 'contain',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#0F2C59' }}>
@@ -723,27 +754,36 @@ export default function AdminCategoriesPage() {
 
       {/* Modern, Friendly Delete Confirmation Modal */}
       {deleteTarget && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 44, 89, 0.45)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: '20px',
-        }}>
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            borderRadius: '14px',
-            width: '100%',
-            maxWidth: '460px',
-            padding: '24px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
-            textAlign: 'center',
-          }}>
+        <div
+          onClick={() => setDeleteTarget(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 44, 89, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            padding: '20px',
+            overscrollBehavior: 'contain',
+          }}
+        >
+          <div
+            className="pf-admin-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '14px',
+              width: '100%',
+              maxWidth: '460px',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
+              textAlign: 'center',
+              overscrollBehavior: 'contain',
+            }}
+          >
             {/* Warning Icon Badge */}
             <div style={{
               width: '54px',

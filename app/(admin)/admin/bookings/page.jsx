@@ -337,6 +337,7 @@ export default function AdminBookingsPage() {
           gap: '8px',
           boxShadow: '0 2px 8px rgba(15, 44, 89, 0.04)',
         }}
+        className="pf-admin-metrics-grid"
       >
         {[
           {

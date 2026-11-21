@@ -11,6 +11,7 @@ export default function FishCard({ fish }) {
   const effectivePrice = fish.pricing?.effectivePrice ?? fish.unitPrice ?? fish.price ?? 0;
   const basePrice = fish.pricing?.basePrice ?? fish.unitPrice ?? fish.price ?? 0;
   const hasDiscount = fish.pricing?.hasDiscount && basePrice > effectivePrice;
+  const isBookable = fish.onlineBookable !== false && fish.online_bookable !== false && fish.physicalAvailable !== false && fish.physical_available !== false;
 
   return (
     <article
@@ -43,6 +44,8 @@ export default function FishCard({ fish }) {
           <img
             src={displayImage}
             alt={fish.name}
+            loading="lazy"
+            decoding="async"
             onError={() => setImageError(true)}
             style={{
               width: '100%',
@@ -93,6 +96,37 @@ export default function FishCard({ fish }) {
           <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
           <span>{fish.freshness?.label || (fish.freshness_state === 'GREEN' ? '0–24H FRESH' : 'HARVESTED TODAY')}</span>
         </div>
+
+        {!isBookable && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(255, 255, 255, 0.72)',
+              backdropFilter: 'blur(1px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 5,
+            }}
+          >
+            <span
+              style={{
+                background: '#EF4444',
+                color: '#FFFFFF',
+                fontSize: '11px',
+                fontWeight: '800',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                boxShadow: '0 2px 6px rgba(239, 68, 68, 0.25)',
+              }}
+            >
+              Out of Stock
+            </span>
+          </div>
+        )}
 
         {/* Category Pill (Top Right) */}
         {(fish.categoryName || fish.category_name) && (
@@ -243,7 +277,7 @@ export default function FishCard({ fish }) {
             >
               Details
             </Link>
-            {fish.onlineBookable && (
+            {isBookable ? (
               <Link
                 href={`/booking?fishId=${fish.id}`}
                 style={{
@@ -260,6 +294,21 @@ export default function FishCard({ fish }) {
               >
                 Reserve
               </Link>
+            ) : (
+              <span
+                style={{
+                  padding: '7px 12px',
+                  background: '#FEF2F2',
+                  color: '#DC2626',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  border: '1px solid #FECACA',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Out of Stock
+              </span>
             )}
           </div>
         </div>

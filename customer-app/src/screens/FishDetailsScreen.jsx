@@ -490,11 +490,21 @@ export default function FishDetailsScreen({
         </View>
 
         {/* Add to Cart Button */}
-        <TouchableOpacity style={[styles.addToCartBtn, !isValidWeight && { backgroundColor: "#94A3B8" }]} onPress={handleAddToCart} disabled={addingToCart || !isValidWeight} activeOpacity={0.88}>
+        <TouchableOpacity
+          style={[
+            styles.addToCartBtn,
+            (!isValidWeight || fish.onlineBookable === false || fish.physicalAvailable === false) && { backgroundColor: "#94A3B8" }
+          ]}
+          onPress={handleAddToCart}
+          disabled={addingToCart || !isValidWeight || fish.onlineBookable === false || fish.physicalAvailable === false}
+          activeOpacity={0.88}
+        >
           {addingToCart ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Text style={styles.addToCartBtnText}>Add to Basket</Text>
+            <Text style={styles.addToCartBtnText}>
+              {fish.onlineBookable === false || fish.physicalAvailable === false ? 'Out of Stock' : 'Add to Basket'}
+            </Text>
           )}
         </TouchableOpacity>
       </View>

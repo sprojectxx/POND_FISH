@@ -50,6 +50,14 @@ export default function AdminLayout({ children }) {
     setSidebarOpen((prev) => !prev);
   };
 
+  const handleMenuToggle = () => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+      setMobileMenuOpen((prev) => !prev);
+    } else {
+      setSidebarOpen((prev) => !prev);
+    }
+  };
+
   const verifyAuth = useCallback(async () => {
     const isLogin = Boolean(
       isLoginPage ||
@@ -172,6 +180,13 @@ export default function AdminLayout({ children }) {
       }
     };
   }, [verifyAuth]);
+
+  // Auto-close menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setSidebarOpen(false);
+    setSidebarHovered(false);
+  }, [pathname]);
 
   // Handle ESC key and scroll lock for mobile drawer
   useEffect(() => {
@@ -630,8 +645,12 @@ export default function AdminLayout({ children }) {
             {/* Menu Toggle Button (Hover or Click to open navigation) */}
             <button
               type="button"
-              onClick={() => setSidebarOpen((prev) => !prev)}
-              onMouseEnter={() => setSidebarHovered(true)}
+              onClick={handleMenuToggle}
+              onMouseEnter={() => {
+                if (typeof window !== 'undefined' && window.innerWidth > 1024) {
+                  setSidebarHovered(true);
+                }
+              }}
               aria-label="Toggle navigation menu"
               title="Navigation Menu"
               style={{
@@ -642,8 +661,8 @@ export default function AdminLayout({ children }) {
                 height: '36px',
                 borderRadius: '8px',
                 border: '1px solid #CBD5E1',
-                background: (sidebarHovered || sidebarOpen) ? '#0F2C59' : '#FFFFFF',
-                color: (sidebarHovered || sidebarOpen) ? '#FFFFFF' : '#0F2C59',
+                background: (sidebarHovered || sidebarOpen || mobileMenuOpen) ? '#0F2C59' : '#FFFFFF',
+                color: (sidebarHovered || sidebarOpen || mobileMenuOpen) ? '#FFFFFF' : '#0F2C59',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
                 boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',

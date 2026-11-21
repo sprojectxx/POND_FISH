@@ -10,16 +10,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect, AdminTableSkeleton } from '@/components/ui';
 
 const STATUS_CONFIG = {
-  DRAFT: { label: 'Draft', bg: 'rgba(148, 163, 184, 0.15)', text: '#94A3B8', border: '#CBD5E1' },
-  SCHEDULED: { label: 'Scheduled', bg: 'rgba(99, 102, 241, 0.15)', text: '#818CF8', border: '#4F46E5' },
-  SENDING: { label: 'Sending...', bg: 'rgba(245, 158, 11, 0.15)', text: '#FBBF24', border: '#D97706' },
-  SENT: { label: 'Sent', bg: 'rgba(16, 185, 129, 0.15)', text: '#34D399', border: '#059669' },
-  PARTIALLY_FAILED: { label: 'Partially Failed', bg: 'rgba(249, 115, 22, 0.15)', text: '#FB923C', border: '#EA580C' },
-  FAILED: { label: 'Failed', bg: 'rgba(239, 68, 68, 0.15)', text: '#F87171', border: '#DC2626' },
-  CANCELLED: { label: 'Cancelled', bg: 'rgba(100, 116, 139, 0.2)', text: '#64748B', border: '#E2E8F0' },
+  DRAFT: { label: 'Draft', bg: '#F1F5F9', text: '#475569', border: '#CBD5E1' },
+  SCHEDULED: { label: 'Scheduled', bg: '#EEF2FF', text: '#4338CA', border: '#C7D2FE' },
+  SENDING: { label: 'Sending...', bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
+  SENT: { label: 'Sent', bg: '#ECFDF5', text: '#065F46', border: '#A7F3D0' },
+  PARTIALLY_FAILED: { label: 'Partially Failed', bg: '#FFF7ED', text: '#C2410C', border: '#FED7AA' },
+  FAILED: { label: 'Failed', bg: '#FEF2F2', text: '#991B1B', border: '#FECACA' },
+  CANCELLED: { label: 'Cancelled', bg: '#F8FAFC', text: '#64748B', border: '#E2E8F0' },
 };
 
 function formatDate(val) {
@@ -451,23 +451,20 @@ export default function AdminNotificationsPage() {
     <div style={{ maxWidth: '1400px', margin: '0 auto', color: '#0F2C59', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
       <AdminSubNav
         tabs={[
-          { label: 'Customer Directory & Profiles', href: '/admin/customers', exact: true },
+          { label: 'Customer Directory & Accounts', href: '/admin/customers', exact: true },
           { label: 'Broadcasts & Notifications', href: '/admin/notifications' },
         ]}
       />
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', letterSpacing: '-0.02em', margin: 0 }}>
-              Notifications &amp; Broadcasts
-            </h1>
-          </div>
-          
+          <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#0F2C59' }}>
+            Notifications &amp; Broadcasts
+          </h1>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button
             id="btn-refresh-notifications"
             onClick={() => (activeTab === 'broadcasts' ? fetchBroadcasts(broadcastPagination.page) : fetchInboxNotifications(inboxPagination.page))}
@@ -476,20 +473,21 @@ export default function AdminNotificationsPage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              height: '36px',
-              padding: '0 14px',
+              height: '38px',
+              padding: '0 16px',
               borderRadius: '8px',
               background: '#FFFFFF',
               color: '#0F2C59',
               border: '1px solid #CBD5E1',
               fontSize: '13px',
-              fontWeight: '600',
+              fontWeight: '700',
               cursor: loading ? 'not-allowed' : 'pointer',
               boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
               transition: 'all 0.15s ease',
             }}
           >
             <svg
+              className={loading ? 'pf-animate-spin' : ''}
               width="14"
               height="14"
               viewBox="0 0 24 24"
@@ -498,16 +496,12 @@ export default function AdminNotificationsPage() {
               strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              style={{
-                transition: 'transform 0.3s ease',
-                transform: loading ? 'rotate(180deg)' : 'none',
-              }}
             >
               <polyline points="23 4 23 10 17 10" />
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            <span>Refresh</span>
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
           <button
             id="btn-compose-notification"
@@ -516,7 +510,7 @@ export default function AdminNotificationsPage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              height: '36px',
+              height: '38px',
               padding: '0 18px',
               borderRadius: '8px',
               background: '#1E56A0',
@@ -547,51 +541,51 @@ export default function AdminNotificationsPage() {
           marginBottom: '24px',
         }}
       >
-        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Total Broadcasts</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#0F2C59', marginTop: '6px' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '20px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B' }}>Total Broadcasts</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#0F2C59', marginTop: '6px' }}>
             {broadcastCounts.total_count}
           </div>
-          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>All campaigns & drafts</div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>All campaigns &amp; drafts</div>
         </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Scheduled Queued</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#818CF8', marginTop: '6px' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '20px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B' }}>Scheduled Queued</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#4338CA', marginTop: '6px' }}>
             {broadcastCounts.scheduled_count}
           </div>
-          <div style={{ fontSize: '11px', color: '#818CF8', marginTop: '4px' }}>Awaiting target time</div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>Awaiting target time</div>
         </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Drafts</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#64748B', marginTop: '6px' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '20px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B' }}>Drafts</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#64748B', marginTop: '6px' }}>
             {broadcastCounts.draft_count}
           </div>
-          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>Editable pre-dispatch</div>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>Editable pre-dispatch</div>
         </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Successfully Sent</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: '#34D399', marginTop: '6px' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '20px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B' }}>Successfully Sent</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#059669', marginTop: '6px' }}>
             {broadcastCounts.sent_count}
           </div>
-          <div style={{ fontSize: '11px', color: '#34D399', marginTop: '4px' }}>100% delivered</div>
+          <div style={{ fontSize: '12px', color: '#065F46', marginTop: '4px', fontWeight: '500' }}>100% delivered</div>
         </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748B' }}>Failures / Partial</div>
+        <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '20px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B' }}>Failures / Partial</div>
           <div
             style={{
-              fontSize: '24px',
-              fontWeight: '700',
-              color: broadcastCounts.failed_count + broadcastCounts.partially_failed_count > 0 ? '#F87171' : '#64748B',
+              fontSize: '28px',
+              fontWeight: '800',
+              color: broadcastCounts.failed_count + broadcastCounts.partially_failed_count > 0 ? '#DC2626' : '#64748B',
               marginTop: '6px',
             }}
           >
             {broadcastCounts.failed_count + broadcastCounts.partially_failed_count}
           </div>
-          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
             {broadcastCounts.cancelled_count} cancelled
           </div>
         </div>
@@ -601,12 +595,13 @@ export default function AdminNotificationsPage() {
       {successMsg && (
         <div
           style={{
-            padding: '12px 16px',
-            borderRadius: '8px',
-            background: 'rgba(16, 185, 129, 0.15)',
-            border: '1px solid #10B981',
-            color: '#6EE7B7',
+            padding: '14px 18px',
+            borderRadius: '12px',
+            background: '#ECFDF5',
+            border: '1px solid #A7F3D0',
+            color: '#065F46',
             fontSize: '13px',
+            fontWeight: '600',
             marginBottom: '20px',
             display: 'flex',
             justifyContent: 'space-between',
@@ -614,19 +609,20 @@ export default function AdminNotificationsPage() {
           }}
         >
           <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#6EE7B7', cursor: 'pointer' }}>&times;</button>
+          <button onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', color: '#065F46', cursor: 'pointer', fontSize: '16px' }}>&times;</button>
         </div>
       )}
 
       {errorMsg && (
         <div
           style={{
-            padding: '12px 16px',
-            borderRadius: '8px',
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid #EF4444',
-            color: '#FCA5A5',
+            padding: '14px 18px',
+            borderRadius: '12px',
+            background: '#FEF2F2',
+            border: '1px solid #FECACA',
+            color: '#991B1B',
             fontSize: '13px',
+            fontWeight: '600',
             marginBottom: '20px',
             display: 'flex',
             justifyContent: 'space-between',
@@ -634,40 +630,42 @@ export default function AdminNotificationsPage() {
           }}
         >
           <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#FCA5A5', cursor: 'pointer' }}>&times;</button>
+          <button onClick={() => setErrorMsg(null)} style={{ background: 'none', border: 'none', color: '#991B1B', cursor: 'pointer', fontSize: '16px' }}>&times;</button>
         </div>
       )}
 
       {/* View Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #E2E8F0', marginBottom: '20px' }}>
+      <div style={{ display: 'inline-flex', padding: '4px', background: '#F1F5F9', borderRadius: '12px', border: '1px solid #E2E8F0', gap: '4px', marginBottom: '24px' }}>
         <button
           id="tab-broadcasts"
           onClick={() => setActiveTab('broadcasts')}
           style={{
-            padding: '10px 18px',
-            background: 'transparent',
+            padding: '8px 18px',
+            borderRadius: '8px',
             border: 'none',
-            borderBottom: activeTab === 'broadcasts' ? '2px solid #38BDF8' : '2px solid transparent',
-            color: activeTab === 'broadcasts' ? '#38BDF8' : '#94A3B8',
-            fontSize: '14px',
-            fontWeight: '600',
+            background: activeTab === 'broadcasts' ? '#1E56A0' : 'transparent',
+            color: activeTab === 'broadcasts' ? '#FFFFFF' : '#64748B',
+            fontSize: '13px',
+            fontWeight: '700',
             cursor: 'pointer',
+            transition: 'all 0.15s ease',
           }}
         >
-           Broadcast Campaigns & Lifecycle ({broadcastCounts.total_count})
+          Broadcast Campaigns &amp; Lifecycle ({broadcastCounts.total_count})
         </button>
         <button
           id="tab-inbox"
           onClick={() => setActiveTab('inbox')}
           style={{
-            padding: '10px 18px',
-            background: 'transparent',
+            padding: '8px 18px',
+            borderRadius: '8px',
             border: 'none',
-            borderBottom: activeTab === 'inbox' ? '2px solid #38BDF8' : '2px solid transparent',
-            color: activeTab === 'inbox' ? '#38BDF8' : '#94A3B8',
-            fontSize: '14px',
-            fontWeight: '600',
+            background: activeTab === 'inbox' ? '#1E56A0' : 'transparent',
+            color: activeTab === 'inbox' ? '#FFFFFF' : '#64748B',
+            fontSize: '13px',
+            fontWeight: '700',
             cursor: 'pointer',
+            transition: 'all 0.15s ease',
           }}
         >
           Customer In-App Inbox Logs ({inboxCounts.all})
@@ -692,7 +690,21 @@ export default function AdminNotificationsPage() {
             }}
           >
             {/* Search */}
-            <div style={{ flex: '1 1 240px' }}>
+            <div style={{ flex: '1 1 240px', position: 'relative' }}>
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#64748B"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
               <input
                 id="input-search-broadcasts"
                 type="text"
@@ -702,19 +714,20 @@ export default function AdminNotificationsPage() {
                 onKeyDown={(e) => e.key === 'Enter' && fetchBroadcasts(1)}
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
+                  padding: '9px 12px 9px 36px',
+                  borderRadius: '8px',
                   background: '#F8FAFC',
                   color: '#0F2C59',
-                  border: '1px solid #E2E8F0',
+                  border: '1px solid #CBD5E1',
                   fontSize: '13px',
                   outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
 
             {/* Status Filter */}
-            <div style={{ flex: '0 1 200px' }}>
+            <div style={{ flex: '0 1 220px' }}>
               <AdminSelect
                 id="select-broadcast-status"
                 value={broadcastStatusFilter}
@@ -736,14 +749,16 @@ export default function AdminNotificationsPage() {
             <button
               onClick={() => fetchBroadcasts(1)}
               style={{
-                padding: '8px 14px',
-                borderRadius: '6px',
-                background: '#0284C7',
+                padding: '9px 16px',
+                borderRadius: '8px',
+                background: '#1E56A0',
                 color: '#FFFFFF',
                 border: 'none',
                 fontSize: '13px',
-                fontWeight: '600',
+                fontWeight: '700',
                 cursor: 'pointer',
+                boxShadow: '0 1px 3px rgba(30, 86, 160, 0.2)',
+                transition: 'all 0.15s ease',
               }}
             >
               Filter
@@ -754,31 +769,57 @@ export default function AdminNotificationsPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: '16px',
               border: '1px solid #E2E8F0',
-              overflow: 'hidden',
+              overflow: 'visible',
               marginBottom: '20px',
+              position: 'relative',
+              boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
             }}
           >
-            <div style={{ overflowX: 'auto' }}>
+            {/* Top indeterminate loading line */}
+            {loading && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: '#E2E8F0',
+                  overflow: 'hidden',
+                  zIndex: 10,
+                  borderTopLeftRadius: '16px',
+                  borderTopRightRadius: '16px',
+                }}
+              >
+                <div
+                  className="pf-animate-indeterminate"
+                  style={{
+                    width: '45%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
+                    borderRadius: '2px',
+                  }}
+                />
+              </div>
+            )}
+
+            <div style={{ overflowX: 'auto', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
-                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Broadcast Details</th>
-                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Audience &amp; Channels</th>
-                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Status</th>
-                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Schedule / Dispatch</th>
-                    <th style={{ padding: '12px 16px', fontWeight: '600' }}>Delivery Metrics</th>
-                    <th style={{ padding: '12px 16px', fontWeight: '600', textAlign: 'right' }}>Actions</th>
+                    <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Broadcast Details</th>
+                    <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Audience &amp; Channels</th>
+                    <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</th>
+                    <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Schedule / Dispatch</th>
+                    <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Delivery Metrics</th>
+                    <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr>
-                      <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
-                        Loading campaigns...
-                      </td>
-                    </tr>
+                    <AdminTableSkeleton columns={6} rows={5} />
                   ) : broadcasts.length === 0 ? (
                     <tr>
                       <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
@@ -801,8 +842,8 @@ export default function AdminNotificationsPage() {
                           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                         >
                           {/* Title & Message */}
-                          <td style={{ padding: '14px 16px', verticalAlign: 'top', maxWidth: '300px' }}>
-                            <div style={{ fontWeight: '600', color: '#0F2C59', marginBottom: '2px' }}>{b.title}</div>
+                          <td style={{ padding: '14px 18px', verticalAlign: 'top', maxWidth: '300px' }}>
+                            <div style={{ fontWeight: '700', color: '#0F2C59', marginBottom: '2px' }}>{b.title}</div>
                             <div
                               style={{
                                 fontSize: '12px',
@@ -811,34 +852,36 @@ export default function AdminNotificationsPage() {
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: 'vertical',
                                 overflow: 'hidden',
+                                lineHeight: '1.4',
                               }}
                             >
                               {b.message}
                             </div>
-                            <div style={{ fontSize: '10px', color: '#64748B', fontFamily: 'monospace', marginTop: '4px' }}>
-                              ID: {b.id.slice(0, 8)}... • Category: {b.category}
+                            <div style={{ fontSize: '11px', color: '#94A3B8', fontFamily: 'monospace', marginTop: '4px' }}>
+                              ID: {b.id.slice(0, 8)} • Category: {b.category}
                             </div>
                           </td>
 
                           {/* Audience & Channels */}
-                          <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
-                            <div style={{ fontWeight: '600', color: '#1E56A0', fontSize: '12px' }}>
+                          <td style={{ padding: '14px 18px', verticalAlign: 'top' }}>
+                            <div style={{ fontWeight: '700', color: '#1E56A0', fontSize: '12px' }}>
                               {b.audience_type}
                             </div>
-                            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
                               {(b.channels || []).join(' + ')}
                             </div>
                           </td>
 
                           {/* Lifecycle State */}
-                          <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
+                          <td style={{ padding: '14px 18px', verticalAlign: 'top' }}>
                             <span
                               style={{
                                 display: 'inline-block',
-                                padding: '3px 8px',
+                                padding: '4px 10px',
                                 borderRadius: '9999px',
                                 fontSize: '11px',
-                                fontWeight: '600',
+                                fontWeight: '700',
+                                letterSpacing: '0.04em',
                                 background: badge.bg,
                                 color: badge.text,
                                 border: `1px solid ${badge.border}`,
@@ -849,16 +892,16 @@ export default function AdminNotificationsPage() {
                           </td>
 
                           {/* Schedule / Dispatch Date */}
-                          <td style={{ padding: '14px 16px', verticalAlign: 'top', fontSize: '12px' }}>
+                          <td style={{ padding: '14px 18px', verticalAlign: 'top', fontSize: '12px' }}>
                             {b.status === 'SCHEDULED' ? (
                               <div>
-                                <span style={{ color: '#818CF8', fontWeight: '500' }}> Scheduled for:</span>
-                                <div style={{ color: '#0F2C59', marginTop: '2px' }}>{formatDate(b.scheduled_at)}</div>
+                                <span style={{ color: '#4338CA', fontWeight: '600' }}>Scheduled for:</span>
+                                <div style={{ color: '#0F2C59', marginTop: '2px', fontWeight: '500' }}>{formatDate(b.scheduled_at)}</div>
                               </div>
                             ) : b.sent_at ? (
                               <div>
-                                <span style={{ color: '#34D399', fontWeight: '500' }}>Dispatched at:</span>
-                                <div style={{ color: '#0F2C59', marginTop: '2px' }}>{formatDate(b.sent_at)}</div>
+                                <span style={{ color: '#065F46', fontWeight: '600' }}>Dispatched at:</span>
+                                <div style={{ color: '#0F2C59', marginTop: '2px', fontWeight: '500' }}>{formatDate(b.sent_at)}</div>
                               </div>
                             ) : (
                               <span style={{ color: '#64748B' }}>Unscheduled Draft</span>
@@ -866,8 +909,8 @@ export default function AdminNotificationsPage() {
                           </td>
 
                           {/* Delivery Metrics */}
-                          <td style={{ padding: '14px 16px', verticalAlign: 'top', fontSize: '12px' }}>
-                            <div>Recipients: <span style={{ color: '#0F2C59', fontWeight: '600' }}>{b.recipient_count || 0}</span></div>
+                          <td style={{ padding: '14px 18px', verticalAlign: 'top', fontSize: '12px' }}>
+                            <div>Recipients: <span style={{ color: '#0F2C59', fontWeight: '700' }}>{b.recipient_count || 0}</span></div>
                             {b.push_attempt_count > 0 && (
                               <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
                                 Push: {b.push_success_count}/{b.push_attempt_count}
@@ -876,7 +919,7 @@ export default function AdminNotificationsPage() {
                           </td>
 
                           {/* Actions */}
-                          <td style={{ padding: '14px 16px', verticalAlign: 'top', textAlign: 'right' }}>
+                          <td style={{ padding: '14px 18px', verticalAlign: 'top', textAlign: 'right' }}>
                             <div style={{ display: 'inline-flex', gap: '6px' }}>
                               {isEditable ? (
                                 <>
@@ -884,28 +927,32 @@ export default function AdminNotificationsPage() {
                                     onClick={() => handleOpenComposerEdit(b)}
                                     title="Edit unsent draft/scheduled broadcast"
                                     style={{
-                                      padding: '5px 10px',
-                                      borderRadius: '6px',
+                                      padding: '6px 12px',
+                                      borderRadius: '8px',
                                       background: '#F8FAFC',
                                       color: '#1E56A0',
-                                      border: '1px solid #E2E8F0',
-                                      fontSize: '11px',
+                                      border: '1px solid #CBD5E1',
+                                      fontSize: '12px',
+                                      fontWeight: '600',
                                       cursor: 'pointer',
+                                      transition: 'all 0.15s ease',
                                     }}
                                   >
-                                     Edit
+                                    Edit
                                   </button>
                                   <button
                                     onClick={() => handleSendNowExisting(b.id)}
                                     title="Dispatch immediately now"
                                     style={{
-                                      padding: '5px 10px',
-                                      borderRadius: '6px',
-                                      background: 'rgba(16, 185, 129, 0.15)',
-                                      color: '#34D399',
-                                      border: '1px solid #059669',
-                                      fontSize: '11px',
+                                      padding: '6px 12px',
+                                      borderRadius: '8px',
+                                      background: '#ECFDF5',
+                                      color: '#065F46',
+                                      border: '1px solid #A7F3D0',
+                                      fontSize: '12px',
+                                      fontWeight: '700',
                                       cursor: 'pointer',
+                                      transition: 'all 0.15s ease',
                                     }}
                                   >
                                     Send Now
@@ -914,20 +961,22 @@ export default function AdminNotificationsPage() {
                                     onClick={() => handleCancelBroadcast(b.id)}
                                     title="Cancel unsent broadcast"
                                     style={{
-                                      padding: '5px 10px',
-                                      borderRadius: '6px',
-                                      background: 'rgba(239, 68, 68, 0.1)',
-                                      color: '#F87171',
-                                      border: '1px solid #DC2626',
-                                      fontSize: '11px',
+                                      padding: '6px 12px',
+                                      borderRadius: '8px',
+                                      background: '#FEF2F2',
+                                      color: '#991B1B',
+                                      border: '1px solid #FECACA',
+                                      fontSize: '12px',
+                                      fontWeight: '700',
                                       cursor: 'pointer',
+                                      transition: 'all 0.15s ease',
                                     }}
                                   >
                                     Cancel
                                   </button>
                                 </>
                               ) : (
-                                <span style={{ fontSize: '11px', color: '#64748B', fontStyle: 'italic' }}>
+                                <span style={{ fontSize: '12px', color: '#94A3B8', fontStyle: 'italic' }}>
                                   Immutable
                                 </span>
                               )}
@@ -961,51 +1010,116 @@ export default function AdminNotificationsPage() {
 
       {/* TAB 2: Customer In-App Notification Log */}
       {activeTab === 'inbox' && (
-        <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', overflow: 'visible', position: 'relative', boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)' }}>
+          {/* Top indeterminate loading line */}
+          {loading && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '3px',
+                background: '#E2E8F0',
+                overflow: 'hidden',
+                zIndex: 10,
+                borderTopLeftRadius: '16px',
+                borderTopRightRadius: '16px',
+              }}
+            >
+              <div
+                className="pf-animate-indeterminate"
+                style={{
+                  width: '45%',
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
+                  borderRadius: '2px',
+                }}
+              />
+            </div>
+          )}
+
+          <div style={{ overflowX: 'auto', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
-                  <th style={{ padding: '12px 16px' }}>Date</th>
-                  <th style={{ padding: '12px 16px' }}>Recipient</th>
-                  <th style={{ padding: '12px 16px' }}>Title & Content</th>
-                  <th style={{ padding: '12px 16px' }}>Category</th>
-                  <th style={{ padding: '12px 16px' }}>Read State</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                  <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</th>
+                  <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Recipient</th>
+                  <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Title &amp; Content</th>
+                  <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category</th>
+                  <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Read State</th>
+                  <th style={{ padding: '14px 18px', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {inboxNotifications.map((item) => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                    <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '12px' }}>{formatDate(item.createdAt)}</td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: '600', color: '#0F2C59' }}>{item.customerName}</div>
-                      <div style={{ fontSize: '11px', color: '#64748B' }}>{item.customerPhone}</div>
-                    </td>
-                    <td style={{ padding: '12px 16px', maxWidth: '350px' }}>
-                      <div style={{ fontWeight: '600', color: '#0F2C59' }}>{item.title}</div>
-                      <div style={{ fontSize: '12px', color: '#64748B' }}>{item.message}</div>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: '#F8FAFC', color: '#1E56A0' }}>
-                        {item.type}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span style={{ fontSize: '11px', color: item.read ? '#34D399' : '#FBBF24' }}>
-                        {item.read ? 'Read' : 'Unread'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <Link
-                        href={`/admin/notifications/${item.id}`}
-                        style={{ color: '#1E56A0', fontSize: '12px', textDecoration: 'none' }}
-                      >
-                        Details &rarr;
-                      </Link>
+                {loading ? (
+                  <AdminTableSkeleton columns={6} rows={5} />
+                ) : inboxNotifications.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: '#64748B' }}>
+                      No in-app notifications found.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  inboxNotifications.map((item) => (
+                    <tr
+                      key={item.id}
+                      style={{ borderBottom: '1px solid #E2E8F0', transition: 'background 0.15s ease' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '12px' }}>{formatDate(item.createdAt)}</td>
+                      <td style={{ padding: '14px 18px' }}>
+                        <div style={{ fontWeight: '700', color: '#0F2C59' }}>{item.customerName}</div>
+                        <div style={{ fontSize: '12px', color: '#64748B', fontFamily: 'monospace' }}>{item.customerPhone}</div>
+                      </td>
+                      <td style={{ padding: '14px 18px', maxWidth: '350px' }}>
+                        <div style={{ fontWeight: '700', color: '#0F2C59', marginBottom: '2px' }}>{item.title}</div>
+                        <div style={{ fontSize: '12px', color: '#64748B', lineHeight: '1.4' }}>{item.message}</div>
+                      </td>
+                      <td style={{ padding: '14px 18px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px', background: '#F1F5F9', color: '#1E56A0', border: '1px solid #E2E8F0' }}>
+                          {item.type}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 18px' }}>
+                        {item.read ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '9999px', background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0' }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }} />
+                            Read
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '9999px', background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A' }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }} />
+                            Unread
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                        <Link
+                          href={`/admin/notifications/${item.id}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            color: '#1E56A0',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            textDecoration: 'none',
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            background: '#F1F5F9',
+                            border: '1px solid #CBD5E1',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <span>Details</span>
+                          <span>&rarr;</span>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -1091,12 +1205,13 @@ export default function AdminNotificationsPage() {
                 <div
                   id="composer-feedback"
                   style={{
-                    padding: '12px',
+                    padding: '12px 16px',
                     borderRadius: '8px',
-                    background: composerFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                    border: `1px solid ${composerFeedback.type === 'success' ? '#10B981' : '#EF4444'}`,
-                    color: composerFeedback.type === 'success' ? '#6EE7B7' : '#FCA5A5',
+                    background: composerFeedback.type === 'success' ? '#ECFDF5' : '#FEF2F2',
+                    border: `1px solid ${composerFeedback.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
+                    color: composerFeedback.type === 'success' ? '#065F46' : '#991B1B',
                     fontSize: '13px',
+                    fontWeight: '600',
                   }}
                 >
                   {composerFeedback.text}
@@ -1111,7 +1226,7 @@ export default function AdminNotificationsPage() {
                 <input
                   id="input-notif-title"
                   type="text"
-                  placeholder="e.g. Fresh Seer Fish Just Arrived! "
+                  placeholder="e.g. Fresh Seer Fish Just Arrived!"
                   value={composerForm.title}
                   onChange={(e) => setComposerForm({ ...composerForm, title: e.target.value })}
                   style={{
@@ -1120,9 +1235,10 @@ export default function AdminNotificationsPage() {
                     borderRadius: '8px',
                     background: '#F8FAFC',
                     color: '#0F2C59',
-                    border: '1px solid #E2E8F0',
+                    border: '1px solid #CBD5E1',
                     fontSize: '13px',
                     outline: 'none',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>
@@ -1144,11 +1260,12 @@ export default function AdminNotificationsPage() {
                     borderRadius: '8px',
                     background: '#F8FAFC',
                     color: '#0F2C59',
-                    border: '1px solid #E2E8F0',
+                    border: '1px solid #CBD5E1',
                     fontSize: '13px',
                     outline: 'none',
                     resize: 'vertical',
                     fontFamily: 'inherit',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>
@@ -1189,9 +1306,10 @@ export default function AdminNotificationsPage() {
                       borderRadius: '8px',
                       background: '#F8FAFC',
                       color: '#0F2C59',
-                      border: '1px solid #E2E8F0',
+                      border: '1px solid #CBD5E1',
                       fontSize: '13px',
                       outline: 'none',
+                      boxSizing: 'border-box',
                     }}
                   />
                 </div>
@@ -1217,12 +1335,13 @@ export default function AdminNotificationsPage() {
                       style={{
                         padding: '7px 10px',
                         borderRadius: '6px',
-                        border: composerForm.audienceType === aud.id ? '1px solid #38BDF8' : '1px solid #334155',
-                        background: composerForm.audienceType === aud.id ? 'rgba(56, 189, 248, 0.15)' : '#F8FAFC',
-                        color: composerForm.audienceType === aud.id ? '#38BDF8' : '#94A3B8',
+                        border: composerForm.audienceType === aud.id ? '1px solid #1E56A0' : '1px solid #CBD5E1',
+                        background: composerForm.audienceType === aud.id ? '#1E56A0' : '#FFFFFF',
+                        color: composerForm.audienceType === aud.id ? '#FFFFFF' : '#475569',
                         fontSize: '12px',
-                        fontWeight: '500',
+                        fontWeight: '600',
                         cursor: 'pointer',
+                        transition: 'all 0.15s ease',
                       }}
                     >
                       {aud.label}
@@ -1259,9 +1378,10 @@ export default function AdminNotificationsPage() {
                         borderRadius: '6px',
                         background: '#FFFFFF',
                         color: '#0F2C59',
-                        border: '1px solid #E2E8F0',
+                        border: '1px solid #CBD5E1',
                         fontSize: '12px',
                         fontFamily: 'monospace',
+                        boxSizing: 'border-box',
                       }}
                     />
                   </div>
@@ -1318,8 +1438,8 @@ export default function AdminNotificationsPage() {
               {/* Dispatch Mode: Send Now vs Schedule for Later */}
               {!editingBroadcastId && (
                 <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#818CF8', marginBottom: '8px' }}>
-                     Dispatch Timing
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#4338CA', marginBottom: '8px' }}>
+                    Dispatch Timing
                   </label>
                   <div style={{ display: 'flex', gap: '16px', marginBottom: '10px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
@@ -1341,14 +1461,14 @@ export default function AdminNotificationsPage() {
                         checked={composerForm.dispatchMode === 'SCHEDULE'}
                         onChange={() => setComposerForm({ ...composerForm, dispatchMode: 'SCHEDULE' })}
                       />
-                      <span> Schedule for Later</span>
+                      <span>Schedule for Later</span>
                     </label>
                   </div>
 
                   {composerForm.dispatchMode === 'SCHEDULE' && (
                     <div style={{ marginTop: '8px' }}>
                       <label style={{ display: 'block', fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>
-                        Scheduled Date & Time (IST):
+                        Scheduled Date &amp; Time (IST):
                       </label>
                       <input
                         id="input-scheduled-time"
@@ -1362,8 +1482,9 @@ export default function AdminNotificationsPage() {
                           borderRadius: '6px',
                           background: '#FFFFFF',
                           color: '#0F2C59',
-                          border: '1px solid #E2E8F0',
+                          border: '1px solid #CBD5E1',
                           fontSize: '12px',
+                          boxSizing: 'border-box',
                         }}
                       />
                     </div>
@@ -1390,14 +1511,15 @@ export default function AdminNotificationsPage() {
                       disabled={composerSubmitting}
                       onClick={() => handleComposerSubmit('DRAFT')}
                       style={{
-                        padding: '8px 14px',
-                        borderRadius: '6px',
-                        background: '#F8FAFC',
+                        padding: '9px 16px',
+                        borderRadius: '8px',
+                        background: '#FFFFFF',
                         color: '#64748B',
-                        border: '1px solid #E2E8F0',
-                        fontSize: '12px',
-                        fontWeight: '500',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '13px',
+                        fontWeight: '600',
                         cursor: 'pointer',
+                        transition: 'all 0.15s ease',
                       }}
                     >
                       Save as Draft
@@ -1412,13 +1534,15 @@ export default function AdminNotificationsPage() {
                     onClick={() => setShowComposer(false)}
                     disabled={composerSubmitting}
                     style={{
-                      padding: '8px 14px',
-                      borderRadius: '6px',
-                      background: 'transparent',
+                      padding: '9px 16px',
+                      borderRadius: '8px',
+                      background: '#FFFFFF',
                       color: '#64748B',
-                      border: '1px solid #E2E8F0',
-                      fontSize: '12px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '13px',
+                      fontWeight: '600',
                       cursor: 'pointer',
+                      transition: 'all 0.15s ease',
                     }}
                   >
                     Cancel
@@ -1430,16 +1554,16 @@ export default function AdminNotificationsPage() {
                     disabled={composerSubmitting || previewLoading}
                     onClick={() => handleComposerSubmit()}
                     style={{
-                      padding: '8px 18px',
-                      borderRadius: '6px',
-                      background: composerForm.dispatchMode === 'SCHEDULE'
-                        ? 'linear-gradient(135deg, #4F46E5, #4338CA)'
-                        : 'linear-gradient(135deg, #0284C7, #0369A1)',
+                      padding: '9px 20px',
+                      borderRadius: '8px',
+                      background: '#1E56A0',
                       color: '#FFFFFF',
                       border: 'none',
                       fontSize: '13px',
-                      fontWeight: '600',
+                      fontWeight: '700',
                       cursor: composerSubmitting ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                      transition: 'all 0.15s ease',
                     }}
                   >
                     {composerSubmitting
@@ -1447,7 +1571,7 @@ export default function AdminNotificationsPage() {
                       : editingBroadcastId
                       ? 'Save Changes'
                       : composerForm.dispatchMode === 'SCHEDULE'
-                      ? ' Schedule Broadcast'
+                      ? 'Schedule Broadcast'
                       : 'Send Broadcast Now'}
                   </button>
                 </div>

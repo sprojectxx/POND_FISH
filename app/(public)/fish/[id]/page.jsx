@@ -259,16 +259,33 @@ export default function FishDetailPage() {
                 <div
                   style={{
                     flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
                     padding: '12px 18px',
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: '#FEF2F2',
+                    border: '1px solid #FECACA',
                     borderRadius: '10px',
-                    fontSize: '13px',
-                    color: '#64748b',
-                    fontWeight: '600',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  Available for walk-in selection at Bangalore counter.
+                  <span
+                    style={{
+                      background: '#DC2626',
+                      color: '#FFFFFF',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    Out of Stock
+                  </span>
+                  <span style={{ fontSize: '13px', color: '#991B1B', fontWeight: '600' }}>
+                    Unavailable for online pre-booking. Available for walk-in selection at store counter.
+                  </span>
                 </div>
               )}
             </div>

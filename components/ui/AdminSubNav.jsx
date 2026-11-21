@@ -9,6 +9,7 @@ export default function AdminSubNav({ tabs = [] }) {
 
   return (
     <div
+      className="pf-admin-subnav-container"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -22,6 +23,8 @@ export default function AdminSubNav({ tabs = [] }) {
         overflowX: 'auto',
         maxWidth: '100%',
         boxSizing: 'border-box',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
       }}
     >
       {tabs.map((tab) => {
@@ -45,6 +48,7 @@ export default function AdminSubNav({ tabs = [] }) {
               boxShadow: isActive ? '0 2px 6px rgba(30, 86, 160, 0.25)' : 'none',
               transition: 'all 0.15s ease',
               whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
             <span>{tab.label}</span>

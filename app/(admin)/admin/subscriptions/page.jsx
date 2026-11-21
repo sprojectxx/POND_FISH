@@ -65,6 +65,17 @@ export default function AdminCustomerSubscriptionsPage() {
     handleSearch('');
   }, []);
 
+  // Lock background scroll when any modal is open
+  useEffect(() => {
+    if (isPurchaseModalOpen || isAdjustModalOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isPurchaseModalOpen, isAdjustModalOpen]);
+
   const fetchAvailablePlans = async () => {
     try {
       const res = await fetch('/api/v1/admin/subscriptions/plans');
@@ -486,15 +497,20 @@ export default function AdminCustomerSubscriptionsPage() {
         boxShadow: '0 4px 16px rgba(15, 44, 89, 0.03)',
       }}>
         {/* Row 1: Status Filter Pills */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          overflowX: 'auto',
-          paddingBottom: '14px',
-          borderBottom: '1px solid #F1F5F9',
-          marginBottom: '14px',
-        }}>
+        <div
+          className="pf-admin-pill-scroll"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            overflowX: 'auto',
+            paddingBottom: '14px',
+            borderBottom: '1px solid #F1F5F9',
+            marginBottom: '14px',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+          }}
+        >
           {[
             { id: 'ALL', label: `All Customers (${totalSubscribersCount})` },
             { id: 'ACTIVE', label: `Active Plans (${activeSubscribersCount})` },
@@ -519,6 +535,7 @@ export default function AdminCustomerSubscriptionsPage() {
                   boxShadow: isSelected ? '0 2px 6px rgba(30, 86, 160, 0.25)' : 'none',
                   transition: 'all 0.15s ease',
                   whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {tab.label}
@@ -584,13 +601,19 @@ export default function AdminCustomerSubscriptionsPage() {
       </div>
 
       {/* Main Full-Width Customer Table (Horizontal List) */}
-      <div style={{
-        background: '#FFFFFF',
-        borderRadius: '16px',
-        border: '1px solid #E2E8F0',
-        boxShadow: '0 4px 16px rgba(15, 44, 89, 0.03)',
-        position: 'relative',
-      }}>
+      <div
+        className="pf-admin-table-card"
+        style={{
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 4px 16px rgba(15, 44, 89, 0.03)',
+          position: 'relative',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+        }}
+      >
         {searching && (
           <div
             className="pf-animate-indeterminate"
@@ -607,7 +630,7 @@ export default function AdminCustomerSubscriptionsPage() {
           />
         )}
 
-        <div style={{ overflowX: 'auto', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+        <div className="pf-admin-table-scroll" style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', boxSizing: 'border-box', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '11px', fontWeight: '800' }}>
@@ -1422,29 +1445,35 @@ export default function AdminCustomerSubscriptionsPage() {
 
       {/* MODAL 1: ADD SUBSCRIPTION (ADMIN-09 FLOW) */}
       {isPurchaseModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(15, 44, 89, 0.45)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px',
-        }}>
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '16px',
-            border: '1px solid #E2E8F0',
-            width: '100%',
-            maxWidth: '560px',
-            boxShadow: '0 20px 40px -8px rgba(15, 44, 89, 0.2)',
-            overflow: 'hidden',
-          }}>
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsPurchaseModalOpen(false); }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 44, 89, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '16px',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div
+            className="pf-admin-modal-card"
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #E2E8F0',
+              width: '100%',
+              maxWidth: '560px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 40px -8px rgba(15, 44, 89, 0.2)',
+              boxSizing: 'border-box',
+            }}
+          >
             <div style={{
               padding: '20px 24px',
               borderBottom: '1px solid #E2E8F0',
@@ -1452,6 +1481,9 @@ export default function AdminCustomerSubscriptionsPage() {
               justifyContent: 'space-between',
               alignItems: 'center',
               background: '#F8FAFC',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
             }}>
               <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#0F2C59' }}>
                 Add Subscription to Customer
@@ -1479,7 +1511,7 @@ export default function AdminCustomerSubscriptionsPage() {
               </button>
             </div>
 
-            <form onSubmit={handlePurchaseSubmit} style={{ padding: '24px' }}>
+            <form onSubmit={handlePurchaseSubmit} style={{ padding: '24px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 {/* 1. Customer Summary */}
                 <div style={{ background: '#F8FAFC', padding: '14px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
@@ -1684,7 +1716,7 @@ export default function AdminCustomerSubscriptionsPage() {
               </div>
 
               {/* Modal Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #E2E8F0', paddingTop: '18px' }}>
+              <div className="pf-admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #E2E8F0', paddingTop: '18px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => setIsPurchaseModalOpen(false)}
@@ -1728,29 +1760,35 @@ export default function AdminCustomerSubscriptionsPage() {
 
       {/* MODAL 2: MANUAL CREDIT ADJUSTMENT */}
       {isAdjustModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(15, 44, 89, 0.45)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px',
-        }}>
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '16px',
-            border: '1px solid #E2E8F0',
-            width: '100%',
-            maxWidth: '520px',
-            boxShadow: '0 20px 40px -8px rgba(15, 44, 89, 0.2)',
-            overflow: 'hidden',
-          }}>
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsAdjustModalOpen(false); }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 44, 89, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '16px',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div
+            className="pf-admin-modal-card"
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #E2E8F0',
+              width: '100%',
+              maxWidth: '520px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 40px -8px rgba(15, 44, 89, 0.2)',
+              boxSizing: 'border-box',
+            }}
+          >
             <div style={{
               padding: '20px 24px',
               borderBottom: '1px solid #E2E8F0',
@@ -1758,6 +1796,9 @@ export default function AdminCustomerSubscriptionsPage() {
               justifyContent: 'space-between',
               alignItems: 'center',
               background: '#F8FAFC',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
             }}>
               <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#0F2C59' }}>
                 Manual Credit Adjustment
@@ -1785,7 +1826,7 @@ export default function AdminCustomerSubscriptionsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleAdjustSubmit} style={{ padding: '24px' }}>
+            <form onSubmit={handleAdjustSubmit} style={{ padding: '24px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 {/* 1. Customer Context */}
                 <div style={{ background: '#F8FAFC', padding: '14px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
@@ -1940,7 +1981,7 @@ export default function AdminCustomerSubscriptionsPage() {
               </div>
 
               {/* Modal Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #E2E8F0', paddingTop: '18px' }}>
+              <div className="pf-admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #E2E8F0', paddingTop: '18px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => setIsAdjustModalOpen(false)}

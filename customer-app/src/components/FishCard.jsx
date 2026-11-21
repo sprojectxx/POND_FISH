@@ -89,9 +89,9 @@ function FishCard({
           </View>
         )}
 
-        {!isPhysicalAvailable && (
+        {(!isPhysicalAvailable || item.onlineBookable === false) && (
           <View style={styles.outOfStockOverlay}>
-            <Text style={styles.outOfStockOverlayText}>Sold Out</Text>
+            <Text style={styles.outOfStockOverlayText}>Out of Stock</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -165,10 +165,10 @@ function FishCard({
         ) : (
           <TouchableOpacity
             onPress={handleAddToCartPress}
-            disabled={!isPhysicalAvailable || isAdding}
+            disabled={!isPhysicalAvailable || item.onlineBookable === false || isAdding}
             style={[
               styles.gridAddBtn,
-              !isPhysicalAvailable && styles.gridAddBtnDisabled,
+              (!isPhysicalAvailable || item.onlineBookable === false) && styles.gridAddBtnDisabled,
             ]}
             accessibilityRole="button"
             accessibilityLabel={`Add ${item.name} to cart`}
@@ -179,10 +179,10 @@ function FishCard({
               <Text
                 style={[
                   styles.gridAddBtnText,
-                  !isPhysicalAvailable && styles.gridAddBtnTextDisabled,
+                  (!isPhysicalAvailable || item.onlineBookable === false) && styles.gridAddBtnTextDisabled,
                 ]}
               >
-                {!isPhysicalAvailable ? 'SOLD' : '+ ADD'}
+                {(!isPhysicalAvailable || item.onlineBookable === false) ? 'Out of Stock' : '+ ADD'}
               </Text>
             )}
           </TouchableOpacity>
