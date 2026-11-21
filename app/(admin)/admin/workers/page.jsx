@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdminPagination, AdminSelect } from '@/components/ui';
+import { AdminPagination, AdminSelect, AdminTableSkeleton } from '@/components/ui';
 
 export default function AdminWorkersPage() {
   const [workers, setWorkers] = useState([]);
@@ -391,7 +391,32 @@ export default function AdminWorkersPage() {
       </div>
 
       {/* Workers Table */}
-      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden', position: 'relative', minHeight: '400px' }}>
+        {/* Subtle Top Loading Line */}
+        {loading && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: '#E2E8F0',
+              overflow: 'hidden',
+              zIndex: 10,
+            }}
+          >
+            <div
+              className="pf-animate-indeterminate"
+              style={{
+                width: '45%',
+                height: '100%',
+                background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
+                borderRadius: '2px',
+              }}
+            />
+          </div>
+        )}
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
             <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
@@ -406,11 +431,7 @@ export default function AdminWorkersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
-                  Loading staff accounts...
-                </td>
-              </tr>
+              <AdminTableSkeleton columns={7} rows={5} />
             ) : filteredWorkers.length === 0 ? (
               <tr>
                 <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>

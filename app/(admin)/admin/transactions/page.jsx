@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useCallback, useTransition } from 'react';
 import Link from 'next/link';
-import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect, AdminTableSkeleton } from '@/components/ui';
 
 const STATUS_CONFIG = {
   COMPLETED: { label: 'Successful', bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' },
@@ -559,11 +559,21 @@ export default function AdminTransactionsPage() {
               left: 0,
               right: 0,
               height: '3px',
-              background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
-              backgroundSize: '200% 100%',
+              background: '#E2E8F0',
+              overflow: 'hidden',
               zIndex: 10,
             }}
-          />
+          >
+            <div
+              className="pf-animate-indeterminate"
+              style={{
+                width: '45%',
+                height: '100%',
+                background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
+                borderRadius: '2px',
+              }}
+            />
+          </div>
         )}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', minWidth: '1200px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
@@ -584,26 +594,9 @@ export default function AdminTransactionsPage() {
                 <th style={{ padding: '14px 16px', fontWeight: '700', textAlign: 'center', whiteSpace: 'nowrap', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>Action</th>
               </tr>
             </thead>
-            <tbody style={{ opacity: loading && transactions.length > 0 ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
-              {loading && transactions.length === 0 ? (
-                <tr>
-                  <td colSpan="13" style={{ padding: '120px 20px', textAlign: 'center', color: '#64748B' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '50%', background: '#EFF6FF', color: '#1E56A0', marginBottom: '14px' }}>
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
-                        <line x1="12" y1="2" x2="12" y2="6"/>
-                        <line x1="12" y1="18" x2="12" y2="22"/>
-                        <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
-                        <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
-                        <line x1="2" y1="12" x2="6" y2="12"/>
-                        <line x1="18" y1="12" x2="22" y2="12"/>
-                        <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/>
-                        <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
-                      </svg>
-                    </div>
-                    <div style={{ fontSize: '15px', fontWeight: '700', color: '#0F2C59', marginBottom: '4px' }}>Loading transactions...</div>
-                    <div style={{ fontSize: '12px', color: '#64748B' }}>Fetching verified sales records</div>
-                  </td>
-                </tr>
+            <tbody>
+              {loading ? (
+                <AdminTableSkeleton columns={13} rows={5} />
               ) : transactions.length === 0 ? (
                 <tr>
                   <td colSpan="13" style={{ padding: '80px 20px', textAlign: 'center', color: '#64748B' }}>

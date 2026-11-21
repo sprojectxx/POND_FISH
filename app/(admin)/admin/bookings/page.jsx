@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useTransition } from 'react';
-import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect, AdminTableSkeleton } from '@/components/ui';
 
 const STATUS_CONFIG = {
   CREATED: { label: 'Created', bg: '#F1F5F9', text: '#64748B', border: '#E2E8F0' },
@@ -679,11 +679,21 @@ export default function AdminBookingsPage() {
               left: 0,
               right: 0,
               height: '3px',
-              background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
-              backgroundSize: '200% 100%',
+              background: '#E2E8F0',
+              overflow: 'hidden',
               zIndex: 10,
             }}
-          />
+          >
+            <div
+              className="pf-animate-indeterminate"
+              style={{
+                width: '45%',
+                height: '100%',
+                background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
+                borderRadius: '2px',
+              }}
+            />
+          </div>
         )}
         <div
           className="pf-admin-scroll-hint"
@@ -726,18 +736,9 @@ export default function AdminBookingsPage() {
                 <th style={{ padding: '14px 16px', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
-            <tbody style={{ opacity: loading && bookings.length > 0 ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
-              {loading && bookings.length === 0 ? (
-                <tr>
-                  <td colSpan="10" style={{ padding: '120px 20px', textAlign: 'center', color: '#64748B' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', fontSize: '14px', fontWeight: '600' }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                      </svg>
-                      <span>Loading bookings queue...</span>
-                    </div>
-                  </td>
-                </tr>
+            <tbody>
+              {loading ? (
+                <AdminTableSkeleton columns={10} rows={5} />
               ) : bookings.length === 0 ? (
                 <tr>
                   <td colSpan="10" style={{ padding: '80px 20px', textAlign: 'center' }}>
@@ -1085,9 +1086,14 @@ export default function AdminBookingsPage() {
             {/* Drawer Content */}
             <div style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
               {detailLoading ? (
-                <div style={{ textAlign: 'center', padding: '60px 0', color: '#64748B' }}>
-
-                  <div>Loading comprehensive booking breakdown...</div>
+                <div style={{ textAlign: 'center', padding: '80px 20px', color: '#64748B', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1E56A0" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" className="pf-animate-spin">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                    </svg>
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#0F2C59' }}>Loading booking details...</div>
+                  <div style={{ fontSize: '12px', color: '#64748B' }}>Fetching breakdown from PondFish database</div>
                 </div>
               ) : !bookingDetail ? (
                 <div style={{ textAlign: 'center', padding: '60px 0', color: '#EF4444' }}>

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect, AdminTableSkeleton } from '@/components/ui';
 
 export default function AdminFishPage() {
   const [fishList, setFishList] = useState([]);
@@ -417,7 +417,32 @@ export default function AdminFishPage() {
       </div>
 
       {/* Main Fish Table */}
-      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden', position: 'relative', minHeight: '400px' }}>
+        {/* Subtle Top Loading Line */}
+        {loading && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: '#E2E8F0',
+              overflow: 'hidden',
+              zIndex: 10,
+            }}
+          >
+            <div
+              className="pf-animate-indeterminate"
+              style={{
+                width: '45%',
+                height: '100%',
+                background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
+                borderRadius: '2px',
+              }}
+            />
+          </div>
+        )}
         <div style={{ overflowX: 'auto', width: '100%' }}>
           <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
@@ -434,11 +459,7 @@ export default function AdminFishPage() {
             </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan="8" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
-                  Loading fish catalog...
-                </td>
-              </tr>
+              <AdminTableSkeleton columns={8} rows={5} />
             ) : filteredList.length === 0 ? (
               <tr>
                 <td colSpan="8" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>

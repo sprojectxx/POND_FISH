@@ -5,5 +5,6 @@ export { default as Modal } from './Modal';
 export { default as AdminSubNav } from './AdminSubNav';
 export { default as AdminPagination } from './AdminPagination';
 export { default as AdminSelect } from './AdminSelect';
+export { default as AdminTableSkeleton } from './AdminTableSkeleton';
 
 

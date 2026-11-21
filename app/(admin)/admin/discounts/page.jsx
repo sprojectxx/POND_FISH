@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdminSubNav, AdminPagination, AdminSelect } from '@/components/ui';
+import { AdminSubNav, AdminPagination, AdminSelect, AdminTableSkeleton } from '@/components/ui';
 
 export default function AdminDiscountsPage() {
   const [discounts, setDiscounts] = useState([]);
@@ -387,7 +387,32 @@ export default function AdminDiscountsPage() {
       </div>
 
       {/* Discounts Table */}
-      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', overflow: 'hidden', position: 'relative', minHeight: '400px' }}>
+        {/* Subtle Top Loading Line */}
+        {loading && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: '#E2E8F0',
+              overflow: 'hidden',
+              zIndex: 10,
+            }}
+          >
+            <div
+              className="pf-animate-indeterminate"
+              style={{
+                width: '45%',
+                height: '100%',
+                background: 'linear-gradient(90deg, #1E56A0, #38BDF8, #1E56A0)',
+                borderRadius: '2px',
+              }}
+            />
+          </div>
+        )}
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
             <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B' }}>
@@ -401,11 +426,7 @@ export default function AdminDiscountsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
-                  Loading discounts...
-                </td>
-              </tr>
+              <AdminTableSkeleton columns={6} rows={5} />
             ) : filteredDiscounts.length === 0 ? (
               <tr>
                 <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
