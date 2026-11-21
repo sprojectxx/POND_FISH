@@ -471,40 +471,67 @@ export default function AdminNotificationsPage() {
             onClick={() => (activeTab === 'broadcasts' ? fetchBroadcasts(broadcastPagination.page) : fetchInboxNotifications(inboxPagination.page))}
             disabled={loading}
             style={{
-              padding: '8px 14px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              height: '36px',
+              padding: '0 14px',
               borderRadius: '8px',
               background: '#FFFFFF',
               color: '#0F2C59',
-              border: '1px solid #E2E8F0',
+              border: '1px solid #CBD5E1',
               fontSize: '13px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+              transition: 'all 0.15s ease',
             }}
           >
-            <span></span> Refresh
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transition: 'transform 0.3s ease',
+                transform: loading ? 'rotate(180deg)' : 'none',
+              }}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            <span>Refresh</span>
           </button>
           <button
             id="btn-compose-notification"
             onClick={handleOpenComposerNew}
             style={{
-              padding: '8px 16px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              height: '36px',
+              padding: '0 18px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #0284C7, #0369A1)',
+              background: '#1E56A0',
               color: '#FFFFFF',
               border: 'none',
               fontSize: '13px',
-              fontWeight: '600',
+              fontWeight: '700',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+              transition: 'all 0.15s ease',
             }}
           >
-            Compose Notification
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>Compose Notification</span>
           </button>
         </div>
       </div>

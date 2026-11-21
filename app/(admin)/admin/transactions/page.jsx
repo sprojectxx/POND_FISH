@@ -156,18 +156,20 @@ export default function AdminTransactionsPage() {
           onClick={() => fetchTransactions(pagination.page)}
           disabled={loading}
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '6px',
+            height: '36px',
             background: '#FFFFFF',
-            color: '#1E56A0',
+            color: '#0F2C59',
             border: '1px solid #CBD5E1',
-            padding: '8px 16px',
+            padding: '0 14px',
             borderRadius: '8px',
             fontSize: '13px',
-            fontWeight: '700',
+            fontWeight: '600',
             cursor: loading ? 'not-allowed' : 'pointer',
             boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+            transition: 'all 0.15s ease',
           }}
         >
           <svg
@@ -188,7 +190,7 @@ export default function AdminTransactionsPage() {
             <polyline points="1 20 1 14 7 14" />
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
           </svg>
-          <span>{loading ? 'Refreshing...' : 'Refresh Records'}</span>
+          <span>Refresh</span>
         </button>
       </div>
 
@@ -679,14 +681,15 @@ export default function AdminTransactionsPage() {
                 disabled={pagination.page <= 1}
                 onClick={() => fetchTransactions(pagination.page - 1)}
                 style={{
-                  background: pagination.page <= 1 ? '#F1F5F9' : '#1E56A0',
-                  color: pagination.page <= 1 ? '#64748B' : '#FFFFFF',
-                  border: 'none',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  color: pagination.page <= 1 ? '#94A3B8' : '#0F2C59',
                   padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
                   fontWeight: '600',
                   cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 Previous
@@ -696,14 +699,15 @@ export default function AdminTransactionsPage() {
                 disabled={pagination.page >= pagination.totalPages}
                 onClick={() => fetchTransactions(pagination.page + 1)}
                 style={{
-                  background: pagination.page >= pagination.totalPages ? '#F1F5F9' : '#1E56A0',
-                  color: pagination.page >= pagination.totalPages ? '#64748B' : '#FFFFFF',
-                  border: 'none',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  color: pagination.page >= pagination.totalPages ? '#94A3B8' : '#0F2C59',
                   padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
                   fontWeight: '600',
                   cursor: pagination.page >= pagination.totalPages ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 Next

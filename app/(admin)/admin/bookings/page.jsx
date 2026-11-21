@@ -906,16 +906,19 @@ export default function AdminBookingsPage() {
               disabled={pagination.page <= 1 || loading}
               style={{
                 background: '#FFFFFF',
-                border: '1px solid #E2E8F0',
-                color: pagination.page <= 1 ? '#475569' : '#CBD5E1',
-                padding: '6px 12px',
-                borderRadius: '4px',
+                border: '1px solid #CBD5E1',
+                color: pagination.page <= 1 ? '#94A3B8' : '#0F2C59',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '600',
                 cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease',
               }}
             >
               Previous
             </button>
-            <span style={{ padding: '0 4px', color: '#0F2C59', fontWeight: '600' }}>
+            <span style={{ padding: '0 8px', color: '#0F2C59', fontWeight: '600', fontSize: '13px' }}>
               Page {pagination.page} of {pagination.totalPages || 1}
             </span>
             <button
@@ -924,11 +927,14 @@ export default function AdminBookingsPage() {
               disabled={pagination.page >= pagination.totalPages || loading}
               style={{
                 background: '#FFFFFF',
-                border: '1px solid #E2E8F0',
-                color: pagination.page >= pagination.totalPages ? '#475569' : '#CBD5E1',
-                padding: '6px 12px',
-                borderRadius: '4px',
+                border: '1px solid #CBD5E1',
+                color: pagination.page >= pagination.totalPages ? '#94A3B8' : '#0F2C59',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '600',
                 cursor: pagination.page >= pagination.totalPages ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease',
               }}
             >
               Next

@@ -288,13 +288,16 @@ export default function AdminSettingsPage() {
                   type="submit"
                   disabled={savingKey === 'store_info'}
                   style={{
-                    background: '#38BDF8',
-                    color: '#0F2C59',
+                    background: '#1E56A0',
+                    color: '#FFFFFF',
                     border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
+                    borderRadius: '8px',
+                    padding: '9px 18px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: savingKey === 'store_info' ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {savingKey === 'store_info' ? 'Saving...' : 'Save Store Info'}
@@ -385,13 +388,16 @@ export default function AdminSettingsPage() {
                   type="submit"
                   disabled={savingKey === 'store_destination'}
                   style={{
-                    background: '#F59E0B',
-                    color: '#0F2C59',
+                    background: '#1E56A0',
+                    color: '#FFFFFF',
                     border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
+                    borderRadius: '8px',
+                    padding: '9px 18px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: savingKey === 'store_destination' ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {savingKey === 'store_destination' ? 'Saving...' : 'Review & Update Destination'}
@@ -443,13 +449,16 @@ export default function AdminSettingsPage() {
                   type="submit"
                   disabled={savingKey === 'truck_info'}
                   style={{
-                    background: '#38BDF8',
-                    color: '#0F2C59',
+                    background: '#1E56A0',
+                    color: '#FFFFFF',
                     border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
+                    borderRadius: '8px',
+                    padding: '9px 18px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: savingKey === 'truck_info' ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {savingKey === 'truck_info' ? 'Saving...' : 'Save Truck Info'}
@@ -487,13 +496,16 @@ export default function AdminSettingsPage() {
                   type="submit"
                   disabled={savingKey === 'operational_rules'}
                   style={{
-                    background: '#38BDF8',
-                    color: '#0F2C59',
+                    background: '#1E56A0',
+                    color: '#FFFFFF',
                     border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
+                    borderRadius: '8px',
+                    padding: '9px 18px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: savingKey === 'operational_rules' ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {savingKey === 'operational_rules' ? 'Saving...' : 'Save Rules'}
@@ -507,15 +519,15 @@ export default function AdminSettingsPage() {
       {/* ELEVATED CONFIRMATION MODAL (Section 150 & 151) */}
       {showConfirmModal && pendingDestinationChange && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 44, 89, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <div style={{ background: '#FFFFFF', border: '1px solid #F59E0B', borderRadius: '12px', padding: '28px', maxWidth: '520px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#F59E0B', margin: '0 0 12px 0' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '12px', padding: '28px', maxWidth: '520px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0F2C59', margin: '0 0 12px 0' }}>
               Confirm Store Destination Change
             </h3>
-            <p style={{ fontSize: '13px', color: '#E2E8F0', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+            <p style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.5, margin: '0 0 16px 0' }}>
               Changing the store destination will affect future truck journeys and GPS geofenced arrival behavior.
             </p>
 
-            <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px' }}>
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '14px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px' }}>
               <div style={{ marginBottom: '8px', color: '#64748B' }}>
                 <strong>Old Destination:</strong> {settings?.store_destination?.name || 'Default Store'} ({settings?.store_destination?.latitude}, {settings?.store_destination?.longitude})
               </div>
@@ -529,14 +541,37 @@ export default function AdminSettingsPage() {
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button
+                type="button"
                 onClick={() => { setShowConfirmModal(false); setPendingDestinationChange(null); }}
-                style={{ background: '#F1F5F9', color: '#0F2C59', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                style={{
+                  background: '#FFFFFF',
+                  color: '#334155',
+                  border: '1px solid #CBD5E1',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  transition: 'all 0.15s ease',
+                }}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={confirmDestinationSave}
-                style={{ background: '#F59E0B', color: '#0F2C59', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                style={{
+                  background: '#1E56A0',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                  transition: 'all 0.15s ease',
+                }}
               >
                 Confirm Change
               </button>

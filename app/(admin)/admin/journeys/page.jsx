@@ -398,23 +398,69 @@ export default function AdminJourneysPage() {
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button
+            onClick={fetchJourneys}
+            disabled={loading}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              height: '36px',
+              padding: '0 14px',
+              borderRadius: '8px',
+              border: '1px solid #CBD5E1',
+              background: '#FFFFFF',
+              color: '#0F2C59',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 1px 3px rgba(15, 44, 89, 0.05)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transition: 'transform 0.3s ease',
+                transform: loading ? 'rotate(180deg)' : 'none',
+              }}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            <span>Refresh</span>
+          </button>
+          <button
             onClick={() => setShowCreateModal(true)}
             style={{
               background: '#1E56A0',
               color: '#FFFFFF',
               border: 'none',
-              padding: '9px 18px',
+              padding: '0 18px',
+              height: '36px',
               borderRadius: '8px',
               fontWeight: '700',
               fontSize: '13px',
               cursor: 'pointer',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
               boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+              transition: 'all 0.15s ease',
             }}
           >
-            <span>+</span> Create Journey
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>Create Journey</span>
           </button>
         </div>
       </div>
@@ -472,9 +518,28 @@ export default function AdminJourneysPage() {
             <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Registered Journeys</h2>
             <button
               onClick={fetchJourneys}
-              style={{ background: 'transparent', border: 'none', color: '#1E56A0', cursor: 'pointer', fontSize: '13px' }}
+              disabled={loading}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                background: '#FFFFFF',
+                border: '1px solid #CBD5E1',
+                borderRadius: '6px',
+                padding: '4px 10px',
+                color: '#0F2C59',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease',
+              }}
             >
-              ↻ Refresh
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+              <span>Refresh</span>
             </button>
           </div>
 
@@ -484,8 +549,21 @@ export default function AdminJourneysPage() {
             <div style={{ textAlign: 'center', padding: '32px', color: '#64748B' }}>
               No journeys recorded yet.<br />
               <button
+                type="button"
                 onClick={() => setShowCreateModal(true)}
-                style={{ marginTop: '12px', background: '#0284C7', color: '#FFF', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}
+                style={{
+                  marginTop: '12px',
+                  background: '#1E56A0',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                  transition: 'all 0.15s ease',
+                }}
               >
                 Create First Journey
               </button>
@@ -583,15 +661,24 @@ export default function AdminJourneysPage() {
                       disabled={actionLoading}
                       style={{
                         background: '#16A34A',
-                        color: '#FFF',
+                        color: '#FFFFFF',
                         border: 'none',
                         padding: '8px 16px',
-                        borderRadius: '6px',
-                        fontWeight: 'bold',
+                        borderRadius: '8px',
+                        fontWeight: '700',
+                        fontSize: '13px',
                         cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 2px 6px rgba(22, 163, 74, 0.25)',
+                        transition: 'all 0.15s ease',
                       }}
                     >
-                      ▶ Start Journey
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                      </svg>
+                      <span>Start Journey</span>
                     </button>
                   )}
 
@@ -601,29 +688,35 @@ export default function AdminJourneysPage() {
                         onClick={() => handleTogglePublication(currentJourney.id, currentJourney.published_to_customer)}
                         disabled={actionLoading}
                         style={{
-                          background: currentJourney.published_to_customer ? '#475569' : '#0284C7',
-                          color: '#FFF',
+                          background: currentJourney.published_to_customer ? '#475569' : '#1E56A0',
+                          color: '#FFFFFF',
                           border: 'none',
                           padding: '8px 16px',
-                          borderRadius: '6px',
-                          fontWeight: 'bold',
+                          borderRadius: '8px',
+                          fontWeight: '700',
+                          fontSize: '13px',
                           cursor: 'pointer',
+                          boxShadow: currentJourney.published_to_customer ? 'none' : '0 2px 6px rgba(30, 86, 160, 0.25)',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        {currentJourney.published_to_customer ? 'Unpublish from Customer' : ' Publish to Customers'}
+                        {currentJourney.published_to_customer ? 'Unpublish from Customer' : 'Publish to Customers'}
                       </button>
 
                       <button
                         onClick={() => setShowIngestModal(true)}
                         disabled={actionLoading}
                         style={{
-                          background: '#7C3AED',
-                          color: '#FFF',
+                          background: '#1E56A0',
+                          color: '#FFFFFF',
                           border: 'none',
                           padding: '8px 16px',
-                          borderRadius: '6px',
-                          fontWeight: 'bold',
+                          borderRadius: '8px',
+                          fontWeight: '700',
+                          fontSize: '13px',
                           cursor: 'pointer',
+                          boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                          transition: 'all 0.15s ease',
                         }}
                       >
                         Ingest GPS Ping
@@ -634,15 +727,24 @@ export default function AdminJourneysPage() {
                         disabled={actionLoading}
                         style={{
                           background: '#DC2626',
-                          color: '#FFF',
+                          color: '#FFFFFF',
                           border: 'none',
                           padding: '8px 16px',
-                          borderRadius: '6px',
-                          fontWeight: 'bold',
+                          borderRadius: '8px',
+                          fontWeight: '700',
+                          fontSize: '13px',
                           cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        ⏹ Stop Journey
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <rect x="4" y="4" width="16" height="16" rx="2" />
+                        </svg>
+                        <span>Stop Journey</span>
                       </button>
                     </>
                   )}
@@ -934,14 +1036,35 @@ export default function AdminJourneysPage() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  style={{ background: '#CBD5E1', color: '#FFF', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer' }}
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #CBD5E1',
+                    color: '#334155',
+                    padding: '9px 18px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  style={{ background: '#0284C7', color: '#FFF', border: 'none', padding: '10px 24px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                  style={{
+                    background: '#1E56A0',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    padding: '9px 24px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: actionLoading ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
                   {actionLoading ? 'Creating...' : 'Save Journey (DRAFT)'}
                 </button>
@@ -1040,14 +1163,35 @@ export default function AdminJourneysPage() {
                 <button
                   type="button"
                   onClick={() => setShowIngestModal(false)}
-                  style={{ background: '#CBD5E1', color: '#FFF', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer' }}
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #CBD5E1',
+                    color: '#334155',
+                    padding: '9px 18px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  style={{ background: '#7C3AED', color: '#FFF', border: 'none', padding: '10px 24px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                  style={{
+                    background: '#1E56A0',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    padding: '9px 24px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: actionLoading ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
                   {actionLoading ? 'Recording...' : 'Send Position'}
                 </button>

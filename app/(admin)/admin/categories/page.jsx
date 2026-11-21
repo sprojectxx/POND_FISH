@@ -308,16 +308,19 @@ export default function AdminCategoriesPage() {
                     Create a category to organize fish in the catalog.
                   </p>
                   <button
+                    type="button"
                     onClick={openCreateModal}
                     style={{
-                      background: '#0284C7',
+                      background: '#1E56A0',
                       border: 'none',
                       color: '#FFFFFF',
-                      padding: '8px 16px',
-                      borderRadius: '6px',
+                      padding: '9px 18px',
+                      borderRadius: '8px',
                       fontSize: '13px',
-                      fontWeight: '600',
+                      fontWeight: '700',
                       cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                      transition: 'all 0.15s ease',
                     }}
                   >
                     Create Category
@@ -439,10 +442,29 @@ export default function AdminCategoriesPage() {
                 {editingCategory ? `Edit: ${editingCategory.name}` : 'Create Category'}
               </h2>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '18px', cursor: 'pointer' }}
+                aria-label="Close modal"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#64748B',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#E2E8F0'; e.currentTarget.style.color = '#0F2C59'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B'; }}
               >
-                &times;
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
@@ -531,13 +553,15 @@ export default function AdminCategoriesPage() {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   style={{
-                    background: '#F1F5F9',
-                    border: 'none',
-                    color: '#425B73',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
+                    background: '#FFFFFF',
+                    border: '1px solid #CBD5E1',
+                    color: '#334155',
+                    padding: '9px 18px',
+                    borderRadius: '8px',
                     fontSize: '13px',
+                    fontWeight: '600',
                     cursor: 'pointer',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   Cancel
@@ -546,14 +570,16 @@ export default function AdminCategoriesPage() {
                   type="submit"
                   disabled={actionLoading}
                   style={{
-                    background: '#0284C7',
+                    background: '#1E56A0',
                     border: 'none',
                     color: '#FFFFFF',
-                    padding: '8px 20px',
-                    borderRadius: '6px',
+                    padding: '9px 20px',
+                    borderRadius: '8px',
                     fontSize: '13px',
-                    fontWeight: '600',
+                    fontWeight: '700',
                     cursor: actionLoading ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {actionLoading ? 'Saving...' : editingCategory ? 'Update Category' : 'Create Category'}
@@ -579,45 +605,52 @@ export default function AdminCategoriesPage() {
         }}>
           <div style={{
             background: '#FFFFFF',
-            border: '1px solid #EF4444',
+            border: '1px solid #CBD5E1',
             borderRadius: '12px',
             width: '100%',
             maxWidth: '440px',
             padding: '24px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
           }}>
-            <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: '#FCA5A5' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: '#DC2626', fontWeight: '700' }}>
               Confirm Deletion: {deleteTarget.name}
             </h3>
-            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#425B73', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#64748B', lineHeight: '1.5' }}>
               Are you sure you want to delete this category? If there are fish varieties assigned to this category ({deleteTarget.fish_count || 0} assigned), deletion will be rejected to protect catalog structure.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
+                type="button"
                 onClick={() => setDeleteTarget(null)}
                 style={{
-                  background: '#F1F5F9',
-                  border: 'none',
-                  color: '#425B73',
-                  padding: '8px 16px',
-                  borderRadius: '6px',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  color: '#334155',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
                   fontSize: '13px',
+                  fontWeight: '600',
                   cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
                 disabled={actionLoading}
                 style={{
                   background: '#DC2626',
                   border: 'none',
                   color: '#FFFFFF',
-                  padding: '8px 18px',
-                  borderRadius: '6px',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: actionLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {actionLoading ? 'Deleting...' : 'Confirm Delete'}

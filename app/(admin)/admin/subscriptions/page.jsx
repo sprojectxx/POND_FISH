@@ -366,21 +366,23 @@ export default function AdminCustomerSubscriptionsPage() {
                 onClick={() => handleSearch(searchQuery)}
                 title="Search Customers"
                 style={{
-                  background: '#0284C7',
+                  background: '#1E56A0',
                   color: '#FFFFFF',
                   border: 'none',
-                  padding: '9px 14px',
-                  borderRadius: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
                   whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                  transition: 'all 0.15s ease',
                 }}
               >
-                 Search
+                Search
               </button>
             </div>
           </div>
@@ -512,21 +514,25 @@ export default function AdminCustomerSubscriptionsPage() {
                       id="btn-add-subscription"
                       onClick={openPurchaseModal}
                       style={{
-                        background: '#0284C7',
+                        background: '#1E56A0',
                         color: '#FFFFFF',
                         border: 'none',
                         padding: '10px 18px',
                         borderRadius: '8px',
                         fontSize: '13px',
-                        fontWeight: '600',
+                        fontWeight: '700',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
+                        boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                        transition: 'all 0.15s ease',
                       }}
                     >
-                      <span>+</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                      </svg>
                       <span>Add Subscription</span>
                     </button>
                     <button
@@ -748,9 +754,27 @@ export default function AdminCustomerSubscriptionsPage() {
                     </span>
                     <button
                       onClick={() => fetchLedger(selectedCustomerId)}
-                      style={{ background: 'none', border: 'none', color: '#1E56A0', fontSize: '12px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        background: '#FFFFFF',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        color: '#0F2C59',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
                     >
-                       Refresh Ledger
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 4 23 10 17 10" />
+                        <polyline points="1 20 1 14 7 14" />
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                      </svg>
+                      <span>Refresh Ledger</span>
                     </button>
                   </div>
 
@@ -880,10 +904,29 @@ export default function AdminCustomerSubscriptionsPage() {
                 Add Subscription to Customer
               </h2>
               <button
+                type="button"
                 onClick={() => setIsPurchaseModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '20px', cursor: 'pointer' }}
+                aria-label="Close modal"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#64748B',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#E2E8F0'; e.currentTarget.style.color = '#0F2C59'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B'; }}
               >
-                ×
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
@@ -1100,14 +1143,15 @@ export default function AdminCustomerSubscriptionsPage() {
                   type="button"
                   onClick={() => setIsPurchaseModalOpen(false)}
                   style={{
-                    background: '#F8FAFC',
-                    color: '#64748B',
-                    border: '1px solid #E2E8F0',
+                    background: '#FFFFFF',
+                    color: '#334155',
+                    border: '1px solid #CBD5E1',
                     padding: '10px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
                     fontWeight: '600',
                     cursor: 'pointer',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   Cancel
@@ -1117,15 +1161,16 @@ export default function AdminCustomerSubscriptionsPage() {
                   type="submit"
                   disabled={actionLoading || (paymentSource === 'CASH' && !confirmedCash)}
                   style={{
-                    background: paymentSource === 'CASH' && !confirmedCash ? '#475569' : '#0284C7',
+                    background: paymentSource === 'CASH' && !confirmedCash ? '#94A3B8' : '#1E56A0',
                     color: '#FFFFFF',
                     border: 'none',
                     padding: '10px 22px',
                     borderRadius: '8px',
                     fontSize: '13px',
-                    fontWeight: '600',
+                    fontWeight: '700',
                     cursor: paymentSource === 'CASH' && !confirmedCash ? 'not-allowed' : 'pointer',
-                    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)',
+                    boxShadow: '0 2px 8px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {actionLoading ? 'Processing...' : 'Confirm & Activate Subscription'}
@@ -1173,10 +1218,29 @@ export default function AdminCustomerSubscriptionsPage() {
                 Manual Credit Adjustment
               </h2>
               <button
+                type="button"
                 onClick={() => setIsAdjustModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '20px', cursor: 'pointer' }}
+                aria-label="Close modal"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#64748B',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#E2E8F0'; e.currentTarget.style.color = '#0F2C59'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B'; }}
               >
-                ×
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
@@ -1338,14 +1402,15 @@ export default function AdminCustomerSubscriptionsPage() {
                   type="button"
                   onClick={() => setIsAdjustModalOpen(false)}
                   style={{
-                    background: '#F8FAFC',
-                    color: '#64748B',
-                    border: '1px solid #E2E8F0',
+                    background: '#FFFFFF',
+                    color: '#334155',
+                    border: '1px solid #CBD5E1',
                     padding: '10px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
                     fontWeight: '600',
                     cursor: 'pointer',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   Cancel
@@ -1355,14 +1420,16 @@ export default function AdminCustomerSubscriptionsPage() {
                   type="submit"
                   disabled={actionLoading || !confirmedAdjust || isAdjustNegative || !adjustReason.trim() || adjustAmountNum <= 0}
                   style={{
-                    background: (!confirmedAdjust || isAdjustNegative || !adjustReason.trim() || adjustAmountNum <= 0) ? '#475569' : '#0284C7',
+                    background: (!confirmedAdjust || isAdjustNegative || !adjustReason.trim() || adjustAmountNum <= 0) ? '#94A3B8' : '#1E56A0',
                     color: '#FFFFFF',
                     border: 'none',
                     padding: '10px 22px',
                     borderRadius: '8px',
                     fontSize: '13px',
-                    fontWeight: '600',
+                    fontWeight: '700',
                     cursor: (!confirmedAdjust || isAdjustNegative || !adjustReason.trim() || adjustAmountNum <= 0) ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 8px rgba(30, 86, 160, 0.25)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {actionLoading ? 'Adjusting...' : 'Confirm Adjustment'}

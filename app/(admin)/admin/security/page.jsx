@@ -386,14 +386,16 @@ export default function AdminSecurityPage() {
               disabled={submittingPassword}
               style={{
                 width: '100%',
-                padding: '10px 16px',
-                borderRadius: '6px',
-                background: submittingPassword ? '#334155' : '#0284C7',
+                padding: '11px 18px',
+                borderRadius: '8px',
+                background: submittingPassword ? '#94A3B8' : '#1E56A0',
                 border: 'none',
                 color: '#FFFFFF',
-                fontSize: '14px',
-                fontWeight: '600',
+                fontSize: '13px',
+                fontWeight: '700',
                 cursor: submittingPassword ? 'not-allowed' : 'pointer',
+                boxShadow: '0 2px 6px rgba(30, 86, 160, 0.25)',
+                transition: 'all 0.15s ease',
               }}
             >
               {submittingPassword ? 'Verifying & Updating...' : 'Update Password'}
@@ -411,10 +413,10 @@ export default function AdminSecurityPage() {
           flexDirection: 'column',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: '#0F2C59' }}>
               Active Sessions
             </h2>
-            <span style={{ fontSize: '12px', background: '#F1F5F9', color: '#425B73', padding: '2px 8px', borderRadius: '12px' }}>
+            <span style={{ fontSize: '12px', background: '#F1F5F9', color: '#425B73', padding: '2px 8px', borderRadius: '12px', fontWeight: '600' }}>
               {sessions.length} Active
             </span>
           </div>
@@ -433,14 +435,14 @@ export default function AdminSecurityPage() {
                   key={sess.sessionId}
                   style={{
                     background: sess.isCurrent ? '#EFF6FF' : '#FFFFFF',
-                    border: sess.isCurrent ? '1px solid #0284C7' : '1px solid #334155',
+                    border: sess.isCurrent ? '1px solid #1E56A0' : '1px solid #E2E8F0',
                     borderRadius: '8px',
                     padding: '12px',
                     marginBottom: '10px',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: sess.isCurrent ? '#38BDF8' : '#F8FAFC' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: sess.isCurrent ? '#1E56A0' : '#0F2C59' }}>
                       {sess.isCurrent ? 'This Browser (Current Session)' : 'External Administrator Device'}
                     </span>
                     <span style={{ fontSize: '11px', color: '#64748B' }}>
@@ -465,14 +467,16 @@ export default function AdminSecurityPage() {
             disabled={terminating || sessions.length <= 1}
             style={{
               padding: '10px 16px',
-              borderRadius: '6px',
-              background: sessions.length <= 1 || terminating ? '#334155' : '#EF4444',
+              borderRadius: '8px',
+              background: sessions.length <= 1 || terminating ? '#CBD5E1' : '#DC2626',
               border: 'none',
-              color: '#FFFFFF',
+              color: sessions.length <= 1 || terminating ? '#64748B' : '#FFFFFF',
               fontSize: '13px',
-              fontWeight: '600',
+              fontWeight: '700',
               cursor: sessions.length <= 1 || terminating ? 'not-allowed' : 'pointer',
               marginTop: 'auto',
+              boxShadow: sessions.length > 1 && !terminating ? '0 2px 6px rgba(220, 38, 38, 0.25)' : 'none',
+              transition: 'all 0.15s ease',
             }}
           >
             {terminating ? 'Terminating...' : 'Terminate All Other Sessions'}

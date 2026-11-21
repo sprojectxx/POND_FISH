@@ -16,50 +16,34 @@ import './admin.css';
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
-  const isBrowser = typeof window !== 'undefined';
-  const browserPath = isBrowser ? window.location.pathname : '';
   const isLoginPage = Boolean(
     pathname === '/admin/login' ||
     pathname?.startsWith('/admin/login') ||
     pathname === '/login' ||
-    pathname?.startsWith('/login') ||
-    browserPath === '/admin/login' ||
-    browserPath.startsWith('/admin/login') ||
-    browserPath === '/login' ||
-    browserPath.startsWith('/login')
+    pathname?.startsWith('/login')
   );
 
-  const [adminUser, setAdminUser] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('pondfish_admin_user');
-        if (cached) return JSON.parse(cached);
-      } catch {}
-    }
-    return null;
-  });
-  const [checkingAuth, setCheckingAuth] = useState(() => {
-    if (isLoginPage) return false;
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('pondfish_admin_user');
-        if (cached) return false; // Optimistic authentication: don't block navigation when session is cached
-      } catch {}
-    }
-    return true;
-  });
+  const [mounted, setMounted] = useState(false);
+  const [adminUser, setAdminUser] = useState(null);
+  const [checkingAuth, setCheckingAuth] = useState(!isLoginPage);
   const [networkError, setNetworkError] = useState(false);
   const [serviceError, setServiceError] = useState(null);
   const [permissionError, setPermissionError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   const abortControllerRef = useRef(null);
 
   useEffect(() => {
     setMounted(true);
+    try {
+      const cached = localStorage.getItem('pondfish_admin_user');
+      if (cached) {
+        setAdminUser(JSON.parse(cached));
+        setCheckingAuth(false);
+      }
+    } catch {}
   }, []);
 
   const toggleSidebar = () => {
@@ -765,9 +749,6 @@ export default function AdminLayout({ children }) {
                 </div>
                 <span style={{ fontSize: '18px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '-0.02em' }}>
                   Pond<span style={{ color: '#38BDF8' }}>Fish</span>
-                </span>
-                <span style={{ fontSize: '10px', fontWeight: '800', background: 'rgba(56, 189, 248, 0.2)', color: '#38BDF8', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
-                  Admin
                 </span>
               </div>
               <button
